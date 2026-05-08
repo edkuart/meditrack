@@ -13,6 +13,276 @@ async function doctorFetch<T>(path: string, token: string, options?: RequestInit
   return json.data as T
 }
 
+async function publicFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
+  })
+  const json = await res.json()
+  if (!json.success) throw new Error(json.error?.message ?? 'Request failed')
+  return json.data as T
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export interface DoctorUser {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  role: string
+  specialty: string | null
+  tenant_id: string
+}
+
+export interface AuthResult {
+  user: DoctorUser
+  access_token: string
+  refresh_token: string
+}
+
+export async function login(email: string, password: string): Promise<AuthResult> {
+  return publicFetch('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  })
+}
+
+export async function register(data: {
+  clinic_name: string
+  clinic_slug: string
+  email: string
+  password: string
+  first_name: string
+  last_name: string
+  professional_id?: string
+  specialty?: string
+}): Promise<AuthResult> {
+  return publicFetch('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function getMe(token: string): Promise<DoctorUser> {
+  return doctorFetch('/auth/me', token)
+}
+
+// ─── Patients ─────────────────────────────────────────────────────────────────
+
+export interface Patient {
+  id: string
+  first_name: string
+  last_name: string
+  email: string | null
+  phone: string | null
+  id_number: string | null
+  date_of_birth: string | null
+  sex: 'male' | 'female' | 'other' | null
+  is_active: boolean
+  notes: string | null
+  created_at: string
+}
+
+export async function listPatients(token: string, q?: string): Promise<Patient[]> {
+  const qs = q ? `?q=${encodeURIComponent(q)}` : ''
+  return doctorFetch(`/patients${qs}`, token)
+}
+
+export async function getPatient(token: string, id: string): Promise<Patient> {
+  return doctorFetch(`/patients/${id}`, token)
+}
+
+export async function createPatient(token: string, data: {
+  first_name: string
+  last_name: string
+  email?: string
+  phone?: string
+  id_number?: string
+  date_of_birth?: string
+  sex?: string
+  notes?: string
+}): Promise<Patient> {
+  return doctorFetch('/patients', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updatePatient(token: string, id: string, data: Partial<{
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  notes: string
+}>): Promise<Patient> {
+  return doctorFetch(`/patients/${id}`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+// ─── Encounters ───────────────────────────────────────────────────────────────
+
+export type EncounterType =
+  | 'CONSULTATION' | 'FOLLOW_UP' | 'POST_HOSPITALIZATION'
+  | 'DISCHARGE' | 'CHRONIC_CONTROL' | 'EMERGENCY'
+
+export interface Encounter {
+  id: string
+  encounter_type: EncounterType
+  status: 'DRAFT' | 'OPEN' | 'CLOSED' | 'ARCHIVED'
+  chief_complaint: string | null
+  notes: string | null
+  summary: string | null
+  opened_at: string
+  closed_at: string | null
+  doctor: { first_name: string; last_name: string; specialty: string | null }
+}
+
+export async function listEncounters(token: string, patientId: string): Promise<Encounter[]> {
+  return doctorFetch(`/patients/${patientId}/encounters`, token)
+}
+
+export async function getEncounter(token: string, id: string): Promise<Encounter> {
+  return doctorFetch(`/encounters/${id}`, token)
+}
+
+export async function createEncounter(token: string, patientId: string, data: {
+  encounter_type?: EncounterType
+  chief_complaint?: string
+  notes?: string
+}): Promise<Encounter> {
+  return doctorFetch(`/patients/${patientId}/encounters`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateEncounter(token: string, id: string, data: {
+  chief_complaint?: string
+  notes?: string
+  summary?: string
+}): Promise<Encounter> {
+  return doctorFetch(`/encounters/${id}`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function closeEncounter(token: string, id: string, data?: {
+  summary?: string
+  notes?: string
+}): Promise<Encounter> {
+  return doctorFetch(`/encounters/${id}/close`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data ?? {}),
+  })
+}
+
+// ─── Treatments ───────────────────────────────────────────────────────────────
+
+export interface MedicationItem {
+  id: string
+  drug_name: string
+  presentation: string | null
+  dose_amount: number
+  dose_unit: string
+  route: string | null
+  frequency_type: 'DAILY' | 'EVERY_X_HOURS' | 'WEEKLY' | 'AS_NEEDED'
+  frequency_value: number | null
+  times_per_day: string[] | null
+  duration_days: number | null
+  with_food: boolean
+  special_instructions: string | null
+}
+
+export interface TreatmentPlan {
+  id: string
+  name: string
+  status: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'SUSPENDED' | 'CANCELLED'
+  start_date: string
+  end_date: string | null
+  instructions: string | null
+  medications: MedicationItem[]
+}
+
+export async function createTreatment(token: string, encounterId: string, data: {
+  name: string
+  start_date: string
+  instructions?: string
+  medications: Array<{
+    drug_name: string
+    dose_amount: number
+    dose_unit: string
+    frequency_type: string
+    frequency_value?: number
+    times_per_day?: string[]
+    duration_days?: number
+    presentation?: string
+    route?: string
+    with_food?: boolean
+    special_instructions?: string
+    sort_order?: number
+  }>
+}): Promise<TreatmentPlan> {
+  return doctorFetch(`/encounters/${encounterId}/treatments`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function getTreatment(token: string, id: string): Promise<TreatmentPlan> {
+  return doctorFetch(`/treatments/${id}`, token)
+}
+
+export async function activateTreatment(token: string, id: string): Promise<TreatmentPlan> {
+  return doctorFetch(`/treatments/${id}/activate`, token, { method: 'POST' })
+}
+
+export async function getAdherence(token: string, treatmentId: string) {
+  return doctorFetch<{
+    score: number
+    confirmed: number
+    total: number
+    missed: number
+    avatar_state: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR'
+  }>(`/treatments/${treatmentId}/adherence`, token)
+}
+
+// ─── Portal access ────────────────────────────────────────────────────────────
+
+export type AccessChannel = 'magic_link' | 'qr' | 'pin' | 'whatsapp'
+
+export type AccessResult =
+  | { channel: 'pin'; pin: string; patient_id: string; access_url: string; expires_at: string }
+  | { channel: AccessChannel; token: string; access_url: string; qr_data: string; expires_at: string }
+
+export async function generatePortalAccess(
+  token: string,
+  patientId: string,
+  channel: AccessChannel,
+  expiresInDays = 30,
+): Promise<AccessResult> {
+  return doctorFetch(`/patients/${patientId}/access`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel, expires_in_days: expiresInDays }),
+  })
+}
+
+export async function revokePortalAccess(token: string, patientId: string): Promise<void> {
+  await doctorFetch(`/patients/${patientId}/access`, token, { method: 'DELETE' })
+}
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
 export interface Document {
   id: string
   type: string
