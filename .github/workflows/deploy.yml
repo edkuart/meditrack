@@ -1,0 +1,37 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        # Replace with your deployment provider's action
+        # Railway: uses railway CLI or webhook trigger
+        run: echo "Configure your deploy step here (Railway / Render / Fly.io)"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    environment: production
+    needs: deploy-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        # Vercel deploys automatically via GitHub integration
+        # This step is a placeholder if using manual deploy
+        run: echo "Vercel deploys automatically on push to main via GitHub integration"

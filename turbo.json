@@ -17,6 +17,10 @@
     "typecheck": {
       "dependsOn": ["^typecheck"]
     },
+    "test": {
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "JWT_SECRET", "JWT_REFRESH_SECRET", "NODE_ENV"]
+    },
     "clean": {
       "cache": false
     }
