@@ -38,3 +38,35 @@ export function refreshTokenExpiresAt(): Date {
   date.setDate(date.getDate() + config.jwt.refreshExpiresInDays)
   return date
 }
+
+// ─── Patient session tokens ────────────────────────────────────────────────────
+
+export interface PatientTokenPayload {
+  sub: string           // patient_id
+  tenant_id: string
+  type: 'PATIENT'
+  access_token_id: string
+}
+
+export async function signPatientToken(payload: PatientTokenPayload): Promise<string> {
+  return new SignJWT({ ...payload })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('90d')
+    .sign(accessSecret)
+}
+
+export async function verifyPatientToken(token: string): Promise<PatientTokenPayload> {
+  const { payload } = await jwtVerify(token, accessSecret)
+  const p = payload as Record<string, unknown>
+  if (p['type'] !== 'PATIENT') throw new Error('Invalid token type')
+  return p as unknown as PatientTokenPayload
+}
+
+export function generateOpaqueToken(): string {
+  return randomBytes(32).toString('hex')
+}
+
+export function generatePin(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString()
+}
