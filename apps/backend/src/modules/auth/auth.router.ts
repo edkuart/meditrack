@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { LoginSchema, RegisterSchema, RefreshSchema } from './auth.schema.ts'
 import * as authService from './auth.service.ts'
+import { getFullUser } from '../staff/staff.service.ts'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 
 const router = new Hono()
@@ -38,15 +39,8 @@ router.post('/logout', requireAuth, async (c) => {
 
 router.get('/me', requireAuth, async (c) => {
   const auth = c.get('auth')
-  return c.json({
-    success: true,
-    data: {
-      id: auth.sub,
-      email: auth.email,
-      role: auth.role,
-      tenant_id: auth.tenant_id,
-    },
-  })
+  const user = await getFullUser(auth.sub)
+  return c.json({ success: true, data: user })
 })
 
 export { router as authRouter }

@@ -1,0 +1,61 @@
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { ForbiddenError } from '../../shared/errors.ts'
+import { InviteStaffSchema, AcceptInviteSchema } from './staff.schema.ts'
+import * as staffService from './staff.service.ts'
+
+const router = new Hono()
+
+function requireAdmin() {
+  return requireAuth  // inline check below — keeps middleware chain clean
+}
+
+// ── Staff list (any authenticated user) ──────────────────────────────────────
+router.get('/staff', requireAuth, async (c) => {
+  const auth = c.get('auth')
+  const data = await staffService.listStaff(auth.tenant_id)
+  return c.json({ success: true, data })
+})
+
+// ── Invite new staff member (admin only) ──────────────────────────────────────
+router.post(
+  '/staff/invite',
+  requireAuth,
+  zValidator('json', InviteStaffSchema),
+  async (c) => {
+    const auth = c.get('auth')
+    if (auth.role !== 'ADMIN_CLINIC' && auth.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenError('Only clinic admins can invite staff')
+    }
+    const data = await staffService.inviteStaff(
+      auth.tenant_id,
+      auth.sub,
+      auth.email,
+      c.req.valid('json'),
+    )
+    return c.json({ success: true, data }, 201)
+  },
+)
+
+// ── Deactivate staff member (admin only) ──────────────────────────────────────
+router.delete('/staff/:userId', requireAuth, async (c) => {
+  const auth = c.get('auth')
+  if (auth.role !== 'ADMIN_CLINIC' && auth.role !== 'SUPER_ADMIN') {
+    throw new ForbiddenError('Only clinic admins can remove staff')
+  }
+  await staffService.deactivateStaff(auth.tenant_id, auth.sub, c.req.param('userId')!)
+  return c.json({ success: true, data: null })
+})
+
+// ── Accept invitation (public — no auth required) ─────────────────────────────
+router.post(
+  '/staff/accept-invite',
+  zValidator('json', AcceptInviteSchema),
+  async (c) => {
+    const data = await staffService.acceptInvitation(c.req.valid('json'))
+    return c.json({ success: true, data })
+  },
+)
+
+export { router as staffRouter }

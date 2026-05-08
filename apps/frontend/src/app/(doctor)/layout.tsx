@@ -3,8 +3,10 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Users, LayoutDashboard, LogOut, Loader2 } from 'lucide-react'
+import { Users, LayoutDashboard, UserCog, LogOut, Loader2 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
+
+const ADMIN_ROLES = new Set(['ADMIN_CLINIC', 'SUPER_ADMIN'])
 
 function Sidebar() {
   const { user, logout } = useAuth()
@@ -47,6 +49,19 @@ function Sidebar() {
           <Users size={16} />
           Pacientes
         </Link>
+        {user && ADMIN_ROLES.has(user.role) && (
+          <Link
+            href="/staff"
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              pathname === '/staff'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+            }`}
+          >
+            <UserCog size={16} />
+            Equipo
+          </Link>
+        )}
       </nav>
 
       {/* Doctor info + logout */}

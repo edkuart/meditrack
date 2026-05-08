@@ -281,6 +281,75 @@ export async function revokePortalAccess(token: string, patientId: string): Prom
   await doctorFetch(`/patients/${patientId}/access`, token, { method: 'DELETE' })
 }
 
+// ─── Staff management ─────────────────────────────────────────────────────────
+
+export type StaffRole = 'ADMIN_CLINIC' | 'DOCTOR' | 'NURSE' | 'ASSISTANT'
+
+export interface StaffMember {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  role: StaffRole
+  specialty: string | null
+  is_active: boolean
+  is_verified: boolean
+  created_at: string
+}
+
+export interface PendingInvitation {
+  id: string
+  email: string
+  role: StaffRole
+  expires_at: string
+  created_at: string
+}
+
+export async function listStaff(token: string): Promise<{
+  staff: StaffMember[]
+  pending_invitations: PendingInvitation[]
+}> {
+  return doctorFetch('/staff', token)
+}
+
+export async function inviteStaff(
+  token: string,
+  email: string,
+  role: StaffRole,
+): Promise<{ email: string; role: StaffRole; expires_at: string }> {
+  return doctorFetch('/staff/invite', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, role }),
+  })
+}
+
+export async function deactivateStaff(token: string, userId: string): Promise<void> {
+  await doctorFetch(`/staff/${userId}`, token, { method: 'DELETE' })
+}
+
+export async function acceptInvite(data: {
+  token: string
+  first_name: string
+  last_name: string
+  password: string
+  specialty?: string
+  professional_id?: string
+}): Promise<{
+  user: DoctorUser
+  access_token: string
+  refresh_token: string
+}> {
+  const res = await fetch(`${API}/staff/accept-invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  const json = await res.json()
+  if (!json.success) throw new Error(json.error?.message ?? 'Request failed')
+  return json.data
+}
+
 // ─── Documents ────────────────────────────────────────────────────────────────
 
 export interface Document {
