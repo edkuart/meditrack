@@ -26,6 +26,12 @@ export const config = {
 
   email: {
     apiKey: optional('RESEND_API_KEY', ''),
-    from: optional('EMAIL_FROM', 'noreply@meditrack.app'),
+    from: optional('EMAIL_FROM', 'meditrack <noreply@meditrack.app>'),
+  },
+
+  whatsapp: {
+    accountSid: optional('TWILIO_ACCOUNT_SID', ''),
+    authToken: optional('TWILIO_AUTH_TOKEN', ''),
+    from: optional('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
   },
 } as const

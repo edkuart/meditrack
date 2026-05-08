@@ -10,6 +10,7 @@ import {
 } from '../../shared/services/token.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { UnauthorizedError, NotFoundError, AppError } from '../../shared/errors.ts'
+import { sendMagicLinkNotification, sendPinNotification } from '../notifications/notifications.service.ts'
 import type { GenerateAccessInput, ValidatePinInput } from './portal.schema.ts'
 
 // ─── Doctor: generate patient access ──────────────────────────────────────────
@@ -23,7 +24,7 @@ export async function generatePatientAccess(
 ) {
   const patient = await db.query.patients.findFirst({
     where: and(eq(patients.tenant_id, tenantId), eq(patients.id, patientId)),
-    columns: { id: true, first_name: true, last_name: true },
+    columns: { id: true, first_name: true, last_name: true, email: true, phone: true },
   })
   if (!patient) throw new NotFoundError('Patient')
 
@@ -67,6 +68,12 @@ export async function generatePatientAccess(
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000'
 
   if (input.channel === 'pin') {
+    // Fire-and-forget: notify patient via email or WhatsApp with their PIN
+    if (pinPlain) {
+      sendPinNotification(patient, pinPlain).catch(err =>
+        console.error('[portal] PIN notification error:', err)
+      )
+    }
     return {
       channel: 'pin',
       pin: pinPlain,
@@ -77,11 +84,19 @@ export async function generatePatientAccess(
   }
 
   const accessUrl = `${frontendUrl}/portal?token=${rawToken}`
+
+  // Fire-and-forget: send magic link or WhatsApp to patient
+  if (input.channel !== 'qr') {
+    sendMagicLinkNotification(patient, accessUrl, expiresAt, input.channel).catch(err =>
+      console.error('[portal] access notification error:', err)
+    )
+  }
+
   return {
     channel: input.channel,
     token: rawToken,
     access_url: accessUrl,
-    qr_data: accessUrl,  // Frontend uses this string to render QR code
+    qr_data: accessUrl,
     expires_at: expiresAt,
   }
 }

@@ -11,6 +11,8 @@ import { encountersRouter } from './modules/encounters/encounters.router.ts'
 import { treatmentsRouter } from './modules/treatments/treatments.router.ts'
 import { portalRouter } from './modules/portal/portal.router.ts'
 import { documentsRouter } from './modules/documents/documents.router.ts'
+import { notificationsRouter } from './modules/notifications/notifications.router.ts'
+import { startScheduler } from './modules/notifications/scheduler/index.ts'
 
 const app = new Hono()
 
@@ -38,6 +40,7 @@ app.route('/api/v1', encountersRouter)
 app.route('/api/v1', treatmentsRouter)
 app.route('/api/v1', portalRouter)
 app.route('/api/v1', documentsRouter)
+app.route('/api/v1', notificationsRouter)
 
 // ─── Error handler ─────────────────────────────────────────────────────────────
 
@@ -49,6 +52,7 @@ app.notFound((c) => c.json({ success: false, error: { code: 'NOT_FOUND', message
 
 serve({ fetch: app.fetch, port: config.port }, () => {
   console.log(`meditrack api running on http://localhost:${config.port}`)
+  startScheduler()
 })
 
 export default app
