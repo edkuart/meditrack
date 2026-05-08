@@ -10,6 +10,7 @@ import { patientsRouter } from './modules/patients/patients.router.ts'
 import { encountersRouter } from './modules/encounters/encounters.router.ts'
 import { treatmentsRouter } from './modules/treatments/treatments.router.ts'
 import { portalRouter } from './modules/portal/portal.router.ts'
+import { documentsRouter } from './modules/documents/documents.router.ts'
 
 const app = new Hono()
 
@@ -36,6 +37,7 @@ app.route('/api/v1/patients', patientsRouter)
 app.route('/api/v1', encountersRouter)
 app.route('/api/v1', treatmentsRouter)
 app.route('/api/v1', portalRouter)
+app.route('/api/v1', documentsRouter)
 
 // ─── Error handler ─────────────────────────────────────────────────────────────
 

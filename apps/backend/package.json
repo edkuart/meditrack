@@ -17,6 +17,8 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1045.0",
+    "@aws-sdk/s3-request-presigner": "^3.1045.0",
     "@hono/node-server": "^1.14.1",
     "@hono/zod-validator": "^0.7.6",
     "bcryptjs": "^3.0.2",
