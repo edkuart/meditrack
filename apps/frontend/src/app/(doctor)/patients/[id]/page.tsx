@@ -14,6 +14,8 @@ import {
 } from '@/lib/doctor/api'
 import { DocumentUploader } from '@/components/doctor/DocumentUploader'
 import { DocumentList } from '@/components/doctor/DocumentList'
+import { AdherenceCalendar } from '@/components/doctor/AdherenceCalendar'
+import { getPatientAdherence, type PatientAdherenceReport } from '@/lib/doctor/analytics-api'
 import QRCode from 'qrcode'
 
 // ─── Encounter type labels ─────────────────────────────────────────────────────
@@ -151,6 +153,7 @@ export default function PatientProfilePage() {
   const [patient, setPatient] = useState<Patient | null>(null)
   const [encounters, setEncounters] = useState<Encounter[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [adherence, setAdherence] = useState<PatientAdherenceReport | null>(null)
   const [loadingPage, setLoadingPage] = useState(true)
 
   // encounter create form
@@ -168,14 +171,16 @@ export default function PatientProfilePage() {
     if (!token) return
     setLoadingPage(true)
     try {
-      const [p, encs, docs] = await Promise.all([
+      const [p, encs, docs, adh] = await Promise.all([
         getPatient(token, patientId),
         listEncounters(token, patientId),
         listDocuments(token, patientId),
+        getPatientAdherence(token, patientId, 30).catch(() => null),
       ])
       setPatient(p)
       setEncounters(encs)
       setDocuments(docs)
+      setAdherence(adh)
     } finally {
       setLoadingPage(false)
     }
@@ -341,6 +346,23 @@ export default function PatientProfilePage() {
 
       {/* Portal access */}
       {token && <PortalAccessSection token={token} patientId={patientId} />}
+
+      {/* Adherence */}
+      {adherence && adherence.total > 0 && (
+        <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+          <h2 className="font-semibold text-slate-800 mb-4">Adherencia — últimos 30 días</h2>
+          <AdherenceCalendar
+            days={adherence.days}
+            streak={adherence.streak}
+            overallScore={adherence.overall_score}
+          />
+          <div className="flex gap-4 mt-4 text-xs text-slate-500">
+            <span>Confirmadas: <strong className="text-slate-700">{adherence.confirmed}</strong></span>
+            <span>Perdidas: <strong className="text-slate-700">{adherence.missed}</strong></span>
+            <span>Total: <strong className="text-slate-700">{adherence.total}</strong></span>
+          </div>
+        </section>
+      )}
 
       {/* Documents */}
       <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">

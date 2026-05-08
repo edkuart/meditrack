@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Users, LogOut, Loader2 } from 'lucide-react'
+import { Users, LayoutDashboard, LogOut, Loader2 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 
 function Sidebar() {
@@ -25,6 +25,17 @@ function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
+        <Link
+          href="/dashboard"
+          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            pathname === '/dashboard'
+              ? 'bg-blue-50 text-blue-700'
+              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+          }`}
+        >
+          <LayoutDashboard size={16} />
+          Dashboard
+        </Link>
         <Link
           href="/patients"
           className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
