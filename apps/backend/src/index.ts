@@ -14,6 +14,7 @@ import { documentsRouter } from './modules/documents/documents.router.ts'
 import { notificationsRouter } from './modules/notifications/notifications.router.ts'
 import { analyticsRouter } from './modules/analytics/analytics.router.ts'
 import { staffRouter } from './modules/staff/staff.router.ts'
+import { fhirRouter } from './modules/fhir/fhir.router.ts'
 import { startScheduler } from './modules/notifications/scheduler/index.ts'
 
 const app = new Hono()
@@ -45,6 +46,7 @@ app.route('/api/v1', documentsRouter)
 app.route('/api/v1', notificationsRouter)
 app.route('/api/v1', analyticsRouter)
 app.route('/api/v1', staffRouter)
+app.route('/api/v1', fhirRouter)
 
 // ─── Error handler ─────────────────────────────────────────────────────────────
 

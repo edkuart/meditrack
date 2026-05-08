@@ -5,12 +5,13 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, FileText, Plus, ChevronUp, ChevronDown,
-  QrCode, Link2, Hash, Loader2, ExternalLink,
+  QrCode, Link2, Hash, Loader2, ExternalLink, Download,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   getPatient, listEncounters, createEncounter, listDocuments,
-  generatePortalAccess, type Patient, type Encounter, type Document, type AccessResult,
+  generatePortalAccess, getPatientFhirBundle,
+  type Patient, type Encounter, type Document, type AccessResult,
 } from '@/lib/doctor/api'
 import { DocumentUploader } from '@/components/doctor/DocumentUploader'
 import { DocumentList } from '@/components/doctor/DocumentList'
@@ -167,6 +168,9 @@ export default function PatientProfilePage() {
   // documents
   const [showUploader, setShowUploader] = useState(false)
 
+  // FHIR export
+  const [exportingFhir, setExportingFhir] = useState(false)
+
   const load = useCallback(async () => {
     if (!token) return
     setLoadingPage(true)
@@ -204,6 +208,24 @@ export default function PatientProfilePage() {
       setEncError(err instanceof Error ? err.message : 'Error al crear la consulta')
     } finally {
       setCreatingEnc(false)
+    }
+  }
+
+  async function handleExportFhir() {
+    if (!token) return
+    setExportingFhir(true)
+    try {
+      const bundle = await getPatientFhirBundle(token, patientId)
+      const json = JSON.stringify(bundle, null, 2)
+      const blob = new Blob([json], { type: 'application/fhir+json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `fhir-patient-${patientId}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportingFhir(false)
     }
   }
 
@@ -246,6 +268,15 @@ export default function PatientProfilePage() {
             {patient.phone && <span>{patient.phone}</span>}
           </div>
         </div>
+        <button
+          onClick={handleExportFhir}
+          disabled={exportingFhir}
+          title="Exportar FHIR R4"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-500 hover:border-blue-300 hover:text-blue-600 disabled:opacity-50 transition-colors shrink-0"
+        >
+          {exportingFhir ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+          FHIR
+        </button>
       </div>
 
       {/* Encounters */}

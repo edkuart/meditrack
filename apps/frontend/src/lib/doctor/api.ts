@@ -410,6 +410,12 @@ export async function uploadDocument(
   return json.data as Document
 }
 
+// ─── FHIR R4 export ───────────────────────────────────────────────────────────
+
+export async function getPatientFhirBundle(token: string, patientId: string): Promise<object> {
+  return doctorFetch(`/patients/${patientId}/fhir`, token)
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
