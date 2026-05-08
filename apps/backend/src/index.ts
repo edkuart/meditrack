@@ -8,6 +8,7 @@ import { errorHandler } from './shared/middleware/error.middleware.ts'
 import { authRouter } from './modules/auth/auth.router.ts'
 import { patientsRouter } from './modules/patients/patients.router.ts'
 import { encountersRouter } from './modules/encounters/encounters.router.ts'
+import { treatmentsRouter } from './modules/treatments/treatments.router.ts'
 
 const app = new Hono()
 
@@ -32,6 +33,7 @@ app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOStri
 app.route('/api/v1/auth', authRouter)
 app.route('/api/v1/patients', patientsRouter)
 app.route('/api/v1', encountersRouter)
+app.route('/api/v1', treatmentsRouter)
 
 // ─── Error handler ─────────────────────────────────────────────────────────────
 
