@@ -129,4 +129,10 @@ router.get('/portal/adherence', requirePatient, async (c) => {
   return c.json({ success: true, data })
 })
 
+router.get('/portal/documents/:id/url', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.getDocumentUrlForPatient(p.sub, c.req.param('id') as string)
+  return c.json({ success: true, data })
+})
+
 export { router as portalRouter }

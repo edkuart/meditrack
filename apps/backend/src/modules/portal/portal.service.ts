@@ -8,6 +8,7 @@ import {
   generateOpaqueToken, generatePin, hashToken,
   signPatientToken, verifyPatientToken,
 } from '../../shared/services/token.service.ts'
+import { getSignedViewUrl } from '../../shared/storage/storage.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { UnauthorizedError, NotFoundError, AppError } from '../../shared/errors.ts'
 import { sendMagicLinkNotification, sendPinNotification } from '../notifications/notifications.service.ts'
@@ -360,6 +361,21 @@ export async function getPatientDocuments(patientId: string) {
     orderBy: (d, { desc }) => desc(d.created_at),
     limit: 50,
   })
+}
+
+export async function getDocumentUrlForPatient(patientId: string, documentId: string) {
+  const doc = await db.query.documents.findFirst({
+    where: and(
+      eq(documents.id, documentId),
+      eq(documents.patient_id, patientId),
+      eq(documents.is_visible_to_patient, true),
+    ),
+    columns: { id: true, storage_key: true, file_name: true, mime_type: true },
+  })
+  if (!doc) throw new NotFoundError('Document')
+
+  const url = await getSignedViewUrl(doc.storage_key, 900)
+  return { url, expires_in_seconds: 900, file_name: doc.file_name, mime_type: doc.mime_type }
 }
 
 export async function getAdherenceForPortal(patientId: string) {

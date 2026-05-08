@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -185,6 +187,13 @@ export default function PortalPage() {
           className="flex items-center justify-between bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm"
         >
           <span className="text-slate-700 font-medium">Mis consultas anteriores</span>
+          <ChevronRight size={18} className="text-slate-400" />
+        </Link>
+        <Link
+          href="/portal/documents"
+          className="flex items-center justify-between bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm"
+        >
+          <span className="text-slate-700 font-medium">Mis documentos</span>
           <ChevronRight size={18} className="text-slate-400" />
         </Link>
       </div>

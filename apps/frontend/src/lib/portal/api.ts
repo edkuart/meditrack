@@ -109,3 +109,21 @@ export async function getHistory(token: string) {
     doctor: { first_name: string; last_name: string; specialty: string | null }
   }>>('/portal/history', token)
 }
+
+export interface PatientDocument {
+  id: string
+  type: string
+  file_name: string
+  mime_type: string
+  created_at: string
+}
+
+export async function getDocuments(token: string) {
+  return portalFetch<PatientDocument[]>('/portal/documents', token)
+}
+
+export async function getDocumentUrl(token: string, documentId: string) {
+  return portalFetch<{ url: string; expires_in_seconds: number; file_name: string; mime_type: string }>(
+    `/portal/documents/${documentId}/url`, token,
+  )
+}
