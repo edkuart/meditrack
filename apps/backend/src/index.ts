@@ -3,28 +3,42 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
+import { config } from './shared/config.ts'
+import { errorHandler } from './shared/middleware/error.middleware.ts'
+import { authRouter } from './modules/auth/auth.router.ts'
 
 const app = new Hono()
 
+// ─── Global middleware ─────────────────────────────────────────────────────────
+
 app.use('*', logger())
-app.use('*', prettyJSON())
 app.use('*', cors({
-  origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  origin: config.frontendUrl,
   credentials: true,
+  allowHeaders: ['Content-Type', 'Authorization'],
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }))
 
-app.get('/health', (c) => {
-  return c.json({ status: 'ok', timestamp: new Date().toISOString() })
-})
+if (config.env === 'development') {
+  app.use('*', prettyJSON())
+}
 
-app.get('/api/v1', (c) => {
-  return c.json({ name: 'meditrack api', version: '1.0.0' })
-})
+// ─── Routes ────────────────────────────────────────────────────────────────────
 
-const port = Number(process.env.PORT) || 3001
+app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
-serve({ fetch: app.fetch, port }, () => {
-  console.log(`meditrack backend running on http://localhost:${port}`)
+app.route('/api/v1/auth', authRouter)
+
+// ─── Error handler ─────────────────────────────────────────────────────────────
+
+app.onError(errorHandler)
+
+app.notFound((c) => c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Route not found' } }, 404))
+
+// ─── Start ─────────────────────────────────────────────────────────────────────
+
+serve({ fetch: app.fetch, port: config.port }, () => {
+  console.log(`meditrack api running on http://localhost:${config.port}`)
 })
 
 export default app
