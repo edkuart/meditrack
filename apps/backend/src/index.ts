@@ -6,6 +6,8 @@ import { prettyJSON } from 'hono/pretty-json'
 import { config } from './shared/config.ts'
 import { errorHandler } from './shared/middleware/error.middleware.ts'
 import { authRouter } from './modules/auth/auth.router.ts'
+import { patientsRouter } from './modules/patients/patients.router.ts'
+import { encountersRouter } from './modules/encounters/encounters.router.ts'
 
 const app = new Hono()
 
@@ -28,6 +30,8 @@ if (config.env === 'development') {
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
 app.route('/api/v1/auth', authRouter)
+app.route('/api/v1/patients', patientsRouter)
+app.route('/api/v1', encountersRouter)
 
 // ─── Error handler ─────────────────────────────────────────────────────────────
 
