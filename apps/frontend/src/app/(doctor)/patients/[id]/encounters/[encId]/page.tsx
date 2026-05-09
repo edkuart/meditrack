@@ -507,14 +507,18 @@ export default function EncounterPage() {
 
   function applyClinicalProtocol(protocol: ClinicalProtocol) {
     setSelectedProtocolId(protocol.id)
+
+    // Always replace treatment name and reset medications when switching protocols
+    setTreatmentName(protocol.treatment_name || protocol.name)
+    setMedications([])
+    setShowMedForm(false)
+    setMedForm(emptyMedForm())
+
     if (protocol.note_template) {
       setNotes(prev => prev.trim() ? `${prev.trim()}\n\n${protocol.note_template}` : protocol.note_template ?? '')
     }
     if (protocol.summary_template) {
       setSummary(prev => prev.trim() ? prev : protocol.summary_template ?? '')
-    }
-    if (protocol.treatment_name || protocol.name) {
-      setTreatmentName(prev => prev || protocol.treatment_name || protocol.name)
     }
 
     const protocolMeds = protocol.medications.map((med) => ({
