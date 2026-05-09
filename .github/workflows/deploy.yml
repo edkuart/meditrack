@@ -9,29 +9,55 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ── Backend → Railway ─────────────────────────────────────────────────────────
   deploy-backend:
-    name: Deploy Backend
+    name: Deploy Backend (Railway)
     runs-on: ubuntu-latest
     environment: production
+
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@latest
+
       - name: Deploy to Railway
-        # Replace with your deployment provider's action
-        # Railway: uses railway CLI or webhook trigger
-        run: echo "Configure your deploy step here (Railway / Render / Fly.io)"
+        # Railway picks up the Dockerfile at apps/backend/Dockerfile automatically
+        # when RAILWAY_SERVICE points to the backend service.
+        # Migrations run inside the container via the CMD in Dockerfile.
+        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME }} --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
+      - name: Wait for deployment to go live
+        run: railway status --service ${{ vars.RAILWAY_SERVICE_NAME }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  # ── Frontend → Vercel ─────────────────────────────────────────────────────────
   deploy-frontend:
-    name: Deploy Frontend
+    name: Deploy Frontend (Vercel)
     runs-on: ubuntu-latest
     environment: production
     needs: deploy-backend
+
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Deploy to Vercel
-        # Vercel deploys automatically via GitHub integration
-        # This step is a placeholder if using manual deploy
-        run: echo "Vercel deploys automatically on push to main via GitHub integration"
+        run: |
+          npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/frontend
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

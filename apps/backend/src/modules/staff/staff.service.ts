@@ -4,6 +4,7 @@ import { db, users, tenants, staffInvitations } from '../../shared/db/index.ts'
 import { generateOpaqueToken, hashToken, signAccessToken, generateRefreshToken, refreshTokenExpiresAt } from '../../shared/services/token.service.ts'
 import { sendEmail } from '../../shared/services/email.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
+import { assertStaffLimit } from '../../shared/services/limits.service.ts'
 import { ConflictError, NotFoundError, UnauthorizedError, ForbiddenError } from '../../shared/errors.ts'
 import type { InviteStaffInput, AcceptInviteInput } from './staff.schema.ts'
 import { refreshTokens } from '../../shared/db/index.ts'
@@ -55,6 +56,8 @@ export async function inviteStaff(
   inviterName: string,
   input: InviteStaffInput,
 ) {
+  await assertStaffLimit(tenantId)
+
   // Check email not already in system
   const existing = await db.query.users.findFirst({
     where: eq(users.email, input.email),
@@ -207,6 +210,10 @@ export async function deactivateStaff(tenantId: string, requesterId: string, tar
   await db.update(users)
     .set({ is_active: false, updated_at: new Date() })
     .where(eq(users.id, targetId))
+
+  await db.update(refreshTokens)
+    .set({ is_revoked: true, used_at: new Date() })
+    .where(eq(refreshTokens.user_id, targetId))
 }
 
 // ─── Get me (full profile from DB) ────────────────────────────────────────────

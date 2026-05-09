@@ -117,7 +117,34 @@ export async function refresh(rawRefreshToken: string, userAgent?: string) {
     with: { user: true },
   })
 
-  if (!stored || stored.is_revoked || stored.expires_at < new Date()) {
+  if (!stored) {
+    throw new UnauthorizedError('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN')
+  }
+
+  if (stored.is_revoked || stored.used_at) {
+    await db.update(refreshTokens)
+      .set({ is_revoked: true })
+      .where(eq(refreshTokens.user_id, stored.user_id))
+
+    await createAuditLog({
+      tenant_id: stored.user.tenant_id,
+      actor_id: stored.user.id,
+      actor_type: 'USER',
+      actor_email: stored.user.email,
+      action: 'TOKEN_REVOKED',
+      resource_type: 'REFRESH_TOKEN',
+      resource_id: stored.id,
+      user_agent: userAgent,
+      context: { reason: 'REFRESH_TOKEN_REUSE_DETECTED' },
+    })
+
+    throw new UnauthorizedError('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN')
+  }
+
+  if (stored.expires_at < new Date()) {
+    await db.update(refreshTokens)
+      .set({ is_revoked: true })
+      .where(eq(refreshTokens.id, stored.id))
     throw new UnauthorizedError('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN')
   }
 
@@ -127,6 +154,13 @@ export async function refresh(rawRefreshToken: string, userAgent?: string) {
     .where(eq(refreshTokens.id, stored.id))
 
   const { user } = stored
+  if (!user.is_active) {
+    await db.update(refreshTokens)
+      .set({ is_revoked: true, used_at: new Date() })
+      .where(eq(refreshTokens.id, stored.id))
+    throw new UnauthorizedError('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN')
+  }
+
   const tokens = await issueTokenPair(user.id, user.tenant_id, user.role, user.email, userAgent)
 
   await createAuditLog({

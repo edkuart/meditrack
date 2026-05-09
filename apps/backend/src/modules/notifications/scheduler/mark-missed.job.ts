@@ -1,5 +1,6 @@
 import { and, eq, lt } from 'drizzle-orm'
 import { db, doseEvents } from '../../../shared/db/index.ts'
+import { log } from '../../../shared/observability/logger.ts'
 
 export async function runMarkMissedJob(): Promise<void> {
   try {
@@ -13,9 +14,9 @@ export async function runMarkMissedJob(): Promise<void> {
       .returning({ id: doseEvents.id })
 
     if (updated.length > 0) {
-      console.log(`[mark-missed] marked ${updated.length} dose(s) as MISSED`)
+      log.info('mark_missed.completed', { marked_missed: updated.length })
     }
   } catch (err) {
-    console.error('[mark-missed] job error:', err)
+    throw err
   }
 }

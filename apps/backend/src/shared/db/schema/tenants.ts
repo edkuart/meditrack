@@ -10,6 +10,10 @@ export const tenants = pgTable('tenants', {
   plan_type: planTypeEnum('plan_type').default('free').notNull(),
   status: tenantStatusEnum('status').default('active').notNull(),
   settings: jsonb('settings').default({}).notNull(),
+  // ─── Stripe billing ──────────────────────────────────────────────────────────
+  stripe_customer_id: varchar('stripe_customer_id', { length: 255 }),
+  stripe_subscription_id: varchar('stripe_subscription_id', { length: 255 }),
+  subscription_current_period_end: timestamp('subscription_current_period_end', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

@@ -26,7 +26,7 @@ router.get('/', zValidator('query', SearchPatientsSchema), async (c) => {
   )
 
   const result = await patientsService.searchPatients(auth.tenant_id, query)
-  return c.json({ success: true, ...result })
+  return c.json({ success: true, data: result })
 })
 
 // POST /patients

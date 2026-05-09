@@ -49,3 +49,51 @@ export async function getPatientAdherence(
 ): Promise<PatientAdherenceReport> {
   return apiFetch(`/analytics/patients/${patientId}/adherence?period=${period}`, token)
 }
+
+// ─── Clinic trends ────────────────────────────────────────────────────────────
+
+export interface WeeklyTrend {
+  week_start: string
+  new_patients: number
+  encounters_opened: number
+  doses_confirmed: number
+  doses_total: number
+  adherence_rate: number  // 0-100, or -1 if no doses
+}
+
+export interface ClinicTrends {
+  weeks: WeeklyTrend[]
+}
+
+export async function getClinicTrends(token: string, weeks = 12): Promise<ClinicTrends> {
+  return apiFetch(`/analytics/clinic/trends?weeks=${weeks}`, token)
+}
+
+// ─── Adherence cohorts ────────────────────────────────────────────────────────
+
+export interface CohortPatient {
+  id: string
+  first_name: string
+  last_name: string
+  overall_score: number
+  active_treatments: number
+}
+
+export interface AdherenceCohorts {
+  period_days: number
+  high: CohortPatient[]
+  medium: CohortPatient[]
+  low: CohortPatient[]
+  no_data: CohortPatient[]
+}
+
+export async function getAdherenceCohorts(token: string, period = 30): Promise<AdherenceCohorts> {
+  return apiFetch(`/analytics/clinic/cohorts?period=${period}`, token)
+}
+
+// ─── CSV export ───────────────────────────────────────────────────────────────
+
+export function buildCsvExportUrl(): string {
+  const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
+  return `${API}/analytics/export/patients`
+}

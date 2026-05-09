@@ -2,6 +2,8 @@ import type { Context, Next } from 'hono'
 import { verifyAccessToken, type AccessTokenPayload } from '../services/token.service.ts'
 import { UnauthorizedError, ForbiddenError } from '../errors.ts'
 import type { userRoleEnum } from '../db/schema/users.ts'
+import { db, users } from '../db/index.ts'
+import { eq } from 'drizzle-orm'
 
 type UserRole = (typeof userRoleEnum.enumValues)[number]
 
@@ -26,6 +28,11 @@ export async function requireAuth(c: Context, next: Next) {
 
   try {
     const payload = await verifyAccessToken(token)
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, payload.sub),
+      columns: { id: true, is_active: true },
+    })
+    if (!user?.is_active) throw new UnauthorizedError('User is inactive')
     c.set('auth', payload)
     await next()
   } catch {

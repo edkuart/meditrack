@@ -1,8 +1,10 @@
 import { and, eq, gte, lte } from 'drizzle-orm'
-import { db, doseEvents, medicationItems, patients, notificationLogs } from '../../../shared/db/index.ts'
-import { sendDoseReminderNotification } from '../notifications.service.ts'
+import { db, doseEvents, medicationItems, patients } from '../../../shared/db/index.ts'
+import { getDoseReminderDeliveryState, sendDoseReminderNotification } from '../notifications.service.ts'
+import { log } from '../../../shared/observability/logger.ts'
 
 const WINDOW_MINUTES = 60
+const MAX_REMINDERS_PER_RUN = 500
 
 export async function runDoseReminderJob(): Promise<void> {
   const now = new Date()
@@ -29,37 +31,37 @@ export async function runDoseReminderJob(): Promise<void> {
         gte(doseEvents.scheduled_at, now),
         lte(doseEvents.scheduled_at, windowEnd),
       ))
+      .limit(MAX_REMINDERS_PER_RUN)
 
     let sent = 0
 
     for (const item of upcoming) {
       if (!item.email && !item.phone) continue
 
-      // Dedup: skip if already notified for this specific dose event
-      const alreadySent = await db.query.notificationLogs.findFirst({
-        where: and(
-          eq(notificationLogs.dose_event_id, item.doseId),
-          eq(notificationLogs.type, 'DOSE_REMINDER'),
-        ),
-        columns: { id: true },
-      })
-      if (alreadySent) continue
+      const deliveryState = await getDoseReminderDeliveryState(item.doseId, now)
+      if (!deliveryState.shouldSend) continue
 
-      await sendDoseReminderNotification(
+      const result = await sendDoseReminderNotification(
         { id: item.patientId, first_name: item.firstName, email: item.email, phone: item.phone },
         item.doseId,
         item.scheduledAt,
         item.drugName,
         item.doseAmount,
         item.doseUnit,
+        deliveryState.attemptCount,
       )
-      sent++
+      if (result?.status === 'SENT') sent++
     }
 
     if (upcoming.length > 0) {
-      console.log(`[dose-reminder] ${upcoming.length} upcoming — ${sent} notified`)
+      log.info('dose_reminder.completed', {
+        upcoming: upcoming.length,
+        capped: upcoming.length === MAX_REMINDERS_PER_RUN,
+        notified: sent,
+        skipped: upcoming.length - sent,
+      })
     }
   } catch (err) {
-    console.error('[dose-reminder] job error:', err)
+    throw err
   }
 }

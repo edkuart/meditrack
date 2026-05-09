@@ -90,6 +90,10 @@ export async function getActiveTreatment(token: string) {
   return portalFetch<TreatmentPlan | null>('/portal/treatment', token)
 }
 
+export async function getActiveTreatments(token: string) {
+  return portalFetch<TreatmentPlan[]>('/portal/treatments', token)
+}
+
 export async function confirmDose(token: string, doseId: string) {
   return portalFetch<DoseEvent>(`/portal/doses/${doseId}/confirm`, token, { method: 'POST', body: JSON.stringify({}) })
 }
@@ -99,6 +103,34 @@ export async function getAdherence(token: string) {
     score: number; confirmed: number; total: number
     missed: number; avatar_state: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR'
   }>('/portal/adherence', token)
+}
+
+export interface PatientEngagement {
+  score: number
+  confirmed: number
+  total: number
+  missed: number
+  streak_days: number
+  weekly_completed_days: number
+  tone: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR'
+  headline: string
+  guidance: string
+  next_action: {
+    label: string
+    detail: string
+    priority: 'calm' | 'today' | 'support'
+  }
+  caregiver_tip: string
+  week: Array<{
+    date: string
+    confirmed: number
+    total: number
+    score: number
+  }>
+}
+
+export async function getEngagement(token: string) {
+  return portalFetch<PatientEngagement>('/portal/engagement', token)
 }
 
 export async function getHistory(token: string) {

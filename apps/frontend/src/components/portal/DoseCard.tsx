@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, Clock, Utensils } from 'lucide-react'
+import { Check, Clock, Loader2, ShieldCheck, Utensils } from 'lucide-react'
 import type { DoseEvent } from '@/lib/portal/api'
 
 interface Props {
@@ -21,6 +21,7 @@ export function DoseCard({ dose, onConfirm }: Props) {
   const [loading, setLoading] = useState(false)
   const confirmed = dose.status === 'CONFIRMED'
   const editable = isEditable(dose)
+  const missed = dose.status === 'MISSED'
 
   async function handleConfirm() {
     if (!editable || loading) return
@@ -35,47 +36,46 @@ export function DoseCard({ dose, onConfirm }: Props) {
   return (
     <div
       className={`
-        rounded-2xl border-2 p-5 transition-all
+        rounded-2xl border p-5 shadow-sm transition-all
         ${confirmed
-          ? 'border-green-200 bg-green-50'
-          : 'border-slate-200 bg-white'
+          ? 'border-emerald-200 bg-emerald-50'
+          : missed
+            ? 'border-amber-200 bg-amber-50'
+            : 'border-slate-100 bg-white'
         }
       `}
     >
-      {/* Time */}
-      <div className="flex items-center gap-2 text-slate-400 text-sm mb-3">
-        <Clock size={14} />
-        <span>{formatTime(dose.scheduled_at)}</span>
+      <div className="mb-3 flex items-center gap-2 text-sm text-slate-400">
+        <Clock size={14} className="shrink-0" />
+        <span className="font-medium">{formatTime(dose.scheduled_at)}</span>
         {dose.medication_item.with_food && (
-          <span className="flex items-center gap-1 ml-auto text-amber-500">
+          <span className="ml-auto flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
             <Utensils size={14} />
             Con comida
           </span>
         )}
       </div>
 
-      {/* Drug info */}
-      <p className="text-xl font-semibold text-slate-800 leading-tight">
+      <p className="text-lg font-semibold leading-tight text-slate-900">
         {dose.medication_item.drug_name}
       </p>
       {dose.medication_item.presentation && (
         <p className="text-slate-500 text-sm mt-0.5">{dose.medication_item.presentation}</p>
       )}
-      <p className="text-slate-600 mt-1 text-base">
+      <p className="mt-1 text-base text-slate-600">
         {dose.medication_item.dose_amount} {dose.medication_item.dose_unit}
       </p>
 
       {dose.medication_item.special_instructions && (
-        <p className="text-slate-400 text-sm mt-2 italic">
+        <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-500">
           {dose.medication_item.special_instructions}
         </p>
       )}
 
-      {/* Action */}
       <div className="mt-4">
         {confirmed ? (
-          <div className="flex items-center gap-2 text-green-600 font-medium">
-            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+          <div className="flex items-center gap-2 font-medium text-emerald-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
               <Check size={16} strokeWidth={3} />
             </div>
             Tomada{dose.confirmed_at ? ` a las ${formatTime(dose.confirmed_at)}` : ''}
@@ -85,17 +85,18 @@ export function DoseCard({ dose, onConfirm }: Props) {
             onClick={handleConfirm}
             disabled={loading}
             className="
-              w-full py-4 rounded-xl text-white font-semibold text-lg
-              bg-blue-500 active:bg-blue-600
-              disabled:opacity-60 transition-all
+              flex w-full items-center justify-center gap-2 rounded-xl
+              bg-blue-500 py-4 text-base font-semibold text-white
               shadow-sm shadow-blue-200
+              transition-all active:bg-blue-600 disabled:opacity-60
             "
           >
-            {loading ? 'Registrando...' : '✓ Ya la tomé'}
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+            {loading ? 'Registrando...' : 'Ya la tomé'}
           </button>
         ) : (
-          <p className="text-slate-400 text-sm text-center py-2">
-            {dose.status === 'MISSED' ? 'No registrada' : 'Fuera de tiempo'}
+          <p className="rounded-xl bg-white/70 px-3 py-2 text-center text-sm text-slate-500">
+            {missed ? 'No registrada en la ventana indicada' : 'Esta dosis ya no se puede modificar'}
           </p>
         )}
       </div>

@@ -37,6 +37,7 @@ export default function RegisterPage() {
         professional_id: form.professional_id || undefined,
       })
       localStorage.setItem('meditrack_doctor_token', result.access_token)
+      localStorage.setItem('meditrack_doctor_refresh_token', result.refresh_token)
       router.replace('/patients')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrarse')

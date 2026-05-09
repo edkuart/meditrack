@@ -68,6 +68,24 @@ export async function getMe(token: string): Promise<DoctorUser> {
   return doctorFetch('/auth/me', token)
 }
 
+export async function refreshSession(refreshToken: string): Promise<{
+  access_token: string
+  refresh_token: string
+}> {
+  return publicFetch('/auth/refresh', {
+    method: 'POST',
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  })
+}
+
+export async function logoutSession(token: string, refreshToken?: string): Promise<void> {
+  await doctorFetch('/auth/logout', token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
+  })
+}
+
 // ─── Patients ─────────────────────────────────────────────────────────────────
 
 export interface Patient {
@@ -81,11 +99,29 @@ export interface Patient {
   sex: 'male' | 'female' | 'other' | null
   is_active: boolean
   notes: string | null
+  anonymized_at: string | null
   created_at: string
 }
 
-export async function listPatients(token: string, q?: string): Promise<Patient[]> {
-  const qs = q ? `?q=${encodeURIComponent(q)}` : ''
+export interface PatientSearchResult {
+  patients: Patient[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    pages: number
+  }
+}
+
+export async function listPatients(
+  token: string,
+  q?: string,
+  page = 1,
+  limit = 20,
+): Promise<PatientSearchResult> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (q) params.set('q', q)
+  const qs = `?${params.toString()}`
   return doctorFetch(`/patients${qs}`, token)
 }
 
@@ -185,6 +221,28 @@ export async function closeEncounter(token: string, id: string, data?: {
   })
 }
 
+export type AiAssistMode = 'SUMMARIZE_ENCOUNTER' | 'SIMPLIFY_FOR_PATIENT'
+
+export interface AiAssistDraft {
+  mode: AiAssistMode
+  text: string
+  safety_notice: string
+  model: string
+}
+
+export async function runEncounterAiAssist(
+  token: string,
+  encounterId: string,
+  mode: AiAssistMode,
+  sourceText?: string,
+): Promise<AiAssistDraft> {
+  return doctorFetch(`/encounters/${encounterId}/ai-assist`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode, source_text: sourceText || undefined }),
+  })
+}
+
 // ─── Treatments ───────────────────────────────────────────────────────────────
 
 export interface MedicationItem {
@@ -204,6 +262,8 @@ export interface MedicationItem {
 
 export interface TreatmentPlan {
   id: string
+  patient_id: string
+  encounter_id: string
   name: string
   status: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'SUSPENDED' | 'CANCELLED'
   start_date: string
@@ -242,6 +302,13 @@ export async function getTreatment(token: string, id: string): Promise<Treatment
   return doctorFetch(`/treatments/${id}`, token)
 }
 
+export async function listPatientTreatments(
+  token: string,
+  patientId: string,
+): Promise<TreatmentPlan[]> {
+  return doctorFetch(`/patients/${patientId}/treatments`, token)
+}
+
 export async function activateTreatment(token: string, id: string): Promise<TreatmentPlan> {
   return doctorFetch(`/treatments/${id}/activate`, token, { method: 'POST' })
 }
@@ -254,6 +321,44 @@ export async function getAdherence(token: string, treatmentId: string) {
     missed: number
     avatar_state: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR'
   }>(`/treatments/${treatmentId}/adherence`, token)
+}
+
+// ─── Clinical protocols ─────────────────────────────────────────────────────
+
+export interface ClinicalProtocolMedication {
+  drug_name: string
+  presentation?: string
+  concentration?: string
+  dose_amount: number
+  dose_unit: string
+  route?: string
+  frequency_type: 'DAILY' | 'EVERY_X_HOURS' | 'WEEKLY' | 'AS_NEEDED'
+  frequency_value?: number
+  times_per_day?: string[]
+  duration_days?: number
+  special_instructions?: string
+  with_food?: boolean
+  sort_order?: number
+}
+
+export interface ClinicalProtocol {
+  id: string
+  source: 'SYSTEM' | 'TENANT'
+  name: string
+  category: string
+  description: string | null
+  encounter_type: EncounterType | null
+  note_template: string | null
+  summary_template: string | null
+  treatment_name: string | null
+  treatment_instructions: string | null
+  medications: ClinicalProtocolMedication[]
+  follow_up_days: number | null
+  tags: string[]
+}
+
+export async function listClinicalProtocols(token: string): Promise<ClinicalProtocol[]> {
+  return doctorFetch('/clinical-protocols', token)
 }
 
 // ─── Portal access ────────────────────────────────────────────────────────────

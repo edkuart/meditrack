@@ -24,6 +24,9 @@ export const users = pgTable('users', {
   is_active: boolean('is_active').default(true).notNull(),
   two_fa_enabled: boolean('two_fa_enabled').default(false).notNull(),
   last_login_at: timestamp('last_login_at', { withTimezone: true }),
+  // Legal acceptance tracking — gated at login if null or before policy update date
+  tos_accepted_at: timestamp('tos_accepted_at', { withTimezone: true }),
+  privacy_policy_accepted_at: timestamp('privacy_policy_accepted_at', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

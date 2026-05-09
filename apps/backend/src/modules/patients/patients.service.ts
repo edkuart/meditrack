@@ -1,6 +1,7 @@
 import { eq, and, or, ilike, sql, desc, count } from 'drizzle-orm'
 import { db, patients, encounters, treatmentPlans } from '../../shared/db/index.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
+import { assertPatientLimit } from '../../shared/services/limits.service.ts'
 import { NotFoundError, ConflictError } from '../../shared/errors.ts'
 import type { CreatePatientInput, UpdatePatientInput, SearchPatientsInput } from './patients.schema.ts'
 
@@ -66,6 +67,8 @@ export async function createPatient(
   doctorEmail: string,
   input: CreatePatientInput,
 ) {
+  await assertPatientLimit(tenantId)
+
   // Deduplication: warn if same id_number already exists in this tenant
   if (input.id_number) {
     const existing = await db.query.patients.findFirst({

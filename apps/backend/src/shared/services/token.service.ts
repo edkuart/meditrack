@@ -15,13 +15,18 @@ export interface AccessTokenPayload {
 export async function signAccessToken(payload: AccessTokenPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(config.jwt.issuer)
+    .setAudience(config.jwt.audience)
     .setIssuedAt()
     .setExpirationTime(config.jwt.accessExpiresIn)
     .sign(accessSecret)
 }
 
 export async function verifyAccessToken(token: string): Promise<AccessTokenPayload> {
-  const { payload } = await jwtVerify(token, accessSecret)
+  const { payload } = await jwtVerify(token, accessSecret, {
+    issuer: config.jwt.issuer,
+    audience: config.jwt.audience,
+  })
   return payload as unknown as AccessTokenPayload
 }
 
@@ -51,13 +56,18 @@ export interface PatientTokenPayload {
 export async function signPatientToken(payload: PatientTokenPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(config.jwt.issuer)
+    .setAudience(`${config.jwt.audience}:patient`)
     .setIssuedAt()
     .setExpirationTime('90d')
     .sign(accessSecret)
 }
 
 export async function verifyPatientToken(token: string): Promise<PatientTokenPayload> {
-  const { payload } = await jwtVerify(token, accessSecret)
+  const { payload } = await jwtVerify(token, accessSecret, {
+    issuer: config.jwt.issuer,
+    audience: `${config.jwt.audience}:patient`,
+  })
   const p = payload as Record<string, unknown>
   if (p['type'] !== 'PATIENT') throw new Error('Invalid token type')
   return p as unknown as PatientTokenPayload

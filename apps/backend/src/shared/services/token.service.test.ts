@@ -1,3 +1,4 @@
+import { decodeJwt } from 'jose'
 import { describe, it, expect } from 'vitest'
 import {
   signAccessToken,
@@ -19,6 +20,10 @@ describe('token.service', () => {
       const token = await signAccessToken(samplePayload)
       expect(typeof token).toBe('string')
       expect(token.split('.')).toHaveLength(3)
+
+      const claims = decodeJwt(token)
+      expect(claims.iss).toBe('meditrack-api')
+      expect(claims.aud).toBe('meditrack-clinical')
 
       const decoded = await verifyAccessToken(token)
       expect(decoded.sub).toBe(samplePayload.sub)

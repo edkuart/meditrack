@@ -3,8 +3,9 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Users, LayoutDashboard, UserCog, LogOut, Loader2 } from 'lucide-react'
+import { Users, LayoutDashboard, UserCog, CreditCard, Building2, ShieldCheck, Monitor, LogOut, Loader2, TrendingUp } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
+import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
 
 const ADMIN_ROLES = new Set(['ADMIN_CLINIC', 'SUPER_ADMIN'])
 
@@ -50,17 +51,57 @@ function Sidebar() {
           Pacientes
         </Link>
         {user && ADMIN_ROLES.has(user.role) && (
-          <Link
-            href="/staff"
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              pathname === '/staff'
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
-            }`}
-          >
-            <UserCog size={16} />
-            Equipo
-          </Link>
+          <>
+            <Link
+              href="/staff"
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname === '/staff'
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+              }`}
+            >
+              <UserCog size={16} />
+              Equipo
+            </Link>
+            <Link
+              href="/analytics"
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname.startsWith('/analytics')
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+              }`}
+            >
+              <TrendingUp size={16} />
+              Analytics
+            </Link>
+
+            {/* Settings submenu */}
+            <div className="pt-1">
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                Configuración
+              </p>
+              {[
+                { href: '/settings/clinic',      icon: Building2,   label: 'Clínica' },
+                { href: '/settings/billing',     icon: CreditCard,  label: 'Plan y pagos' },
+                { href: '/settings/audit',       icon: ShieldCheck, label: 'Auditoría' },
+                { href: '/settings/sessions',    icon: Monitor,     label: 'Sesiones' },
+                { href: '/settings/compliance',  icon: ShieldCheck, label: 'Cumplimiento' },
+              ].map(({ href, icon: Icon, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    pathname.startsWith(href)
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                  }`}
+                >
+                  <Icon size={16} />
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </>
         )}
       </nav>
 
@@ -81,6 +122,45 @@ function Sidebar() {
         </button>
       </div>
     </aside>
+  )
+}
+
+function MobileNav() {
+  const { user } = useAuth()
+  const pathname = usePathname()
+
+  const items = [
+    { href: '/dashboard', label: 'Inicio', icon: LayoutDashboard, active: pathname === '/dashboard' },
+    { href: '/patients', label: 'Pacientes', icon: Users, active: pathname.startsWith('/patients') },
+  ]
+
+  if (user && ADMIN_ROLES.has(user.role)) {
+    items.push({ href: '/staff', label: 'Equipo', icon: UserCog, active: pathname === '/staff' })
+    items.push({ href: '/settings/billing', label: 'Plan', icon: CreditCard, active: pathname.startsWith('/settings/billing') })
+  }
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+      <div className={`mx-auto grid max-w-md gap-1 ${items.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+        {items.map(item => {
+          const Icon = item.icon
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors ${
+                item.active
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+              }`}
+            >
+              <Icon size={18} />
+              <span>{item.label}</span>
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
   )
 }
 
@@ -105,9 +185,13 @@ function DoctorGuard({ children }: { children: React.ReactNode }) {
   if (!token) return null
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">{children}</main>
+    <div className="flex min-h-screen flex-col">
+      <LegalAcceptanceBanner />
+      <div className="flex flex-1">
+        <Sidebar />
+        <main className="flex-1 overflow-auto pb-24 md:pb-0">{children}</main>
+        <MobileNav />
+      </div>
     </div>
   )
 }

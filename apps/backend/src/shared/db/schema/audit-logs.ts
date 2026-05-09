@@ -44,6 +44,20 @@ export const auditActionEnum = pgEnum('audit_action', [
   'USER_DEACTIVATED',
   'SETTINGS_CHANGED',
   'EXPORT_REQUESTED',
+  // AI assist
+  'AI_ASSIST_USED',
+  // Billing
+  'BILLING_CHECKOUT_STARTED',
+  'BILLING_PLAN_CHANGED',
+  // Compliance
+  'CONSENT_RECORDED',
+  'CONSENT_WITHDRAWN',
+  'PATIENT_ANONYMIZED',
+  'DATA_EXPORT_REQUESTED',
+  'TOS_ACCEPTED',
+  'PRIVACY_POLICY_ACCEPTED',
+  // Retention
+  'DATA_RETENTION_PURGE',
 ])
 
 // This table is APPEND-ONLY — no UPDATE or DELETE should ever run on it.

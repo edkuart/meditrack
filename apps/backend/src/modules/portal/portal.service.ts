@@ -1,4 +1,4 @@
-import { eq, and, desc, lte, gte } from 'drizzle-orm'
+import { eq, and, desc, lte, gte, count, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import {
   db, patients, patientAccessTokens, encounters,
@@ -12,6 +12,7 @@ import { getSignedViewUrl } from '../../shared/storage/storage.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { UnauthorizedError, NotFoundError, AppError } from '../../shared/errors.ts'
 import { sendMagicLinkNotification, sendPinNotification } from '../notifications/notifications.service.ts'
+import { buildEngagementProfile } from './engagement.ts'
 import type { GenerateAccessInput, ValidatePinInput } from './portal.schema.ts'
 
 // ─── Doctor: generate patient access ──────────────────────────────────────────
@@ -252,7 +253,12 @@ export async function getPortalMe(patientId: string) {
 }
 
 export async function getActiveTreatment(patientId: string) {
-  const plan = await db.query.treatmentPlans.findFirst({
+  const plans = await getActiveTreatments(patientId)
+  return plans[0] ?? null
+}
+
+export async function getActiveTreatments(patientId: string) {
+  const plans = await db.query.treatmentPlans.findMany({
     where: and(
       eq(treatmentPlans.patient_id, patientId),
       eq(treatmentPlans.status, 'ACTIVE'),
@@ -265,7 +271,7 @@ export async function getActiveTreatment(patientId: string) {
     },
     orderBy: (t, { desc }) => desc(t.created_at),
   })
-  return plan ?? null
+  return plans
 }
 
 export async function getTodayDosesForPortal(patientId: string) {
@@ -382,18 +388,27 @@ export async function getAdherenceForPortal(patientId: string) {
   const todayStart = new Date()
   todayStart.setDate(todayStart.getDate() - 7)
 
-  const events = await db.query.doseEvents.findMany({
-    where: and(
+  const rows = await db
+    .select({
+      status: doseEvents.status,
+      cnt: count(doseEvents.id),
+    })
+    .from(doseEvents)
+    .where(and(
       eq(doseEvents.patient_id, patientId),
       gte(doseEvents.scheduled_at, todayStart),
       lte(doseEvents.scheduled_at, new Date()),
-    ),
-    columns: { status: true },
-  })
+    ))
+    .groupBy(doseEvents.status)
 
-  const relevant = events.filter(e => e.status !== 'CANCELLED' && e.status !== 'SUPERSEDED')
-  const confirmed = relevant.filter(e => e.status === 'CONFIRMED').length
-  const total = relevant.length
+  const statusCounts = Object.fromEntries(
+    rows.map(row => [row.status, Number(row.cnt)]),
+  ) as Record<string, number>
+
+  const confirmed = statusCounts['CONFIRMED'] ?? 0
+  const cancelled = statusCounts['CANCELLED'] ?? 0
+  const superseded = statusCounts['SUPERSEDED'] ?? 0
+  const total = rows.reduce((sum, row) => sum + Number(row.cnt), 0) - cancelled - superseded
   const score = total > 0 ? Math.round((confirmed / total) * 100) : 100
 
   // Map score to avatar state
@@ -403,4 +418,65 @@ export async function getAdherenceForPortal(patientId: string) {
     score >= 40 ? 'FAIR' : 'POOR'
 
   return { score, confirmed, total, missed: total - confirmed, avatar_state: avatarState }
+}
+
+export async function getEngagementForPortal(patientId: string) {
+  const since = new Date()
+  since.setDate(since.getDate() - 6)
+  since.setHours(0, 0, 0, 0)
+
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const todayEnd = new Date()
+  todayEnd.setHours(23, 59, 59, 999)
+
+  const [weekRows, todayDoses] = await Promise.all([
+    db
+      .select({
+        date: sql<string>`DATE(${doseEvents.scheduled_at})::text`,
+        status: doseEvents.status,
+        cnt: count(doseEvents.id),
+      })
+      .from(doseEvents)
+      .where(and(
+        eq(doseEvents.patient_id, patientId),
+        gte(doseEvents.scheduled_at, since),
+        lte(doseEvents.scheduled_at, new Date()),
+      ))
+      .groupBy(sql`DATE(${doseEvents.scheduled_at})`, doseEvents.status),
+    db.query.doseEvents.findMany({
+      where: and(
+        eq(doseEvents.patient_id, patientId),
+        gte(doseEvents.scheduled_at, todayStart),
+        lte(doseEvents.scheduled_at, todayEnd),
+      ),
+      columns: {
+        id: true,
+        scheduled_at: true,
+        status: true,
+      },
+      with: {
+        medication_item: {
+          columns: { drug_name: true },
+        },
+      },
+      orderBy: (d, { asc }) => asc(d.scheduled_at),
+    }),
+  ])
+
+  const actionableToday = todayDoses.filter(dose =>
+    dose.status !== 'CANCELLED' && dose.status !== 'SUPERSEDED',
+  )
+  const nextDose = actionableToday.find(dose => dose.status === 'PENDING')
+
+  return buildEngagementProfile(
+    weekRows.map(row => ({ date: row.date, status: row.status, cnt: Number(row.cnt) })),
+    {
+      total: actionableToday.length,
+      confirmed: actionableToday.filter(dose => dose.status === 'CONFIRMED').length,
+      pending: actionableToday.filter(dose => dose.status === 'PENDING').length,
+      next_dose_at: nextDose?.scheduled_at.toISOString() ?? null,
+      next_dose_name: nextDose?.medication_item.drug_name ?? null,
+    },
+  )
 }

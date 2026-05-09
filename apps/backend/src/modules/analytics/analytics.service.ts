@@ -1,5 +1,11 @@
-import { fetchClinicSummary, fetchPatientDosesByDay } from './analytics.repository.ts'
-import type { ClinicSummary, DayAdherence, PatientAdherenceReport } from './analytics.types.ts'
+import {
+  fetchClinicSummary, fetchPatientDosesByDay,
+  fetchWeeklyTrends, fetchAdherenceCohortData, fetchPatientsCsvData,
+} from './analytics.repository.ts'
+import type {
+  ClinicSummary, DayAdherence, PatientAdherenceReport,
+  ClinicTrends, AdherenceCohorts, CohortPatient,
+} from './analytics.types.ts'
 
 const SKIP_STATUSES = new Set(['CANCELLED', 'SUPERSEDED'])
 
@@ -83,4 +89,77 @@ export function calcStreak(days: DayAdherence[]): number {
     else break
   }
   return streak
+}
+
+// ─── Clinic trends ────────────────────────────────────────────────────────────
+
+export async function getClinicTrends(tenantId: string, weeks = 12): Promise<ClinicTrends> {
+  const clampedWeeks = Math.min(52, Math.max(4, weeks))
+  const weekData = await fetchWeeklyTrends(tenantId, clampedWeeks)
+  return { weeks: weekData }
+}
+
+// ─── Adherence cohorts ────────────────────────────────────────────────────────
+
+export async function getAdherenceCohorts(tenantId: string, periodDays = 30): Promise<AdherenceCohorts> {
+  const rows = await fetchAdherenceCohortData(tenantId, periodDays)
+
+  const high: CohortPatient[] = []
+  const medium: CohortPatient[] = []
+  const low: CohortPatient[] = []
+  const no_data: CohortPatient[] = []
+
+  for (const r of rows) {
+    const score = r.total > 0 ? Math.round((r.confirmed / r.total) * 100) : -1
+    const patient: CohortPatient = {
+      id: r.id,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      overall_score: score,
+      active_treatments: r.active_treatments,
+    }
+    if (score === -1) no_data.push(patient)
+    else if (score >= 80) high.push(patient)
+    else if (score >= 50) medium.push(patient)
+    else low.push(patient)
+  }
+
+  // Sort each bucket by score descending (no_data alphabetically)
+  high.sort((a, b) => b.overall_score - a.overall_score)
+  medium.sort((a, b) => b.overall_score - a.overall_score)
+  low.sort((a, b) => a.overall_score - b.overall_score)
+  no_data.sort((a, b) => a.last_name.localeCompare(b.last_name))
+
+  return { period_days: periodDays, high, medium, low, no_data }
+}
+
+// ─── CSV export ───────────────────────────────────────────────────────────────
+
+export async function buildPatientsCsv(tenantId: string): Promise<string> {
+  const rows = await fetchPatientsCsvData(tenantId)
+
+  const headers = [
+    'ID', 'Apellido', 'Nombre', 'Fecha nacimiento', 'Sexo',
+    'Email', 'Teléfono', 'Nº documento', 'Activo', 'Tratamientos activos', 'Registrado',
+  ]
+
+  const escape = (v: string | number | boolean | null | undefined): string => {
+    if (v == null) return ''
+    const s = String(v)
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s
+  }
+
+  const csvRows = [
+    headers.join(','),
+    ...rows.map(r => [
+      r.id, r.last_name, r.first_name, r.date_of_birth ?? '',
+      r.sex ?? '', r.email ?? '', r.phone ?? '', r.id_number ?? '',
+      r.is_active ? 'Sí' : 'No', r.active_treatments,
+      r.created_at.substring(0, 10),
+    ].map(escape).join(',')),
+  ]
+
+  return csvRows.join('\r\n')
 }

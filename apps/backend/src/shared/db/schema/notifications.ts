@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, pgEnum, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, text, timestamp, pgEnum, jsonb, index, integer } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { patients } from './patients.ts'
 import { doseEvents } from './treatments.ts'
@@ -39,6 +39,9 @@ export const notificationLogs = pgTable('notification_logs', {
   provider_message_id: varchar('provider_message_id', { length: 200 }),
   // Snapshot of sent content for audit purposes
   content_snapshot: jsonb('content_snapshot'),
+  attempt_count: integer('attempt_count').default(1).notNull(),
+  last_attempt_at: timestamp('last_attempt_at', { withTimezone: true }).defaultNow().notNull(),
+  next_retry_at: timestamp('next_retry_at', { withTimezone: true }),
   sent_at: timestamp('sent_at', { withTimezone: true }),
   delivered_at: timestamp('delivered_at', { withTimezone: true }),
   failed_reason: text('failed_reason'),
@@ -47,6 +50,7 @@ export const notificationLogs = pgTable('notification_logs', {
   index('notif_patient_id_idx').on(table.patient_id),
   index('notif_dose_event_id_idx').on(table.dose_event_id),
   index('notif_status_idx').on(table.status, table.created_at),
+  index('notif_retry_idx').on(table.status, table.next_retry_at),
 ])
 
 export const notificationLogsRelations = relations(notificationLogs, ({ one }) => ({

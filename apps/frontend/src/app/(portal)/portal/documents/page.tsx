@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, FileText, Download, Loader2 } from 'lucide-react'
+import { ArrowLeft, FileText, Download, Loader2, FolderOpen } from 'lucide-react'
 import { getSession } from '@/lib/portal/session'
 import { getDocuments, getDocumentUrl, type PatientDocument } from '@/lib/portal/api'
 
@@ -25,12 +25,6 @@ const TYPE_COLORS: Record<string, string> = {
   OTHER: 'bg-slate-50 text-slate-500',
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 function DocRow({ doc, token }: { doc: PatientDocument; token: string }) {
   const [loading, setLoading] = useState(false)
 
@@ -47,16 +41,14 @@ function DocRow({ doc, token }: { doc: PatientDocument; token: string }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center gap-4">
-      {/* Icon */}
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${TYPE_COLORS[doc.type] ?? TYPE_COLORS.OTHER}`}>
+    <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${TYPE_COLORS[doc.type] ?? TYPE_COLORS.OTHER}`}>
         <FileText size={18} />
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-slate-800 text-sm truncate">{doc.file_name}</p>
-        <div className="flex items-center gap-2 mt-0.5">
+        <p className="truncate text-sm font-medium text-slate-900">{doc.file_name}</p>
+        <div className="mt-0.5 flex items-center gap-2">
           <span className="text-xs text-slate-400">
             {TYPE_LABELS[doc.type] ?? 'Documento'}
           </span>
@@ -67,11 +59,10 @@ function DocRow({ doc, token }: { doc: PatientDocument; token: string }) {
         </div>
       </div>
 
-      {/* Download button */}
       <button
         onClick={handleOpen}
         disabled={loading}
-        className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50 transition-colors shrink-0"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
         title="Abrir documento"
       >
         {loading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
@@ -106,29 +97,33 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto min-h-screen pb-10">
+    <div className="mx-auto min-h-screen max-w-md pb-10">
 
-      {/* Header */}
-      <div className="flex items-center gap-3 px-5 pt-6 pb-4">
+      <div className="flex items-center gap-3 px-5 pb-4 pt-6">
         <Link
           href="/portal"
-          className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm"
         >
           <ArrowLeft size={18} className="text-slate-600" />
         </Link>
-        <h1 className="text-slate-800 text-xl font-semibold">Mis documentos</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Mis documentos</h1>
+          <p className="text-sm text-slate-400">Archivos compartidos por tu equipo médico</p>
+        </div>
       </div>
 
-      <div className="px-5 flex flex-col gap-3">
+      <div className="flex flex-col gap-3 px-5">
         {docs.length === 0 ? (
-          <div className="text-center py-16 text-slate-400">
-            <p className="text-5xl mb-4">📂</p>
-            <p className="text-slate-600 font-medium">Sin documentos compartidos</p>
-            <p className="text-sm mt-1">Tu médico podrá compartir recetas, análisis y más aquí</p>
+          <div className="py-16 text-center text-slate-400">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-500">
+              <FolderOpen size={26} />
+            </div>
+            <p className="font-medium text-slate-700">Sin documentos compartidos</p>
+            <p className="mt-1 text-sm">Tu médico podrá compartir recetas, análisis y más aquí.</p>
           </div>
         ) : (
           <>
-            <p className="text-slate-400 text-sm px-1">{docs.length} documento{docs.length !== 1 ? 's' : ''}</p>
+            <p className="px-1 text-sm text-slate-400">{docs.length} documento{docs.length !== 1 ? 's' : ''}</p>
             {token && docs.map(doc => (
               <DocRow key={doc.id} doc={doc} token={token} />
             ))}

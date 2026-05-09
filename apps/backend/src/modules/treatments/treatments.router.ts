@@ -25,6 +25,16 @@ router.post(
   },
 )
 
+// GET /patients/:patientId/treatments
+router.get('/patients/:patientId/treatments', async (c) => {
+  const auth = c.get('auth')
+  const plans = await treatmentsService.listTreatmentsByPatient(
+    auth.tenant_id,
+    c.req.param('patientId'),
+  )
+  return c.json({ success: true, data: plans })
+})
+
 // GET /treatments/:id
 router.get('/treatments/:id', async (c) => {
   const auth = c.get('auth')

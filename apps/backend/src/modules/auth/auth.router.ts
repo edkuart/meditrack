@@ -4,16 +4,20 @@ import { LoginSchema, RegisterSchema, RefreshSchema } from './auth.schema.ts'
 import * as authService from './auth.service.ts'
 import { getFullUser } from '../staff/staff.service.ts'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { rateLimit } from '../../shared/middleware/rate-limit.middleware.ts'
 
 const router = new Hono()
 
-router.post('/register', zValidator('json', RegisterSchema), async (c) => {
+const authLimiter = rateLimit({ keyPrefix: 'auth', windowMs: 15 * 60 * 1000, max: 20 })
+const loginLimiter = rateLimit({ keyPrefix: 'auth-login', windowMs: 15 * 60 * 1000, max: 8 })
+
+router.post('/register', authLimiter, zValidator('json', RegisterSchema), async (c) => {
   const body = c.req.valid('json')
   const result = await authService.register(body)
   return c.json({ success: true, data: result }, 201)
 })
 
-router.post('/login', zValidator('json', LoginSchema), async (c) => {
+router.post('/login', loginLimiter, zValidator('json', LoginSchema), async (c) => {
   const body = c.req.valid('json')
   const ip = c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip')
   const ua = c.req.header('user-agent')
@@ -21,7 +25,7 @@ router.post('/login', zValidator('json', LoginSchema), async (c) => {
   return c.json({ success: true, data: result })
 })
 
-router.post('/refresh', zValidator('json', RefreshSchema), async (c) => {
+router.post('/refresh', authLimiter, zValidator('json', RefreshSchema), async (c) => {
   const { refresh_token } = c.req.valid('json')
   const ua = c.req.header('user-agent')
   const tokens = await authService.refresh(refresh_token, ua)

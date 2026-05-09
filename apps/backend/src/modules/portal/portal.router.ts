@@ -7,6 +7,7 @@ import {
   GenerateAccessSchema, ValidateMagicLinkSchema, ValidatePinSchema,
 } from './portal.schema.ts'
 import * as portalService from './portal.service.ts'
+import { rateLimit } from '../../shared/middleware/rate-limit.middleware.ts'
 import type { PatientTokenPayload } from '../../shared/services/token.service.ts'
 import type { Context, Next } from 'hono'
 
@@ -31,6 +32,7 @@ async function requirePatient(c: Context, next: Next) {
 }
 
 const router = new Hono()
+const portalAuthLimiter = rateLimit({ keyPrefix: 'portal-auth', windowMs: 15 * 60 * 1000, max: 20 })
 
 // ── Doctor-facing: generate / revoke access ───────────────────────────────────
 
@@ -61,6 +63,7 @@ router.delete('/patients/:patientId/access', requireAuth, async (c) => {
 
 router.post(
   '/portal/auth/magic-link',
+  portalAuthLimiter,
   zValidator('json', ValidateMagicLinkSchema),
   async (c) => {
     const { token } = c.req.valid('json')
@@ -96,6 +99,12 @@ router.get('/portal/treatment', requirePatient, async (c) => {
   return c.json({ success: true, data })
 })
 
+router.get('/portal/treatments', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.getActiveTreatments(p.sub)
+  return c.json({ success: true, data })
+})
+
 router.get('/portal/doses/today', requirePatient, async (c) => {
   const p = c.get('patient')
   const data = await portalService.getTodayDosesForPortal(p.sub)
@@ -126,6 +135,12 @@ router.get('/portal/documents', requirePatient, async (c) => {
 router.get('/portal/adherence', requirePatient, async (c) => {
   const p = c.get('patient')
   const data = await portalService.getAdherenceForPortal(p.sub)
+  return c.json({ success: true, data })
+})
+
+router.get('/portal/engagement', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.getEngagementForPortal(p.sub)
   return c.json({ success: true, data })
 })
 

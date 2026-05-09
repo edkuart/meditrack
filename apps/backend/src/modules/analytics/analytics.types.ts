@@ -26,3 +26,38 @@ export interface PatientAdherenceReport {
   days: DayAdherence[]
   streak: number      // consecutive days (backwards from today) with score >= 80
 }
+
+// ─── Clinic trends ────────────────────────────────────────────────────────────
+
+export interface WeeklyTrend {
+  week_start: string  // YYYY-MM-DD (Monday)
+  new_patients: number
+  encounters_opened: number
+  doses_confirmed: number
+  doses_total: number
+  adherence_rate: number  // 0-100, or -1 if no doses
+}
+
+export interface ClinicTrends {
+  weeks: WeeklyTrend[]
+}
+
+// ─── Adherence cohorts ────────────────────────────────────────────────────────
+
+export type CohortBucket = 'high' | 'medium' | 'low' | 'no_data'
+
+export interface CohortPatient {
+  id: string
+  first_name: string
+  last_name: string
+  overall_score: number
+  active_treatments: number
+}
+
+export interface AdherenceCohorts {
+  period_days: number
+  high: CohortPatient[]    // score >= 80
+  medium: CohortPatient[]  // 50 <= score < 80
+  low: CohortPatient[]     // score < 50 (and has doses)
+  no_data: CohortPatient[] // no doses in period
+}

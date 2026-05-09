@@ -5,12 +5,27 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
+  ClipboardList, Clock3, FileText, Save, Sparkles, Stethoscope,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
-  getEncounter, updateEncounter, closeEncounter, createTreatment, getTreatment, activateTreatment,
-  type Encounter, type TreatmentPlan, type MedicationItem,
+  getEncounter, updateEncounter, closeEncounter, createTreatment, activateTreatment,
+  listClinicalProtocols,
+  runEncounterAiAssist,
+  type AiAssistMode,
+  type ClinicalProtocol,
+  type Encounter,
+  type TreatmentPlan,
 } from '@/lib/doctor/api'
+import {
+  ClinicalButton,
+  ClinicalHeader,
+  ClinicalInsight,
+  ClinicalPage,
+  ClinicalPanel,
+  LoadingState,
+  StatusPill,
+} from '@/components/doctor/clinical-ui'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -26,6 +41,63 @@ const FREQ_LABELS: Record<string, string> = {
 
 const DOSE_UNITS = ['mg', 'ml', 'mcg', 'g', 'UI', 'tableta(s)', 'cápsula(s)', 'gota(s)', 'ampolla(s)', 'parche(s)']
 const ROUTES = ['oral', 'sublingual', 'inhalatoria', 'tópica', 'inyectable IV', 'inyectable IM', 'subcutánea', 'rectal', 'vaginal', 'oftálmica', 'ótica']
+
+const NOTE_TEMPLATES = [
+  {
+    label: 'SOAP',
+    notes: 'Subjetivo:\n\nObjetivo:\n\nEvaluación:\n\nPlan:\n',
+    summary: 'Plan:\n- \n\nSeguimiento:\n',
+  },
+  {
+    label: 'Seguimiento',
+    notes: 'Evolución desde última consulta:\n\nAdherencia referida:\n\nSíntomas o eventos relevantes:\n',
+    summary: 'Continuar seguimiento.\nAjustes/indicaciones:\n',
+  },
+  {
+    label: 'Alta/egreso',
+    notes: 'Estado al egreso:\n\nIndicaciones entregadas:\n\nSignos de alarma revisados:\n',
+    summary: 'Plan de egreso:\n- \n\nPróximo control:\n',
+  },
+]
+
+const PLAN_PRESETS = [
+  { label: 'Control 30 días', name: 'Plan de control 30 días', duration: '30', times: ['08:00'], count: '1' },
+  { label: 'Corto 7 días', name: 'Tratamiento corto', duration: '7', times: ['08:00', '20:00'], count: '2' },
+  { label: 'Post-alta', name: 'Plan post-alta', duration: '14', times: ['08:00', '14:00', '20:00'], count: '3' },
+]
+
+const FALLBACK_PROTOCOLS: ClinicalProtocol[] = PLAN_PRESETS.map((preset) => ({
+  id: `fallback-${preset.label}`,
+  source: 'SYSTEM',
+  name: preset.label,
+  category: 'GENERAL',
+  description: null,
+  encounter_type: null,
+  note_template: null,
+  summary_template: null,
+  treatment_name: preset.name,
+  treatment_instructions: null,
+  medications: [{
+    drug_name: '',
+    dose_amount: 1,
+    dose_unit: 'tableta(s)',
+    route: 'oral',
+    frequency_type: 'DAILY',
+    times_per_day: preset.times,
+    duration_days: Number(preset.duration),
+    sort_order: 0,
+  }],
+  follow_up_days: Number(preset.duration),
+  tags: [],
+}))
+
+const SCHEDULE_PRESETS = [
+  { label: 'Mañana', frequency_type: 'DAILY', frequency_value: '8', times_per_day_count: '1', times_per_day: ['08:00'] },
+  { label: 'Mañana/noche', frequency_type: 'DAILY', frequency_value: '12', times_per_day_count: '2', times_per_day: ['08:00', '20:00'] },
+  { label: 'Tres veces', frequency_type: 'DAILY', frequency_value: '8', times_per_day_count: '3', times_per_day: ['08:00', '14:00', '20:00'] },
+  { label: 'Cada 8h', frequency_type: 'EVERY_X_HOURS', frequency_value: '8', times_per_day_count: '3', times_per_day: ['08:00', '16:00', '00:00'] },
+  { label: 'Según necesidad', frequency_type: 'AS_NEEDED', frequency_value: '8', times_per_day_count: '1', times_per_day: ['08:00'] },
+]
 
 // ─── Medication form ──────────────────────────────────────────────────────────
 
@@ -74,6 +146,17 @@ function MedicationCard({ med, onRemove }: { med: Partial<MedForm & { drug_name:
   )
 }
 
+function StepMarker({ number, title }: { number: number; title: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
+        {number}
+      </span>
+      <span className="text-sm font-semibold text-slate-800">{title}</span>
+    </div>
+  )
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function EncounterPage() {
@@ -85,12 +168,16 @@ export default function EncounterPage() {
 
   const [encounter, setEncounter] = useState<Encounter | null>(null)
   const [treatment, setTreatment] = useState<TreatmentPlan | null>(null)
+  const [protocols, setProtocols] = useState<ClinicalProtocol[]>(FALLBACK_PROTOCOLS)
   const [loading, setLoading] = useState(true)
 
   // Notes editing
   const [notes, setNotes] = useState('')
   const [summary, setSummary] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [aiLoading, setAiLoading] = useState<AiAssistMode | null>(null)
+  const [aiNotice, setAiNotice] = useState('')
+  const [aiError, setAiError] = useState('')
 
   // Treatment builder
   const [treatmentName, setTreatmentName] = useState('')
@@ -107,10 +194,14 @@ export default function EncounterPage() {
     if (!token) return
     setLoading(true)
     try {
-      const enc = await getEncounter(token, encId)
+      const [enc, protocolList] = await Promise.all([
+        getEncounter(token, encId),
+        listClinicalProtocols(token).catch(() => FALLBACK_PROTOCOLS),
+      ])
       setEncounter(enc)
       setNotes(enc.notes ?? '')
       setSummary(enc.summary ?? '')
+      setProtocols(protocolList.length > 0 ? protocolList : FALLBACK_PROTOCOLS)
     } finally {
       setLoading(false)
     }
@@ -132,6 +223,69 @@ export default function EncounterPage() {
       times[index] = value
       return { ...prev, times_per_day: times }
     })
+  }
+
+  function applyNoteTemplate(template: typeof NOTE_TEMPLATES[number]) {
+    setNotes(prev => prev.trim() ? `${prev.trim()}\n\n${template.notes}` : template.notes)
+    setSummary(prev => prev.trim() ? prev : template.summary)
+  }
+
+  function applyPlanPreset(preset: typeof PLAN_PRESETS[number]) {
+    setTreatmentName(prev => prev || preset.name)
+    setMedForm(prev => ({
+      ...prev,
+      duration_days: preset.duration,
+      frequency_type: 'DAILY',
+      frequency_value: '8',
+      times_per_day_count: preset.count,
+      times_per_day: preset.times,
+    }))
+    setShowMedForm(true)
+  }
+
+  function applyClinicalProtocol(protocol: ClinicalProtocol) {
+    if (protocol.note_template) {
+      setNotes(prev => prev.trim() ? `${prev.trim()}\n\n${protocol.note_template}` : protocol.note_template ?? '')
+    }
+    if (protocol.summary_template) {
+      setSummary(prev => prev.trim() ? prev : protocol.summary_template ?? '')
+    }
+    if (protocol.treatment_name || protocol.name) {
+      setTreatmentName(prev => prev || protocol.treatment_name || protocol.name)
+    }
+
+    const protocolMeds = protocol.medications.map((med) => ({
+      drug_name: med.drug_name,
+      presentation: med.presentation ?? '',
+      dose_amount: String(med.dose_amount),
+      dose_unit: med.dose_unit,
+      route: med.route ?? 'oral',
+      frequency_type: med.frequency_type,
+      frequency_value: String(med.frequency_value ?? 8),
+      times_per_day_count: String(med.times_per_day?.length ?? 1),
+      times_per_day: med.times_per_day ?? ['08:00'],
+      duration_days: String(med.duration_days ?? protocol.follow_up_days ?? 30),
+      with_food: med.with_food ?? false,
+      special_instructions: med.special_instructions ?? '',
+    }))
+
+    if (protocolMeds.length > 0) {
+      const completeMeds = protocolMeds.filter(med => med.drug_name.trim())
+      const incompleteMed = protocolMeds.find(med => !med.drug_name.trim())
+      setMedications(completeMeds)
+      setShowMedForm(Boolean(incompleteMed))
+      setMedForm(incompleteMed ?? emptyMedForm())
+    }
+  }
+
+  function applySchedulePreset(preset: typeof SCHEDULE_PRESETS[number]) {
+    setMedForm(prev => ({
+      ...prev,
+      frequency_type: preset.frequency_type,
+      frequency_value: preset.frequency_value,
+      times_per_day_count: preset.times_per_day_count,
+      times_per_day: preset.times_per_day,
+    }))
   }
 
   function addMedication() {
@@ -198,6 +352,32 @@ export default function EncounterPage() {
     }
   }
 
+  async function handleAiAssist(mode: AiAssistMode) {
+    if (!token) return
+    setAiLoading(mode)
+    setAiNotice('')
+    setAiError('')
+    try {
+      const sourceText = [
+        encounter?.chief_complaint ? `Motivo: ${encounter.chief_complaint}` : '',
+        notes,
+        summary,
+      ].filter(Boolean).join('\n')
+
+      const draft = await runEncounterAiAssist(token, encId, mode, sourceText)
+      if (mode === 'SUMMARIZE_ENCOUNTER') {
+        setSummary(draft.text)
+      } else {
+        setSummary(prev => prev.trim() ? `${prev.trim()}\n\n${draft.text}` : draft.text)
+      }
+      setAiNotice(draft.safety_notice)
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'No se pudo generar el borrador asistido')
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
   async function handleClose() {
     if (!token || !confirm('¿Cerrar esta consulta?')) return
     setClosing(true)
@@ -211,54 +391,100 @@ export default function EncounterPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <Loader2 size={24} className="animate-spin text-slate-300" />
-      </div>
+      <ClinicalPage size="compact">
+        <LoadingState label="Cargando consulta..." />
+      </ClinicalPage>
     )
   }
 
   if (!encounter) return null
 
   const isClosed = encounter.status === 'CLOSED' || encounter.status === 'ARCHIVED'
+  const hasUnsavedNotes = notes !== (encounter.notes ?? '') || summary !== (encounter.summary ?? '')
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 flex flex-col gap-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link href={`/patients/${patientId}`} className="text-slate-400 hover:text-slate-600">
-          <ArrowLeft size={20} />
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-800">
-              {ENC_LABELS[encounter.encounter_type] ?? encounter.encounter_type}
-            </h1>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              encounter.status === 'OPEN' ? 'bg-green-100 text-green-700' :
-              'bg-slate-100 text-slate-500'
-            }`}>
-              {encounter.status === 'OPEN' ? 'Abierta' : 'Cerrada'}
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {new Date(encounter.opened_at).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        {!isClosed && (
-          <button
-            onClick={handleClose}
-            disabled={closing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:border-red-300 hover:text-red-600 disabled:opacity-50 transition-colors"
-          >
-            {closing ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-            Cerrar consulta
-          </button>
-        )}
-      </div>
+    <ClinicalPage size="compact">
+      <ClinicalHeader
+        eyebrow="Consulta clínica"
+        title={ENC_LABELS[encounter.encounter_type] ?? encounter.encounter_type}
+        subtitle={new Date(encounter.opened_at).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        icon={Stethoscope}
+        meta={
+          <StatusPill tone={encounter.status === 'OPEN' ? 'green' : 'slate'}>
+            {encounter.status === 'OPEN' ? 'Abierta' : 'Cerrada'}
+          </StatusPill>
+        }
+        actions={
+          <>
+            <ClinicalButton href={`/patients/${patientId}`} icon={ArrowLeft} variant="outline" tone="slate">
+              Paciente
+            </ClinicalButton>
+            {!isClosed && (
+              <ClinicalButton
+                icon={closing ? Loader2 : XCircle}
+                onClick={handleClose}
+                disabled={closing}
+                variant="outline"
+                tone="red"
+              >
+                Cerrar
+              </ClinicalButton>
+            )}
+          </>
+        }
+      />
 
-      {/* Notes */}
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4">
-        <h2 className="font-semibold text-slate-800">Notas clínicas</h2>
+      {!isClosed && hasUnsavedNotes && (
+        <ClinicalInsight tone="amber" title="Cambios sin guardar">
+          Hay cambios en las notas de esta consulta. Guarda antes de cerrar o salir del flujo.
+        </ClinicalInsight>
+      )}
+
+      <ClinicalPanel title="Notas clínicas" icon={FileText}>
+        <div className="flex flex-col gap-4 p-5">
+          {!isClosed && (
+            <div className="flex flex-wrap gap-2">
+              {NOTE_TEMPLATES.map(template => (
+                <button
+                  key={template.label}
+                  type="button"
+                  onClick={() => applyNoteTemplate(template)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:text-blue-700"
+                >
+                  <Sparkles size={13} />
+                  {template.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => handleAiAssist('SUMMARIZE_ENCOUNTER')}
+                disabled={Boolean(aiLoading)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60"
+              >
+                {aiLoading === 'SUMMARIZE_ENCOUNTER' ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                Sugerir resumen
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAiAssist('SIMPLIFY_FOR_PATIENT')}
+                disabled={Boolean(aiLoading)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-60"
+              >
+                {aiLoading === 'SIMPLIFY_FOR_PATIENT' ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                Lenguaje paciente
+              </button>
+            </div>
+          )}
+
+          {aiNotice && (
+            <ClinicalInsight tone="blue" title="Asistencia IA">
+              {aiNotice}
+            </ClinicalInsight>
+          )}
+
+          {aiError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{aiError}</p>
+          )}
 
         {encounter.chief_complaint && (
           <div>
@@ -293,17 +519,19 @@ export default function EncounterPage() {
 
         {!isClosed && (
           <div className="flex justify-end">
-            <button
+            <ClinicalButton
+              icon={savingNotes ? Loader2 : Save}
               onClick={handleSaveNotes}
               disabled={savingNotes}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 transition-colors"
+              variant="outline"
+              tone={hasUnsavedNotes ? 'blue' : 'slate'}
             >
-              {savingNotes ? <Loader2 size={14} className="animate-spin" /> : null}
               Guardar notas
-            </button>
+            </ClinicalButton>
           </div>
         )}
-      </section>
+        </div>
+      </ClinicalPanel>
 
       {/* Treatment builder */}
       <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -374,6 +602,44 @@ export default function EncounterPage() {
             <p className="text-sm text-slate-400 text-center py-4">Esta consulta no tiene plan de tratamiento.</p>
           ) : (
             <>
+              <div className="flex flex-col gap-3 rounded-lg border border-blue-100 bg-blue-50 p-4">
+                <StepMarker number={1} title="Elegir protocolo" />
+                <div className="grid gap-2 md:grid-cols-3">
+                  {protocols.slice(0, 6).map(protocol => (
+                    <button
+                      key={protocol.id}
+                      type="button"
+                      onClick={() => applyClinicalProtocol(protocol)}
+                      className="flex min-h-24 flex-col items-start gap-1 rounded-lg bg-white px-3 py-2 text-left shadow-sm transition-colors hover:bg-blue-100"
+                    >
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+                        <ClipboardList size={13} />
+                        {protocol.name}
+                      </span>
+                      {protocol.description && (
+                        <span className="text-xs text-slate-500">{protocol.description}</span>
+                      )}
+                      <span className="mt-auto text-[11px] font-medium text-slate-400">
+                        {protocol.medications.length} med. {protocol.follow_up_days ? `· control ${protocol.follow_up_days}d` : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {PLAN_PRESETS.map(preset => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => applyPlanPreset(preset)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-100"
+                    >
+                      <ClipboardList size={13} />
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Treatment meta */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
@@ -412,7 +678,22 @@ export default function EncounterPage() {
               {/* Add medication form */}
               {showMedForm ? (
                 <div className="border border-slate-200 rounded-xl p-4 flex flex-col gap-3 bg-slate-50">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Agregar medicamento</p>
+                  <div className="flex flex-col gap-3">
+                    <StepMarker number={2} title="Agregar medicamento" />
+                    <div className="flex flex-wrap gap-2">
+                      {SCHEDULE_PRESETS.map(preset => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => applySchedulePreset(preset)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:text-blue-700"
+                        >
+                          <Clock3 size={13} />
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1 col-span-2">
@@ -587,6 +868,6 @@ export default function EncounterPage() {
           )}
         </div>
       </section>
-    </div>
+    </ClinicalPage>
   )
 }

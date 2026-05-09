@@ -1,14 +1,78 @@
+import { and, eq } from 'drizzle-orm'
 import { db, notificationLogs } from '../../shared/db/index.ts'
 import { sendEmail } from '../../shared/services/email.service.ts'
 import { sendWhatsApp } from '../../shared/services/whatsapp.service.ts'
+import { log } from '../../shared/observability/logger.ts'
 
 const PORTAL_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
+const MAX_NOTIFICATION_ATTEMPTS = 3
+const RETRY_DELAYS_MS = [5 * 60 * 1000, 30 * 60 * 1000, 2 * 60 * 60 * 1000]
 
 type ContactInfo = {
   id: string
   first_name: string
   email: string | null
   phone: string | null
+}
+
+type NotificationType = typeof notificationLogs.$inferInsert['type']
+type NotificationChannel = typeof notificationLogs.$inferInsert['channel']
+type NotificationStatus = typeof notificationLogs.$inferInsert['status']
+
+interface DispatchResult {
+  channel: NotificationChannel
+  status: Extract<NotificationStatus, 'SENT' | 'FAILED'>
+  providerMessageId?: string
+  failedReason?: string
+  attemptCount: number
+  nextRetryAt: Date | null
+}
+
+export function nextRetryAt(attemptCount: number, now = new Date()): Date | null {
+  if (attemptCount >= MAX_NOTIFICATION_ATTEMPTS) return null
+  const delay = RETRY_DELAYS_MS[Math.min(attemptCount - 1, RETRY_DELAYS_MS.length - 1)]
+  return new Date(now.getTime() + delay)
+}
+
+export function chooseDoseReminderChannels(patient: ContactInfo): NotificationChannel[] {
+  const channels: NotificationChannel[] = []
+  if (patient.email) channels.push('email')
+  if (patient.phone) channels.push('whatsapp')
+  return channels
+}
+
+export async function getDoseReminderDeliveryState(doseEventId: string, now = new Date()) {
+  const latest = await db.query.notificationLogs.findFirst({
+    where: and(
+      eq(notificationLogs.dose_event_id, doseEventId),
+      eq(notificationLogs.type, 'DOSE_REMINDER'),
+    ),
+    orderBy: (n, { desc }) => desc(n.created_at),
+    columns: {
+      id: true,
+      status: true,
+      attempt_count: true,
+      next_retry_at: true,
+    },
+  })
+
+  if (!latest) {
+    return { shouldSend: true, reason: 'never_sent', attemptCount: 1 }
+  }
+
+  if (latest.status === 'SENT' || latest.status === 'DELIVERED') {
+    return { shouldSend: false, reason: 'already_delivered', attemptCount: latest.attempt_count }
+  }
+
+  if (latest.attempt_count >= MAX_NOTIFICATION_ATTEMPTS) {
+    return { shouldSend: false, reason: 'max_attempts_reached', attemptCount: latest.attempt_count }
+  }
+
+  if (latest.next_retry_at && latest.next_retry_at > now) {
+    return { shouldSend: false, reason: 'retry_not_due', attemptCount: latest.attempt_count }
+  }
+
+  return { shouldSend: true, reason: 'retry_due', attemptCount: latest.attempt_count + 1 }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -25,14 +89,14 @@ export async function sendMagicLinkNotification(
 
   if (channel === 'whatsapp' && patient.phone) {
     const body = `Hola ${patient.first_name} 👋\n\nTu médico ha habilitado tu acceso al portal de salud meditrack.\n\nAccede aquí: ${accessUrl}\n\nEste enlace expira el ${expiresStr}.`
-    await dispatchWhatsApp(patient.id, patient.phone, body, 'MAGIC_LINK', undefined)
+    await dispatchWhatsApp(patient.id, patient.phone, body, 'MAGIC_LINK', undefined, 1)
     return
   }
 
   if (patient.email) {
     const html = magicLinkHtml(patient.first_name, accessUrl, expiresStr)
     const text = `Hola ${patient.first_name},\n\nTu médico ha habilitado tu acceso al portal meditrack.\n\nAccede aquí: ${accessUrl}\n\nExpira el ${expiresStr}.`
-    await dispatchEmail(patient.id, patient.email, 'Acceso a tu portal de salud', html, text, 'MAGIC_LINK', undefined)
+    await dispatchEmail(patient.id, patient.email, 'Acceso a tu portal de salud', html, text, 'MAGIC_LINK', undefined, 1)
   }
 }
 
@@ -44,13 +108,13 @@ export async function sendPinNotification(
   const text = `Hola ${patient.first_name} 👋\n\nTu PIN de acceso al portal meditrack es: ${pin}\n\nÚsalo en: ${portalUrl}`
 
   if (patient.phone) {
-    await dispatchWhatsApp(patient.id, patient.phone, text, 'WELCOME', undefined)
+    await dispatchWhatsApp(patient.id, patient.phone, text, 'WELCOME', undefined, 1)
     return
   }
 
   if (patient.email) {
     const html = pinHtml(patient.first_name, pin, portalUrl)
-    await dispatchEmail(patient.id, patient.email, 'Tu PIN de acceso a meditrack', html, text, 'WELCOME', undefined)
+    await dispatchEmail(patient.id, patient.email, 'Tu PIN de acceso a meditrack', html, text, 'WELCOME', undefined, 1)
   }
 }
 
@@ -61,20 +125,40 @@ export async function sendDoseReminderNotification(
   drugName: string,
   doseAmount: number,
   doseUnit: string,
-): Promise<void> {
+  attemptCount = 1,
+): Promise<DispatchResult | null> {
   const time = scheduledAt.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
   const portalUrl = `${PORTAL_URL}/portal`
   const text = `💊 Recordatorio: ${patient.first_name}, es hora de tomar ${drugName} (${doseAmount} ${doseUnit}) a las ${time}.\n\nConfírmalo en: ${portalUrl}`
+  const channels = chooseDoseReminderChannels(patient)
 
-  if (patient.email) {
-    const html = doseReminderHtml(patient.first_name, drugName, `${doseAmount} ${doseUnit}`, time, portalUrl)
-    await dispatchEmail(patient.id, patient.email, `Recordatorio: ${drugName}`, html, text, 'DOSE_REMINDER', doseEventId)
-    return
+  for (const channel of channels) {
+    const result = channel === 'email'
+      ? await dispatchEmail(
+        patient.id,
+        patient.email!,
+        `Recordatorio: ${drugName}`,
+        doseReminderHtml(patient.first_name, drugName, `${doseAmount} ${doseUnit}`, time, portalUrl),
+        text,
+        'DOSE_REMINDER',
+        doseEventId,
+        attemptCount,
+      )
+      : await dispatchWhatsApp(patient.id, patient.phone!, text, 'DOSE_REMINDER', doseEventId, attemptCount)
+
+    if (result.status === 'SENT') return result
+
+    log.warn('notification.channel_failed', {
+      type: 'DOSE_REMINDER',
+      channel,
+      patient_id: patient.id,
+      dose_event_id: doseEventId,
+      attempt_count: attemptCount,
+      failed_reason: result.failedReason,
+    })
   }
 
-  if (patient.phone) {
-    await dispatchWhatsApp(patient.id, patient.phone, text, 'DOSE_REMINDER', doseEventId)
-  }
+  return null
 }
 
 // ─── Channel dispatch + logging ───────────────────────────────────────────────
@@ -87,18 +171,22 @@ async function dispatchEmail(
   text: string,
   type: string,
   doseEventId: string | undefined,
-): Promise<void> {
+  attemptCount: number,
+): Promise<DispatchResult> {
   let providerMessageId: string | undefined
   let failedReason: string | undefined
   let status: 'SENT' | 'FAILED' = 'SENT'
+  const attemptedAt = new Date()
 
   try {
     providerMessageId = await sendEmail({ to: recipient, subject, html, text })
   } catch (err) {
     status = 'FAILED'
     failedReason = err instanceof Error ? err.message : String(err)
-    console.error('[notifications] email failed:', failedReason)
+    log.error('notification.email_failed', { patient_id: patientId, dose_event_id: doseEventId, failed_reason: failedReason })
   }
+
+  const retryAt = status === 'FAILED' ? nextRetryAt(attemptCount, attemptedAt) : null
 
   await db.insert(notificationLogs).values({
     patient_id: patientId,
@@ -109,9 +197,21 @@ async function dispatchEmail(
     recipient,
     provider_message_id: providerMessageId,
     content_snapshot: { subject, preview: text.slice(0, 300) },
+    attempt_count: attemptCount,
+    last_attempt_at: attemptedAt,
+    next_retry_at: retryAt,
     sent_at: status === 'SENT' ? new Date() : null,
     failed_reason: failedReason ?? null,
-  }).catch(err => console.error('[notifications] failed to log:', err))
+  }).catch(err => log.error('notification.log_failed', { error: err instanceof Error ? err.message : String(err) }))
+
+  return {
+    channel: 'email',
+    status,
+    providerMessageId,
+    failedReason,
+    attemptCount,
+    nextRetryAt: retryAt,
+  }
 }
 
 async function dispatchWhatsApp(
@@ -120,18 +220,22 @@ async function dispatchWhatsApp(
   body: string,
   type: string,
   doseEventId: string | undefined,
-): Promise<void> {
+  attemptCount: number,
+): Promise<DispatchResult> {
   let providerMessageId: string | undefined
   let failedReason: string | undefined
   let status: 'SENT' | 'FAILED' = 'SENT'
+  const attemptedAt = new Date()
 
   try {
     providerMessageId = await sendWhatsApp(phone, body)
   } catch (err) {
     status = 'FAILED'
     failedReason = err instanceof Error ? err.message : String(err)
-    console.error('[notifications] whatsapp failed:', failedReason)
+    log.error('notification.whatsapp_failed', { patient_id: patientId, dose_event_id: doseEventId, failed_reason: failedReason })
   }
+
+  const retryAt = status === 'FAILED' ? nextRetryAt(attemptCount, attemptedAt) : null
 
   await db.insert(notificationLogs).values({
     patient_id: patientId,
@@ -142,9 +246,21 @@ async function dispatchWhatsApp(
     recipient: phone,
     provider_message_id: providerMessageId,
     content_snapshot: { body: body.slice(0, 300) },
+    attempt_count: attemptCount,
+    last_attempt_at: attemptedAt,
+    next_retry_at: retryAt,
     sent_at: status === 'SENT' ? new Date() : null,
     failed_reason: failedReason ?? null,
-  }).catch(err => console.error('[notifications] failed to log:', err))
+  }).catch(err => log.error('notification.log_failed', { error: err instanceof Error ? err.message : String(err) }))
+
+  return {
+    channel: 'whatsapp',
+    status,
+    providerMessageId,
+    failedReason,
+    attemptCount,
+    nextRetryAt: retryAt,
+  }
 }
 
 // ─── Email templates ──────────────────────────────────────────────────────────

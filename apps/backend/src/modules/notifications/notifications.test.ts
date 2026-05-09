@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { magicLinkHtml, pinHtml, doseReminderHtml } from './notifications.service.ts'
+import {
+  chooseDoseReminderChannels,
+  doseReminderHtml,
+  magicLinkHtml,
+  nextRetryAt,
+  pinHtml,
+} from './notifications.service.ts'
 
 // ─── Email template tests (pure functions, no DB or network needed) ───────────
 
@@ -50,6 +56,35 @@ describe('doseReminderHtml', () => {
     const portal = 'https://app.test/portal'
     const html = doseReminderHtml('Mario', 'Atorvastatina', '20 mg', '20:00', portal)
     expect(html).toContain(`href="${portal}"`)
+  })
+})
+
+describe('notification orchestration helpers', () => {
+  it('prioritizes email and falls back to whatsapp for dose reminders', () => {
+    expect(chooseDoseReminderChannels({
+      id: 'patient-1',
+      first_name: 'Ana',
+      email: 'ana@example.com',
+      phone: '+50255555555',
+    })).toEqual(['email', 'whatsapp'])
+  })
+
+  it('uses whatsapp when email is absent', () => {
+    expect(chooseDoseReminderChannels({
+      id: 'patient-1',
+      first_name: 'Ana',
+      email: null,
+      phone: '+50255555555',
+    })).toEqual(['whatsapp'])
+  })
+
+  it('does not schedule retry after max attempts', () => {
+    expect(nextRetryAt(3)).toBeNull()
+  })
+
+  it('schedules retry after a failed early attempt', () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    expect(nextRetryAt(1, now)?.getTime()).toBeGreaterThan(now.getTime())
   })
 })
 

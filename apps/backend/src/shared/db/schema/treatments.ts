@@ -48,6 +48,8 @@ export const treatmentPlans = pgTable('treatment_plans', {
 }, (table) => [
   index('treatment_plans_patient_id_idx').on(table.patient_id),
   index('treatment_plans_tenant_id_idx').on(table.tenant_id),
+  index('treatment_plans_tenant_patient_status_idx').on(table.tenant_id, table.patient_id, table.status),
+  index('treatment_plans_tenant_encounter_idx').on(table.tenant_id, table.encounter_id),
 ])
 
 // ─── Medication Item ───────────────────────────────────────────────────────────
@@ -70,7 +72,9 @@ export const medicationItems = pgTable('medication_items', {
   is_active: boolean('is_active').default(true).notNull(),
   sort_order: integer('sort_order').default(0).notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+}, (table) => [
+  index('medication_items_plan_active_idx').on(table.treatment_plan_id, table.is_active),
+])
 
 // ─── Dose Event ────────────────────────────────────────────────────────────────
 
@@ -90,6 +94,8 @@ export const doseEvents = pgTable('dose_events', {
   index('dose_events_patient_id_idx').on(table.patient_id),
   index('dose_events_scheduled_at_idx').on(table.patient_id, table.scheduled_at),
   index('dose_events_status_idx').on(table.status, table.scheduled_at),
+  index('dose_events_patient_status_scheduled_idx').on(table.patient_id, table.status, table.scheduled_at),
+  index('dose_events_medication_status_scheduled_idx').on(table.medication_item_id, table.status, table.scheduled_at),
 ])
 
 // ─── Relations ─────────────────────────────────────────────────────────────────
