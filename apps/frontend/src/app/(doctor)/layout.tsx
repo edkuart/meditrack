@@ -226,8 +226,8 @@ function Topbar() {
   const clinicName = 'Clínica'
 
   return (
-    <header style={{
-      height: 56, padding: '0 32px',
+    <header className="mt-topbar-pad" style={{
+      height: 56,
       display: 'flex', alignItems: 'center', gap: 16,
       borderBottom: '1px solid var(--mt-border)',
       background: 'rgba(255,255,255,.85)',
@@ -235,7 +235,7 @@ function Topbar() {
       position: 'sticky', top: 0, zIndex: 10,
       flexShrink: 0,
     }}>
-      {/* Search bar */}
+      {/* Search bar — text label hidden on mobile */}
       <div style={{ flex: 1, maxWidth: 360 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 12px',
@@ -244,8 +244,8 @@ function Topbar() {
           cursor: 'pointer',
         }}>
           <Search size={14} color="var(--mt-muted)" />
-          <span style={{ flex: 1 }}>Buscar paciente…</span>
-          <div style={{ display: 'flex', gap: 2 }}>
+          <span className="hidden sm:block" style={{ flex: 1 }}>Buscar paciente…</span>
+          <div className="hidden sm:flex" style={{ gap: 2 }}>
             <kbd style={{
               fontSize: 10, fontFamily: 'var(--mt-font-mono)',
               padding: '1px 5px', background: 'var(--mt-surface)',
@@ -279,8 +279,8 @@ function Topbar() {
 
         <div style={{ height: 24, width: 1, background: 'var(--mt-border)' }} />
 
-        {/* Clinic label */}
-        <div style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>
+        {/* Clinic label — hidden on mobile */}
+        <div className="hidden sm:block" style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>
           {clinicName}{' '}
           {user && (
             <span style={{ fontWeight: 500, color: 'var(--mt-text)' }}>

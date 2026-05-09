@@ -76,7 +76,7 @@ function AcceptInviteForm() {
         <h2 className="font-semibold text-slate-800">Configura tu cuenta</h2>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">Nombre *</label>
           <input required value={form.first_name} onChange={set('first_name')}
@@ -102,7 +102,7 @@ function AcceptInviteForm() {
           className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">Especialidad</label>
           <input value={form.specialty} onChange={set('specialty')} placeholder="Cardiología"

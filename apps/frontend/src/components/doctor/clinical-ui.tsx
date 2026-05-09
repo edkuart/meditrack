@@ -578,10 +578,9 @@ export function ClinicalPage({
   size?: 'compact' | 'wide'
 }) {
   return (
-    <div className="mt-page-in" style={{
+    <div className="mt-page-in mt-page" style={{
       maxWidth: size === 'compact' ? 768 : 1200,
       margin: '0 auto',
-      padding: '28px 32px 48px',
       display: 'flex', flexDirection: 'column', gap: 20,
     }}>
       {children}

@@ -75,7 +75,7 @@ export default function RegisterPage() {
           {field('Slug (identificador único)', 'clinic_slug', 'text', 'dr-garcia')}
 
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-2">Médico responsable</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-sm text-slate-600 font-medium">Nombre</label>
               <input type="text" required value={form.first_name} onChange={set('first_name')} className="border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />

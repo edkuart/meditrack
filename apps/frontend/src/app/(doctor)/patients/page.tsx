@@ -94,17 +94,17 @@ function PatientRow({ patient, last }: { patient: Patient; last: boolean }) {
       </td>
 
       {/* Contact */}
-      <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--mt-text-2)' }}>
+      <td className="hidden md:table-cell" style={{ padding: '12px 16px', fontSize: 13, color: 'var(--mt-text-2)' }}>
         {patient.phone ?? '—'}
       </td>
 
       {/* Status pill */}
-      <td style={{ padding: '12px 16px' }}>
+      <td className="hidden md:table-cell" style={{ padding: '12px 16px' }}>
         <MTPill tone="green" dot>Activo</MTPill>
       </td>
 
       {/* Adherence — placeholder since API doesn't return it in list */}
-      <td style={{ padding: '12px 16px' }}>
+      <td className="hidden lg:table-cell" style={{ padding: '12px 16px' }}>
         <AdherenceBar value={null} />
       </td>
 
@@ -223,30 +223,38 @@ export default function PatientsPage() {
           boxShadow: 'var(--mt-shadow-sm)',
           overflow: 'hidden',
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: '32%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '14%' }} />
-            </colgroup>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--mt-bg)', borderBottom: '1px solid var(--mt-border)' }}>
-                {['Paciente', 'Teléfono', 'Estado', 'Adherencia', ''].map((h, i) => (
-                  <th key={i} style={{
-                    padding: '10px 16px',
-                    textAlign: i === 4 ? 'right' : 'left',
-                    fontSize: 11, fontWeight: 500, letterSpacing: '0.08em',
-                    textTransform: 'uppercase', color: 'var(--mt-muted)',
-                  }}>
-                    {i === 0 ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        {h}<ChevronDown size={11} />
-                      </span>
-                    ) : h}
-                  </th>
-                ))}
+                <th style={{
+                  padding: '10px 16px', textAlign: 'left',
+                  fontSize: 11, fontWeight: 500, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: 'var(--mt-muted)',
+                }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    Paciente<ChevronDown size={11} />
+                  </span>
+                </th>
+                <th className="hidden md:table-cell" style={{
+                  padding: '10px 16px', textAlign: 'left',
+                  fontSize: 11, fontWeight: 500, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: 'var(--mt-muted)',
+                }}>Teléfono</th>
+                <th className="hidden md:table-cell" style={{
+                  padding: '10px 16px', textAlign: 'left',
+                  fontSize: 11, fontWeight: 500, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: 'var(--mt-muted)',
+                }}>Estado</th>
+                <th className="hidden lg:table-cell" style={{
+                  padding: '10px 16px', textAlign: 'left',
+                  fontSize: 11, fontWeight: 500, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: 'var(--mt-muted)',
+                }}>Adherencia</th>
+                <th style={{
+                  padding: '10px 16px', textAlign: 'right',
+                  fontSize: 11, fontWeight: 500, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: 'var(--mt-muted)',
+                }}></th>
               </tr>
             </thead>
             <tbody>

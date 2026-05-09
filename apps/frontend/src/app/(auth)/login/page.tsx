@@ -272,10 +272,10 @@ export default function LoginPage() {
       </div>
 
       {/* Form panel */}
-      <div style={{
+      <div className="px-5 sm:px-12" style={{
         flex: 1, display: 'flex', alignItems: 'center',
-        justifyContent: 'center', padding: '32px 48px',
-        overflowY: 'auto',
+        justifyContent: 'center',
+        overflowY: 'auto', paddingTop: 32, paddingBottom: 32,
       }}>
         {/* Mobile logo */}
         <div className="md:hidden" style={{ position: 'absolute', top: 24, left: 24 }}>

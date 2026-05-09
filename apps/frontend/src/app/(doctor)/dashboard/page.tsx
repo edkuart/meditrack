@@ -189,7 +189,7 @@ function DoseProgressSection({
   const tone = pct >= 80 ? 'green' : pct >= 50 ? 'amber' : 'red'
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+    <div className="mt-grid-halves">
       <div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 16 }}>
           <span style={{ fontSize: 36, fontWeight: 700, color: 'var(--mt-text)', letterSpacing: '-0.02em' }}>
@@ -298,7 +298,7 @@ export default function DashboardPage() {
           <OnboardingBanner />
 
           {/* Metric grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+          <div className="mt-grid-metrics">
             <MetricCard
               icon={Users}
               label="Pacientes activos"
@@ -331,7 +331,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Two-column body */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
+          <div className="mt-grid-body">
             {/* Left column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Prioridades clínicas */}
@@ -460,7 +460,7 @@ export default function DashboardPage() {
 
               {/* Acciones rápidas */}
               <MTPanel title="Acciones rápidas" icon={Sparkles} accent="purple" padBody>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="mt-grid-actions">
                   <QuickAction
                     icon={UserPlus} label="Registrar paciente" sub="Nueva ficha clínica"
                     bg="#eff6ff" fg="#1e40af" href="/patients/new"

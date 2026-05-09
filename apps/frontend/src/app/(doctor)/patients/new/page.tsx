@@ -64,7 +64,7 @@ export default function NewPatientPage() {
 
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col gap-5">
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-slate-600">Nombre *</label>
             <input required value={form.first_name} onChange={set('first_name')}
@@ -77,7 +77,7 @@ export default function NewPatientPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-slate-600">Correo electrónico</label>
             <input type="email" value={form.email} onChange={set('email')}
@@ -90,7 +90,7 @@ export default function NewPatientPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="flex flex-col gap-1 col-span-1">
             <label className="text-sm font-medium text-slate-600">N° de cédula / ID</label>
             <input value={form.id_number} onChange={set('id_number')}
