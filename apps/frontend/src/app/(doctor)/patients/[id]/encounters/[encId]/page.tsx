@@ -453,6 +453,7 @@ export default function EncounterPage() {
   const [aiError, setAiError] = useState('')
 
   // Treatment builder
+  const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
   const [treatmentName, setTreatmentName] = useState('')
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
   const [medications, setMedications] = useState<MedForm[]>([])
@@ -505,6 +506,7 @@ export default function EncounterPage() {
   }
 
   function applyClinicalProtocol(protocol: ClinicalProtocol) {
+    setSelectedProtocolId(protocol.id)
     if (protocol.note_template) {
       setNotes(prev => prev.trim() ? `${prev.trim()}\n\n${protocol.note_template}` : protocol.note_template ?? '')
     }
@@ -581,6 +583,7 @@ export default function EncounterPage() {
       })
       setTreatment(plan)
       setMedications([])
+      setSelectedProtocolId(null)
     } catch (err) {
       setTreatmentError(err instanceof Error ? err.message : 'Error al guardar el tratamiento')
     } finally {
@@ -916,16 +919,19 @@ export default function EncounterPage() {
                         style={{
                           display: 'flex', flexDirection: 'column', gap: 4,
                           padding: '9px 12px', borderRadius: 8, textAlign: 'left',
-                          border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+                          border: `1.5px solid ${selectedProtocolId === protocol.id ? 'var(--mt-primary)' : 'var(--mt-border)'}`,
+                          background: selectedProtocolId === protocol.id ? 'var(--mt-primary-subtle)' : 'var(--mt-surface)',
                           cursor: 'pointer', transition: 'border-color .2s, background .2s',
-                          boxShadow: 'var(--mt-shadow-xs)',
+                          boxShadow: selectedProtocolId === protocol.id ? 'var(--mt-shadow-focus)' : 'var(--mt-shadow-xs)',
                         }}
                         onMouseEnter={e => {
+                          if (selectedProtocolId === protocol.id) return
                           const el = e.currentTarget as HTMLElement
                           el.style.borderColor = 'var(--mt-primary)'
                           el.style.background = 'var(--mt-primary-subtle)'
                         }}
                         onMouseLeave={e => {
+                          if (selectedProtocolId === protocol.id) return
                           const el = e.currentTarget as HTMLElement
                           el.style.borderColor = 'var(--mt-border)'
                           el.style.background = 'var(--mt-surface)'
