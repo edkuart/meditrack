@@ -6,7 +6,6 @@ import Link from 'next/link'
 import {
   LayoutGrid,
   Users,
-  ClipboardList,
   TrendingUp,
   UserCog,
   CreditCard,
@@ -17,7 +16,8 @@ import {
   Loader2,
   Bell,
   Search,
-  Stethoscope,
+  Menu,
+  X,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
@@ -34,18 +34,21 @@ function NavItem({
   label,
   active,
   badge,
+  onClick,
 }: {
   href: string
   icon: React.ElementType
   label: string
   active: boolean
   badge?: string
+  onClick?: () => void
 }) {
   const [hover, setHover] = useState(false)
 
   return (
     <Link
       href={href}
+      onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -83,17 +86,17 @@ function NavItem({
 // ─────────────────────────────────────────────
 // Sidebar
 // ─────────────────────────────────────────────
-function Sidebar() {
+function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, logout } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
   const isAdmin = user && ADMIN_ROLES.has(user.role)
 
   const main = [
-    { href: '/dashboard',  icon: LayoutGrid,    label: 'Panel operativo', match: (p: string) => p === '/dashboard' },
-    { href: '/patients',   icon: Users,          label: 'Pacientes',       match: (p: string) => p.startsWith('/patients') },
-    { href: '/analytics',  icon: TrendingUp,     label: 'Analítica',       match: (p: string) => p.startsWith('/analytics'), adminOnly: true },
-    { href: '/staff',      icon: UserCog,        label: 'Equipo clínico',  match: (p: string) => p === '/staff', adminOnly: true },
+    { href: '/dashboard',  icon: LayoutGrid, label: 'Panel operativo', match: (p: string) => p === '/dashboard' },
+    { href: '/patients',   icon: Users,       label: 'Pacientes',      match: (p: string) => p.startsWith('/patients') },
+    { href: '/analytics',  icon: TrendingUp,  label: 'Analítica',      match: (p: string) => p.startsWith('/analytics'), adminOnly: true },
+    { href: '/staff',      icon: UserCog,     label: 'Equipo clínico', match: (p: string) => p === '/staff', adminOnly: true },
   ]
 
   const config = [
@@ -106,22 +109,45 @@ function Sidebar() {
 
   const doctorName = user ? `${user.first_name} ${user.last_name}` : ''
 
+  // On desktop the sidebar is always in the flex flow. On mobile it slides in/out
+  // as a fixed overlay. We use Tailwind classes exclusively for position/display
+  // to avoid inline-style specificity conflicts.
   return (
-    <aside style={{
-      width: 224, flexShrink: 0,
-      height: '100%',
-      background: 'var(--mt-surface)',
-      borderRight: '1px solid var(--mt-border)',
-      boxShadow: '2px 0 8px rgba(15,23,42,.04)',
-      flexDirection: 'column',
-      position: 'relative', zIndex: 1,
-    }} className="hidden md:flex">
-      {/* Logo */}
+    <aside
+      className={[
+        // Mobile: fixed overlay, slide in/out
+        'fixed inset-y-0 left-0 z-50 flex flex-col',
+        'transition-transform duration-300 ease-in-out',
+        open ? 'translate-x-0' : '-translate-x-full',
+        // Desktop: static, always visible, reset transform
+        'md:static md:translate-x-0 md:z-auto',
+      ].join(' ')}
+      style={{
+        width: 224, flexShrink: 0,
+        background: 'var(--mt-surface)',
+        borderRight: '1px solid var(--mt-border)',
+        boxShadow: open ? '8px 0 32px rgba(15,23,42,.18)' : '2px 0 8px rgba(15,23,42,.04)',
+      }}
+    >
+      {/* Logo + mobile close */}
       <div style={{
         padding: '18px 18px 16px',
         borderBottom: '1px solid var(--mt-border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <MTLogo size={16} />
+        <button
+          onClick={onClose}
+          className="md:hidden"
+          style={{
+            width: 28, height: 28, borderRadius: 6, border: 'none',
+            background: 'var(--mt-elevated)', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--mt-text-2)',
+          }}
+        >
+          <X size={15} />
+        </button>
       </div>
 
       {/* Nav */}
@@ -139,6 +165,7 @@ function Sidebar() {
               icon={item.icon}
               label={item.label}
               active={item.match(pathname)}
+              onClick={onClose}
             />
           ))}
 
@@ -157,6 +184,7 @@ function Sidebar() {
                 icon={item.icon}
                 label={item.label}
                 active={pathname.startsWith(item.href)}
+                onClick={onClose}
               />
             ))}
           </>
@@ -219,23 +247,37 @@ function LogoutBtn({ onLogout }: { onLogout: () => void }) {
 }
 
 // ─────────────────────────────────────────────
-// Topbar (shared across all doctor pages)
+// Topbar
 // ─────────────────────────────────────────────
-function Topbar() {
+function Topbar({ onMenu }: { onMenu: () => void }) {
   const { user } = useAuth()
   const clinicName = 'Clínica'
 
   return (
     <header className="mt-topbar-pad" style={{
       height: 56,
-      display: 'flex', alignItems: 'center', gap: 16,
+      display: 'flex', alignItems: 'center', gap: 12,
       borderBottom: '1px solid var(--mt-border)',
       background: 'rgba(255,255,255,.85)',
       backdropFilter: 'blur(8px)',
       position: 'sticky', top: 0, zIndex: 10,
       flexShrink: 0,
     }}>
-      {/* Search bar — text label hidden on mobile */}
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={onMenu}
+        className="md:hidden"
+        style={{
+          width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+          border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--mt-text-2)', cursor: 'pointer',
+        }}
+      >
+        <Menu size={18} />
+      </button>
+
+      {/* Search bar — label hidden on mobile */}
       <div style={{ flex: 1, maxWidth: 360 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 12px',
@@ -306,8 +348,8 @@ function MobileNav() {
   ]
 
   if (user && ADMIN_ROLES.has(user.role)) {
-    items.push({ href: '/staff',    label: 'Equipo', icon: UserCog,  active: pathname === '/staff' })
-    items.push({ href: '/analytics', label: 'Stats', icon: TrendingUp, active: pathname.startsWith('/analytics') })
+    items.push({ href: '/staff',     label: 'Equipo', icon: UserCog,   active: pathname === '/staff' })
+    items.push({ href: '/analytics', label: 'Stats',  icon: TrendingUp, active: pathname.startsWith('/analytics') })
   }
 
   return (
@@ -359,6 +401,11 @@ function MobileNav() {
 function DoctorGuard({ children }: { children: React.ReactNode }) {
   const { token, isLoading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Auto-close sidebar when navigating
+  useEffect(() => { setSidebarOpen(false) }, [pathname])
 
   useEffect(() => {
     if (!isLoading && !token) router.replace('/login')
@@ -380,10 +427,20 @@ function DoctorGuard({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--mt-bg)' }}>
       <LegalAcceptanceBanner />
+
+      {/* Mobile backdrop — shown when sidebar is open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 md:hidden"
+          style={{ background: 'rgba(15,23,42,.45)', backdropFilter: 'blur(2px)' }}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Sidebar />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-          <Topbar />
+          <Topbar onMenu={() => setSidebarOpen(v => !v)} />
           <main style={{ flex: 1, overflowY: 'auto', paddingBottom: '96px' }} className="md:pb-0 mt-scroll">
             {children}
           </main>
