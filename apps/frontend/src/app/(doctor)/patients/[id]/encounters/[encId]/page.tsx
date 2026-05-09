@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
-  ClipboardList, Clock3, FileText, Save, Sparkles, Stethoscope,
+  ClipboardList, Clock3, FileText, Save, Sparkles, Stethoscope, Wand2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
@@ -455,6 +455,7 @@ export default function EncounterPage() {
   const [treatmentError, setTreatmentError] = useState('')
   const [activating, setActivating] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [showTools, setShowTools] = useState(false)
 
   const load = useCallback(async () => {
     if (!token) return
@@ -693,10 +694,37 @@ export default function EncounterPage() {
         </ClinicalInsight>
       )}
 
-      <ClinicalPanel title="Notas clínicas" icon={FileText}>
+      <ClinicalPanel
+        title="Notas clínicas"
+        icon={FileText}
+        actions={!isClosed ? (
+          <button
+            type="button"
+            onClick={() => setShowTools(v => !v)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 30, padding: '0 10px', borderRadius: 8, border: '1px solid var(--mt-border)',
+              background: showTools ? 'var(--mt-primary-subtle)' : 'var(--mt-surface)',
+              color: showTools ? 'var(--mt-primary)' : 'var(--mt-muted)',
+              fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all .15s',
+              fontFamily: 'var(--mt-font)',
+            }}
+          >
+            <Wand2 size={13} />
+            Herramientas
+          </button>
+        ) : undefined}
+      >
         <div className="flex flex-col gap-4 p-5">
-          {!isClosed && (
-            <div className="flex flex-wrap gap-2">
+          {!isClosed && showTools && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 6,
+              padding: '10px 12px', borderRadius: 10,
+              background: 'var(--mt-bg)', border: '1px solid var(--mt-border)',
+            }}>
+              <span style={{ width: '100%', fontSize: 11, fontWeight: 600, color: 'var(--mt-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 2 }}>
+                Plantillas de notas
+              </span>
               {NOTE_TEMPLATES.map(template => (
                 <button
                   key={template.label}
@@ -704,17 +732,21 @@ export default function EncounterPage() {
                   onClick={() => applyNoteTemplate(template)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:text-blue-700"
                 >
-                  <Sparkles size={13} />
+                  <Sparkles size={12} />
                   {template.label}
                 </button>
               ))}
+              <div style={{ width: '100%', height: 1, background: 'var(--mt-border)', margin: '4px 0' }} />
+              <span style={{ width: '100%', fontSize: 11, fontWeight: 600, color: 'var(--mt-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 2 }}>
+                Asistencia IA
+              </span>
               <button
                 type="button"
                 onClick={() => handleAiAssist('SUMMARIZE_ENCOUNTER')}
                 disabled={Boolean(aiLoading)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60"
               >
-                {aiLoading === 'SUMMARIZE_ENCOUNTER' ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {aiLoading === 'SUMMARIZE_ENCOUNTER' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                 Sugerir resumen
               </button>
               <button
@@ -723,7 +755,7 @@ export default function EncounterPage() {
                 disabled={Boolean(aiLoading)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-60"
               >
-                {aiLoading === 'SIMPLIFY_FOR_PATIENT' ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {aiLoading === 'SIMPLIFY_FOR_PATIENT' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                 Lenguaje paciente
               </button>
             </div>
