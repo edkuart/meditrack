@@ -593,7 +593,8 @@ export default function EncounterPage() {
     setActivating(true)
     try {
       const updated = await activateTreatment(token, treatment.id)
-      setTreatment(updated)
+      // Backend activate response omits medications — preserve from current state
+      setTreatment(prev => prev ? { ...prev, ...updated, medications: prev.medications } : prev)
     } finally {
       setActivating(false)
     }
@@ -854,7 +855,7 @@ export default function EncounterPage() {
                 <p className="text-xs text-slate-400">Desde {new Date(treatment.start_date).toLocaleDateString('es')}</p>
               </div>
               <div className="flex flex-col gap-2">
-                {treatment.medications.map(med => (
+                {(treatment.medications ?? []).map(med => (
                   <div key={med.id} className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50">
                     <Pill size={14} className="text-blue-500 mt-0.5 shrink-0" />
                     <div>
@@ -938,9 +939,10 @@ export default function EncounterPage() {
                           {protocol.name}
                         </span>
                         <span style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
-                          {protocol.medications.length === 0
-                            ? 'Sin medicamentos'
-                            : `${protocol.medications.length} medicamento${protocol.medications.length > 1 ? 's' : ''}`}
+                          {(() => {
+                            const n = protocol.medications.filter(m => m.drug_name.trim()).length
+                            return n === 0 ? 'Sin medicamentos' : `${n} medicamento${n > 1 ? 's' : ''}`
+                          })()}
                           {protocol.follow_up_days ? ` · control ${protocol.follow_up_days}d` : ''}
                         </span>
                       </button>
