@@ -2,20 +2,23 @@
 
 export const dynamic = 'force-dynamic'
 
-import { Suspense, useEffect, useState, useCallback } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
+  Bell,
+  Calendar,
   ChevronRight,
   ClipboardList,
   FileText,
-  HeartPulse,
-  LogOut,
+  Home,
+  Loader2,
+  Pill,
   ShieldCheck,
   Stethoscope,
 } from 'lucide-react'
-import { PatientAvatar } from '@/components/portal/PatientAvatar'
 import { DoseCard } from '@/components/portal/DoseCard'
+import { MTAvatar, MTLogo } from '@/components/doctor/clinical-ui'
 import { getSession, saveSession, clearSession, type PatientSession } from '@/lib/portal/session'
 import {
   authMagicLink,
@@ -33,13 +36,125 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 }
 
-function engagementCopy(score?: number) {
-  if (score === undefined) return 'Revisa con calma lo que tienes programado para hoy.'
-  if (score >= 85) return 'Vas muy bien. Mantén tu ritmo de hoy.'
-  if (score >= 60) return 'Cada confirmación ayuda a mantener tu tratamiento ordenado.'
-  return 'Un paso a la vez. Empieza por la próxima dosis programada.'
+// ─────────────────────────────────────────────
+// Mood face SVG (geometric)
+// ─────────────────────────────────────────────
+function MoodAvatar({ score }: { score: number }) {
+  const happy = score >= 85
+  const ok = score >= 60 && score < 85
+  const tone = happy ? '#10b981' : ok ? '#0ea5e9' : '#f59e0b'
+  const bg   = happy ? '#d1fae5' : ok ? '#e0f2fe'  : '#fef3c7'
+  const mouth = happy
+    ? 'M 32 56 Q 44 70 56 56'
+    : ok
+    ? 'M 32 60 L 56 60'
+    : 'M 32 62 Q 44 52 56 62'
+
+  return (
+    <div style={{
+      width: 88, height: 88, borderRadius: '50%',
+      background: bg, boxShadow: '0 6px 18px rgba(15,23,42,.08)',
+      flexShrink: 0,
+    }}>
+      <svg width="88" height="88" viewBox="0 0 88 88" style={{ display: 'block' }}>
+        <circle cx="32" cy="40" r="3.5" fill={tone} />
+        <circle cx="56" cy="40" r="3.5" fill={tone} />
+        <path d={mouth} stroke={tone} strokeWidth="3" strokeLinecap="round" fill="none" />
+        {happy && (
+          <>
+            <circle cx="22" cy="52" r="3" fill={tone} opacity="0.25" />
+            <circle cx="66" cy="52" r="3" fill={tone} opacity="0.25" />
+          </>
+        )}
+      </svg>
+    </div>
+  )
 }
 
+// ─────────────────────────────────────────────
+// Adherence ring card
+// ─────────────────────────────────────────────
+function AdherenceCard({ confirmed, total }: { confirmed: number; total: number }) {
+  const pct = total > 0 ? Math.round((confirmed / total) * 100) : 0
+  const circum = 2 * Math.PI * 24
+  const dash = (pct / 100) * circum
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #1e40af 0%, #1a56db 100%)',
+      color: '#fff', borderRadius: 14, padding: 16, marginBottom: 22,
+      boxShadow: '0 6px 18px rgba(26,86,219,.25)',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Decorative circle */}
+      <div style={{
+        position: 'absolute', top: -30, right: -30, width: 140, height: 140,
+        borderRadius: '50%', border: '40px solid rgba(255,255,255,.08)',
+        pointerEvents: 'none',
+      }} />
+
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', position: 'relative' }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,.7)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Adherencia de hoy
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+            <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.02em' }}>{confirmed}</span>
+            <span style={{ fontSize: 18, fontWeight: 500, color: 'rgba(255,255,255,.85)' }}>/ {total} dosis</span>
+          </div>
+        </div>
+
+        {/* Ring */}
+        <div style={{ position: 'relative', width: 56, height: 56 }}>
+          <svg width="56" height="56" viewBox="0 0 56 56" style={{ transform: 'rotate(-90deg)' }}>
+            <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="5" />
+            <circle cx="28" cy="28" r="24" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round"
+              strokeDasharray={`${dash} ${circum}`}
+              style={{ transition: 'stroke-dasharray .8s cubic-bezier(0,0,.2,1)' }}
+            />
+          </svg>
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 600,
+          }}>{pct}%</div>
+        </div>
+      </div>
+
+      {total > confirmed && (
+        <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,.85)' }}>
+          {total - confirmed} dosis pendiente{total - confirmed > 1 ? 's' : ''} hoy
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Bottom nav button
+// ─────────────────────────────────────────────
+function NavBtn({ icon: Icon, label, active, href }: { icon: React.ElementType; label: string; active?: boolean; href: string }) {
+  return (
+    <Link href={href} style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+      color: active ? 'var(--mt-primary)' : 'var(--mt-muted)',
+      textDecoration: 'none', fontSize: 10.5, fontWeight: active ? 500 : 400,
+    }}>
+      <span style={{
+        padding: '4px 14px', borderRadius: 999,
+        background: active ? 'var(--mt-primary-subtle)' : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background .2s',
+      }}>
+        <Icon size={18} color={active ? 'var(--mt-primary)' : 'var(--mt-muted)'} />
+      </span>
+      {label}
+    </Link>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Portal content
+// ─────────────────────────────────────────────
 function PortalContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -48,42 +163,32 @@ function PortalContent() {
   const [doses, setDoses] = useState<DoseEvent[]>([])
   const [adherence, setAdherence] = useState<{ score: number; avatar_state: AvatarState } | null>(null)
   const [engagement, setEngagement] = useState<PatientEngagement | null>(null)
-  const [caregiverMode, setCaregiverMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Authenticate via magic link token from URL or existing session
   useEffect(() => {
     async function init() {
       const urlToken = searchParams.get('token')
-
       try {
         if (urlToken) {
-          // Validate magic link
           const result = await authMagicLink(urlToken)
           const s: PatientSession = { token: result.session_token, patient: result.patient }
           saveSession(s)
           setSession(s)
-          // Clean token from URL without full reload
           window.history.replaceState({}, '', '/portal')
         } else {
           const existing = getSession()
-          if (!existing) {
-            router.replace('/portal/auth')
-            return
-          }
+          if (!existing) { router.replace('/portal/auth'); return }
           setSession(existing)
         }
-      } catch (err) {
+      } catch {
         setError('El enlace es inválido o ya expiró. Pide a tu médico un nuevo acceso.')
         setLoading(false)
-        return
       }
     }
     init()
   }, [searchParams, router])
 
-  // Load portal data once session is ready
   const loadData = useCallback(async (token: string) => {
     try {
       const [dosesData, adherenceData, engagementData] = await Promise.all([
@@ -101,31 +206,23 @@ function PortalContent() {
     }
   }, [])
 
-  useEffect(() => {
-    if (session) loadData(session.token)
-  }, [session, loadData])
+  useEffect(() => { if (session) loadData(session.token) }, [session, loadData])
 
   async function handleConfirm(doseId: string) {
     if (!session) return
     const updated = await confirmDose(session.token, doseId)
     setDoses(prev => prev.map(d => d.id === doseId ? { ...d, ...updated } : d))
-    // Refresh calm feedback after confirmation.
     getAdherence(session.token).then(setAdherence).catch(() => {})
     getEngagement(session.token).then(setEngagement).catch(() => {})
   }
 
-  function handleLogout() {
-    clearSession()
-    router.replace('/portal/auth')
-  }
-
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-center max-w-xs">
-          <p className="text-5xl mb-4">⚠️</p>
-          <p className="text-slate-700 text-lg font-medium mb-2">Acceso no válido</p>
-          <p className="text-slate-500 text-base">{error}</p>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ textAlign: 'center', maxWidth: 300 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+          <p style={{ fontSize: 18, fontWeight: 500, color: 'var(--mt-text)', marginBottom: 8 }}>Acceso no válido</p>
+          <p style={{ fontSize: 14, color: 'var(--mt-text-2)' }}>{error}</p>
         </div>
       </div>
     )
@@ -133,145 +230,99 @@ function PortalContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Cargando tu tratamiento...</p>
-        </div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--mt-primary)' }} />
+        <p style={{ fontSize: 14, color: 'var(--mt-muted)' }}>Cargando tu tratamiento...</p>
       </div>
     )
   }
 
-  const firstName = session?.patient.first_name ?? ''
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches'
+  const firstName = session?.patient.first_name ?? ''
+  const patientName = `${session?.patient.first_name ?? ''} ${session?.patient.last_name ?? ''}`.trim()
   const confirmedToday = doses.filter(d => d.status === 'CONFIRMED').length
   const totalToday = doses.filter(d => d.status !== 'CANCELLED').length
-  const pendingDoses = doses.filter(d => d.status === 'PENDING')
-  const nextDose = pendingDoses.find(d => new Date(d.can_edit_until) >= new Date())
-  const progressPct = totalToday > 0 ? Math.round((confirmedToday / totalToday) * 100) : 0
-  const allDone = totalToday > 0 && confirmedToday === totalToday
+  const score = adherence?.score ?? 70
+  const today = new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' })
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col pb-8">
-
-      <div className="flex items-center justify-between px-5 pb-4 pt-6">
-        <div>
-          <p className="text-sm text-slate-400">{greeting}</p>
-          <p className="text-xl font-semibold text-slate-900">{firstName}</p>
+    <div style={{
+      display: 'flex', flexDirection: 'column', height: '100vh', maxWidth: 440,
+      margin: '0 auto', background: 'var(--mt-bg)', position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Topbar */}
+      <header style={{
+        height: 56, padding: '0 18px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: '1px solid var(--mt-border)',
+        background: 'rgba(255,255,255,.9)', backdropFilter: 'blur(8px)',
+        flexShrink: 0, position: 'sticky', top: 0, zIndex: 10,
+      }}>
+        <MTLogo size={15} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button style={{
+            position: 'relative', width: 34, height: 34, borderRadius: 8, border: 'none',
+            background: 'var(--mt-elevated)', color: 'var(--mt-text-2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}>
+            <Bell size={16} />
+            <span style={{
+              position: 'absolute', top: 7, right: 7, width: 7, height: 7,
+              borderRadius: '50%', background: 'var(--mt-danger)', border: '1.5px solid #fff',
+            }} />
+          </button>
+          {patientName && <MTAvatar name={patientName} size={32} tone={{ bg: '#dbeafe', fg: '#1a56db' }} />}
         </div>
-        <button
-          onClick={handleLogout}
-          aria-label="Cerrar sesión"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm"
-        >
-          <LogOut size={16} />
-        </button>
-      </div>
+      </header>
 
-      <section className="mx-5 rounded-3xl border border-blue-100 bg-white p-5 shadow-sm">
-        <div className="flex items-start gap-4">
-          {adherence && (
-            <div className="shrink-0 scale-75 origin-top-left">
-              <PatientAvatar state={adherence.avatar_state} score={adherence.score} />
-            </div>
-          )}
-          <div className="min-w-0 flex-1 pt-1">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                <HeartPulse size={13} />
-                Seguimiento semanal
-              </div>
-              <button
-                type="button"
-                onClick={() => setCaregiverMode(prev => !prev)}
-                className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500"
-              >
-                {caregiverMode ? 'Vista paciente' : 'Vista cuidador'}
-              </button>
-            </div>
-            <p className="text-lg font-semibold leading-snug text-slate-900">
-              {engagement?.headline ?? engagementCopy(adherence?.score)}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              {caregiverMode && engagement
-                ? engagement.caregiver_tip
-                : engagement?.guidance ?? (
-                    nextDose
-                      ? `Próxima dosis: ${nextDose.medication_item.drug_name} a las ${formatTime(nextDose.scheduled_at)}.`
-                      : allDone
-                        ? 'Ya registraste todas las dosis de hoy.'
-                        : 'No hay dosis pendientes en este momento.'
-                  )}
-            </p>
+      {/* Scrollable body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 96px' }} className="mt-page-in mt-scroll">
+        {/* Greeting + mood */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
+          <div style={{ flex: 1 }}>
+            <div className="mt-micro" style={{ color: 'var(--mt-muted)', marginBottom: 6 }}>{greeting}</div>
+            <h1 style={{
+              fontSize: 22, fontWeight: 700, color: 'var(--mt-text)',
+              letterSpacing: '-0.02em', lineHeight: 1.2, margin: 0,
+            }}>
+              {firstName},<br />
+              {score >= 80 ? 'vas muy bien.' : score >= 60 ? 'sigue adelante.' : 'un paso a la vez.'}
+            </h1>
           </div>
-        </div>
-      </section>
-
-      {engagement && (
-        <section className="mx-5 mt-4 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">{engagement.next_action.label}</p>
-              <p className="mt-1 text-sm leading-6 text-slate-500">{engagement.next_action.detail}</p>
-            </div>
-            <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-center">
-              <p className="text-lg font-semibold text-emerald-700">{engagement.streak_days}</p>
-              <p className="text-[11px] font-medium text-emerald-700">días</p>
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-7 gap-1.5" aria-label="Progreso de los últimos siete días">
-            {engagement.week.map(day => (
-              <div
-                key={day.date}
-                title={`${day.date}: ${day.total > 0 ? `${day.score}%` : 'sin dosis'}`}
-                className={`h-9 rounded-xl border ${
-                  day.total === 0 ? 'border-slate-100 bg-slate-50' :
-                  day.score >= 80 ? 'border-emerald-100 bg-emerald-100' :
-                  day.score >= 40 ? 'border-amber-100 bg-amber-100' :
-                  'border-rose-100 bg-rose-100'
-                }`}
-              />
-            ))}
-          </div>
-          <p className="mt-3 text-xs leading-5 text-slate-400">
-            {engagement.weekly_completed_days} día(s) completos esta semana. El objetivo es ayudarte a recordar, no exigirte perfección.
-          </p>
-        </section>
-      )}
-
-      <section className="mt-5 px-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="text-lg font-semibold text-slate-900">Hoy</p>
-            <p className="text-sm text-slate-400">
-              {totalToday > 0 ? `${confirmedToday} de ${totalToday} registradas` : 'Sin dosis programadas'}
-            </p>
-          </div>
-          {totalToday > 0 && (
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-700 shadow-sm">
-              {progressPct}%
-            </div>
-          )}
+          <MoodAvatar score={score} />
         </div>
 
-        {totalToday > 0 && (
-          <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="h-full rounded-full bg-emerald-400 transition-all duration-500"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-        )}
+        {/* Adherence ring card */}
+        <AdherenceCard confirmed={confirmedToday} total={totalToday} />
 
-        <div className="flex flex-col gap-3" aria-live="polite">
+        {/* Doses section */}
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--mt-text)', letterSpacing: '-0.01em', margin: 0 }}>
+            Dosis de hoy
+          </h2>
+          <span className="mt-small">{today}</span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-live="polite">
           {doses.length === 0 ? (
-            <div className="rounded-3xl border border-slate-100 bg-white px-6 py-10 text-center shadow-sm">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                <ShieldCheck size={24} />
+            <div style={{
+              background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+              borderRadius: 14, padding: '32px 24px', textAlign: 'center',
+            }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 12, background: 'var(--mt-success-subtle)',
+                color: 'var(--mt-success)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 12px',
+              }}>
+                <ShieldCheck size={22} />
               </div>
-              <p className="font-medium text-slate-700">No hay dosis programadas para hoy</p>
-              <p className="mt-1 text-sm text-slate-400">Puedes revisar tu tratamiento completo si tienes dudas.</p>
+              <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--mt-text)', margin: '0 0 4px' }}>
+                No hay dosis programadas para hoy
+              </p>
+              <p style={{ fontSize: 13, color: 'var(--mt-muted)', margin: 0 }}>
+                Revisa tu tratamiento completo si tienes dudas.
+              </p>
             </div>
           ) : (
             doses.map(dose => (
@@ -279,44 +330,60 @@ function PortalContent() {
             ))
           )}
         </div>
-      </section>
 
-      <div className="mt-auto flex flex-col gap-2 px-5 pt-6">
-        <Link
-          href="/portal/treatment"
-          className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-5 py-4 shadow-sm"
-        >
-          <span className="flex items-center gap-3 font-medium text-slate-700">
-            <ClipboardList size={18} className="text-blue-500" />
-            Ver mi tratamiento completo
-          </span>
-          <ChevronRight size={18} className="text-slate-400" />
-        </Link>
-        <Link
-          href="/portal/history"
-          className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-5 py-4 shadow-sm"
-        >
-          <span className="flex items-center gap-3 font-medium text-slate-700">
-            <Stethoscope size={18} className="text-blue-500" />
-            Mis consultas anteriores
-          </span>
-          <ChevronRight size={18} className="text-slate-400" />
-        </Link>
-        <Link
-          href="/portal/documents"
-          className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-5 py-4 shadow-sm"
-        >
-          <span className="flex items-center gap-3 font-medium text-slate-700">
-            <FileText size={18} className="text-blue-500" />
-            Mis documentos
-          </span>
-          <ChevronRight size={18} className="text-slate-400" />
-        </Link>
-        <p className="pt-3 text-center text-xs leading-5 text-slate-400">
+        {/* Quick links */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
+          {[
+            { href: '/portal/treatment', icon: ClipboardList, label: 'Mi tratamiento completo', sub: 'Ver todos los medicamentos' },
+            { href: '/portal/history',   icon: Stethoscope,  label: 'Mis consultas',            sub: 'Historial de encuentros' },
+            { href: '/portal/documents', icon: FileText,     label: 'Mis documentos',           sub: 'Resultados y recetas' },
+          ].map(item => (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+                background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+                borderRadius: 12, textDecoration: 'none', transition: 'border-color .2s',
+              }}
+            >
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                background: 'var(--mt-elevated)', color: 'var(--mt-text-2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <item.icon size={18} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)' }}>{item.label}</div>
+                <div style={{ fontSize: 13, color: 'var(--mt-muted)', marginTop: 1 }}>{item.sub}</div>
+              </div>
+              <ChevronRight size={16} color="var(--mt-muted)" />
+            </Link>
+          ))}
+        </div>
+
+        <p style={{
+          marginTop: 20, textAlign: 'center', fontSize: 12,
+          color: 'var(--mt-muted)', lineHeight: 1.5,
+        }}>
           Si algo no coincide con las indicaciones recibidas, consulta con tu equipo médico.
         </p>
       </div>
 
+      {/* Bottom nav */}
+      <nav style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        height: 76, padding: '8px 12px 22px',
+        background: 'rgba(255,255,255,.95)', backdropFilter: 'blur(10px)',
+        borderTop: '1px solid var(--mt-border)',
+        display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+      }}>
+        <NavBtn icon={Home}          label="Hoy"        href="/portal"           active />
+        <NavBtn icon={Pill}          label="Plan"       href="/portal/treatment"            />
+        <NavBtn icon={ClipboardList} label="Consultas"  href="/portal/history"              />
+        <NavBtn icon={FileText}      label="Documentos" href="/portal/documents"            />
+      </nav>
     </div>
   )
 }
@@ -324,8 +391,8 @@ function PortalContent() {
 export default function PortalPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={28} style={{ animation: 'spin 1s linear infinite', color: 'var(--mt-primary)' }} />
       </div>
     }>
       <PortalContent />

@@ -3,21 +3,254 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
+import { MTInput, MTLogo, MTButton } from '@/components/doctor/clinical-ui'
 
+// ─────────────────────────────────────────────
+// ECG pulse background pattern
+// ─────────────────────────────────────────────
+function PulsePattern() {
+  return (
+    <svg
+      width="100%" height="100%"
+      style={{ position: 'absolute', inset: 0, opacity: 0.12 }}
+      preserveAspectRatio="none"
+      viewBox="0 0 600 800"
+    >
+      <defs>
+        <pattern id="dots" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+          <circle cx="2" cy="2" r="1" fill="#fff" />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#dots)" />
+      <path
+        d="M -50 400 L 100 400 L 130 400 L 145 380 L 160 420 L 175 340 L 195 460 L 215 400 L 280 400 L 310 400 L 325 380 L 340 420 L 355 340 L 375 460 L 395 400 L 460 400 L 490 400 L 505 380 L 520 420 L 535 340 L 555 460 L 575 400 L 650 400"
+        fill="none" stroke="#fff" strokeWidth="1.5"
+        strokeLinecap="round" strokeLinejoin="round" opacity="0.6"
+      />
+      <circle cx="120" cy="180" r="80"  fill="none" stroke="#fff" strokeWidth="1" opacity="0.3" />
+      <circle cx="120" cy="180" r="140" fill="none" stroke="#fff" strokeWidth="1" opacity="0.2" />
+      <circle cx="500" cy="620" r="100" fill="none" stroke="#fff" strokeWidth="1" opacity="0.3" />
+      <circle cx="500" cy="620" r="180" fill="none" stroke="#fff" strokeWidth="1" opacity="0.2" />
+    </svg>
+  )
+}
+
+function BrandedPanel() {
+  return (
+    <div style={{
+      flex: '0 0 42%',
+      background: 'linear-gradient(160deg, #1e40af 0%, #1a56db 60%, #2563eb 100%)',
+      color: '#fff', position: 'relative', overflow: 'hidden',
+      padding: '48px 44px',
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+    }}>
+      <PulsePattern />
+
+      {/* Logo */}
+      <div style={{ position: 'relative' }}>
+        <MTLogo size={20} mono />
+      </div>
+
+      {/* Main copy */}
+      <div style={{ position: 'relative', maxWidth: 380 }}>
+        <div style={{
+          fontSize: 11, fontWeight: 500, letterSpacing: '0.12em',
+          textTransform: 'uppercase', color: 'rgba(255,255,255,.7)', marginBottom: 14,
+        }}>
+          Adherencia terapéutica
+        </div>
+        <h2 style={{
+          fontSize: 30, fontWeight: 700, lineHeight: 1.2,
+          letterSpacing: '-0.02em', marginBottom: 14, margin: '0 0 14px',
+        }}>
+          Cuidado clínico que sigue al paciente fuera del consultorio.
+        </h2>
+        <p style={{ fontSize: 15, color: 'rgba(255,255,255,.85)', lineHeight: 1.6, margin: 0 }}>
+          Planes de tratamiento, seguimiento de dosis y comunicación con el paciente —
+          todo en una sola vista para tu equipo.
+        </p>
+        <div style={{ display: 'flex', gap: 24, marginTop: 28, flexWrap: 'wrap' }}>
+          {[
+            { n: '128k', l: 'dosis confirmadas / mes' },
+            { n: '+6 pp', l: 'adherencia promedio' },
+            { n: '240+', l: 'clínicas en LATAM' },
+          ].map(s => (
+            <div key={s.n}>
+              <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em' }}>{s.n}</div>
+              <div style={{
+                fontSize: 11, color: 'rgba(255,255,255,.7)',
+                textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2,
+              }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Compliance badge */}
+      <div style={{
+        position: 'relative', display: 'flex', alignItems: 'center', gap: 8,
+        fontSize: 12, color: 'rgba(255,255,255,.7)',
+      }}>
+        <ShieldCheck size={14} color="rgba(255,255,255,.7)" />
+        HIPAA · Habeas Data Colombia · ISO 27001
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Login form
+// ─────────────────────────────────────────────
+function LoginForm({
+  onSubmit,
+  loading,
+  error,
+}: {
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
+  loading: boolean
+  error: string
+}) {
+  const [showPw, setShowPw] = useState(false)
+
+  return (
+    <form onSubmit={onSubmit} style={{
+      width: '100%', maxWidth: 380,
+      display: 'flex', flexDirection: 'column', gap: 18,
+    }}>
+      <div>
+        <div className="mt-micro" style={{ color: 'var(--mt-primary)', marginBottom: 8 }}>
+          Acceso clínico
+        </div>
+        <h1 style={{
+          fontSize: 26, fontWeight: 700, color: 'var(--mt-text)',
+          letterSpacing: '-0.02em', margin: '0 0 6px',
+        }}>
+          Bienvenida de vuelta
+        </h1>
+        <p className="mt-small">Ingresa con tu correo institucional para continuar.</p>
+      </div>
+
+      <MTInput
+        name="email"
+        label="Correo electrónico"
+        icon={Mail}
+        type="email"
+        required
+        placeholder="doctor@clinica.com"
+        autoComplete="email"
+      />
+
+      <MTInput
+        name="password"
+        label="Contraseña"
+        icon={Lock}
+        type={showPw ? 'text' : 'password'}
+        required
+        placeholder="••••••••"
+        autoComplete="current-password"
+        suffix={
+          <button
+            type="button"
+            onClick={() => setShowPw(v => !v)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--mt-muted)', display: 'flex', padding: 0,
+            }}
+          >
+            {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        }
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--mt-text-2)' }}>
+          <span style={{
+            width: 16, height: 16, borderRadius: 4,
+            border: '1.5px solid var(--mt-primary)', background: 'var(--mt-primary)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          Mantener sesión
+        </label>
+        <a href="#" style={{ color: 'var(--mt-primary)', fontWeight: 500 }}>
+          ¿Olvidaste tu contraseña?
+        </a>
+      </div>
+
+      {error && (
+        <div style={{
+          background: 'var(--mt-danger-subtle)', color: 'var(--mt-danger)',
+          fontSize: 13, borderRadius: 8, padding: '10px 14px', border: '1px solid #fecaca',
+        }}>
+          {error}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          height: 44, width: '100%', borderRadius: 8, border: 'none',
+          background: loading ? 'var(--mt-primary-hover)' : 'var(--mt-primary)',
+          color: '#fff', fontSize: 14, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
+          boxShadow: '0 1px 3px rgba(26,86,219,.30)',
+          transition: 'background .2s, box-shadow .2s',
+          opacity: loading ? 0.8 : 1,
+          fontFamily: 'var(--mt-font)',
+        }}
+      >
+        {loading
+          ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Ingresando...</>
+          : <><span>Ingresar al panel</span><ArrowRight size={16} /></>
+        }
+      </button>
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        color: 'var(--mt-muted)', fontSize: 12, margin: '4px 0',
+      }}>
+        <span style={{ flex: 1, height: 1, background: 'var(--mt-border)' }} />
+        o continúa con
+        <span style={{ flex: 1, height: 1, background: 'var(--mt-border)' }} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <MTButton variant="outline" type="button">SSO institucional</MTButton>
+        <MTButton variant="outline" type="button">Google Workspace</MTButton>
+      </div>
+
+      <p style={{ fontSize: 13, color: 'var(--mt-text-2)', margin: 0 }}>
+        ¿Tu clínica aún no está registrada?{' '}
+        <Link href="/register" style={{ color: 'var(--mt-primary)', fontWeight: 500 }}>
+          Solicitar acceso →
+        </Link>
+      </p>
+    </form>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────
 export default function LoginPage() {
   const router = useRouter()
   const { login } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
     setLoading(true)
+    const fd = new FormData(e.currentTarget)
+    const email = fd.get('email') as string
+    const password = fd.get('password') as string
     try {
       await login(email, password)
       router.replace('/patients')
@@ -29,59 +262,26 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-800">meditrack</h1>
-          <p className="text-slate-500 mt-1 text-sm">Portal médico</p>
+    <div style={{
+      display: 'flex', height: '100vh', background: 'var(--mt-bg)',
+      fontFamily: 'var(--mt-font)',
+    }}>
+      {/* Branded left panel — hidden on mobile */}
+      <div className="hidden md:flex" style={{ flex: '0 0 42%' }}>
+        <BrandedPanel />
+      </div>
+
+      {/* Form panel */}
+      <div style={{
+        flex: 1, display: 'flex', alignItems: 'center',
+        justifyContent: 'center', padding: '32px 48px',
+        overflowY: 'auto',
+      }}>
+        {/* Mobile logo */}
+        <div className="md:hidden" style={{ position: 'absolute', top: 24, left: 24 }}>
+          <MTLogo size={18} />
         </div>
-
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col gap-4">
-          <h2 className="font-semibold text-slate-800 text-lg">Iniciar sesión</h2>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 font-medium">Correo electrónico</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-              placeholder="doctor@ejemplo.com"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-600 font-medium">Contraseña</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-500 text-white font-medium text-sm disabled:opacity-60 hover:bg-blue-600 transition-colors"
-          >
-            {loading ? <><Loader2 size={16} className="animate-spin" /> Ingresando...</> : 'Ingresar'}
-          </button>
-
-          <p className="text-center text-sm text-slate-500">
-            ¿Primera vez?{' '}
-            <Link href="/register" className="text-blue-600 font-medium hover:underline">
-              Registrar clínica
-            </Link>
-          </p>
-        </form>
+        <LoginForm onSubmit={handleSubmit} loading={loading} error={error} />
       </div>
     </div>
   )

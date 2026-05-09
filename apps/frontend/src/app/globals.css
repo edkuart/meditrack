@@ -1,26 +1,144 @@
 @import "tailwindcss";
 
+/* ============================================================
+   MEDITRACK · Design Tokens
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* — Brand — */
+  --mt-primary:        #1a56db;
+  --mt-primary-hover:  #1e40af;
+  --mt-primary-subtle: #dbeafe;
+  --mt-accent:         #0284c7;
+
+  /* — Semantic — */
+  --mt-success:        #059669;
+  --mt-success-subtle: #d1fae5;
+  --mt-warning:        #d97706;
+  --mt-warning-subtle: #fef3c7;
+  --mt-danger:         #dc2626;
+  --mt-danger-subtle:  #fee2e2;
+  --mt-info:           #0284c7;
+  --mt-info-subtle:    #e0f2fe;
+
+  /* — Neutrals — */
+  --mt-bg:       #f8fafc;
+  --mt-surface:  #ffffff;
+  --mt-elevated: #f1f5f9;
+  --mt-text:     #0f172a;
+  --mt-text-2:   #475569;
+  --mt-muted:    #94a3b8;
+  --mt-border:   #e2e8f0;
+  --mt-border-2: #cbd5e1;
+
+  /* — Shadows — */
+  --mt-shadow-xs:    0 1px 2px rgba(15,23,42,.04);
+  --mt-shadow-sm:    0 1px 3px rgba(15,23,42,.08);
+  --mt-shadow-md:    0 4px 12px rgba(15,23,42,.10);
+  --mt-shadow-lg:    0 8px 24px rgba(15,23,42,.12);
+  --mt-shadow-focus: 0 0 0 3px rgba(26,86,219,.15);
+
+  /* — Radii — */
+  --mt-r-sm: 6px;
+  --mt-r-md: 8px;
+  --mt-r-lg: 12px;
+  --mt-r-xl: 16px;
+
+  /* — Typography — */
+  --mt-font:      'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mt-font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-background: var(--mt-bg);
+  --color-foreground: var(--mt-text);
+  --font-sans: var(--font-geist);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ============================================================
+   Base
+   ============================================================ */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--mt-bg);
+  color: var(--mt-text);
+  font-family: var(--mt-font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ============================================================
+   Type utilities
+   ============================================================ */
+
+.mt-display    { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; color: var(--mt-text); margin: 0; }
+.mt-heading    { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; color: var(--mt-text); margin: 0; }
+.mt-subheading { font-size: 16px; font-weight: 600; letter-spacing: -0.005em; line-height: 1.3;  color: var(--mt-text); margin: 0; }
+.mt-body       { font-size: 14px; font-weight: 400; color: var(--mt-text); }
+.mt-small      { font-size: 13px; font-weight: 400; color: var(--mt-text-2); margin: 0; }
+.mt-micro      { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mt-muted); margin: 0; }
+.mt-muted      { color: var(--mt-muted); }
+.mt-text-2     { color: var(--mt-text-2); }
+
+/* ============================================================
+   Animations
+   ============================================================ */
+
+@keyframes mt-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes mt-pulse-dot {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: 0.4; transform: scale(0.9); }
+}
+
+@keyframes mt-page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes mt-fade-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+
+@keyframes mt-slide-in-l {
+  from { transform: translateX(-3px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ============================================================
+   Utility classes
+   ============================================================ */
+
+.mt-page-in       { animation: mt-page-in .3s ease-out; }
+.mt-fade-scale-in { animation: mt-fade-scale-in .3s ease-out; }
+
+.mt-skeleton {
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: mt-shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+.mt-pulse-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mt-danger);
+  animation: mt-pulse-dot 1.4s infinite ease-in-out;
+}
+
+/* ============================================================
+   Scrollbars
+   ============================================================ */
+
+.mt-scroll::-webkit-scrollbar        { width: 6px; height: 6px; }
+.mt-scroll::-webkit-scrollbar-thumb  { background: var(--mt-border-2); border-radius: 3px; }
+.mt-scroll::-webkit-scrollbar-track  { background: transparent; }
