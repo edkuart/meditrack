@@ -621,7 +621,7 @@ export function ClinicalHeader({
           <p className="mt-small" style={{ marginTop: 6, maxWidth: 560 }}>{subtitle}</p>
         )}
         {meta && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
             {meta}
           </div>
         )}

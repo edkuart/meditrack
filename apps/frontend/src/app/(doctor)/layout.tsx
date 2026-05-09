@@ -113,7 +113,7 @@ function Sidebar() {
       background: 'var(--mt-surface)',
       borderRight: '1px solid var(--mt-border)',
       boxShadow: '2px 0 8px rgba(15,23,42,.04)',
-      display: 'flex', flexDirection: 'column',
+      flexDirection: 'column',
       position: 'relative', zIndex: 1,
     }} className="hidden md:flex">
       {/* Logo */}
