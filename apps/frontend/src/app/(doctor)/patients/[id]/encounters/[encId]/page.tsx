@@ -899,7 +899,10 @@ export default function EncounterPage() {
                           {protocol.name}
                         </span>
                         <span style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
-                          {protocol.medications.length} med.{protocol.follow_up_days ? ` · control ${protocol.follow_up_days}d` : ''}
+                          {protocol.medications.length === 0
+                            ? 'Sin medicamentos'
+                            : `${protocol.medications.length} medicamento${protocol.medications.length > 1 ? 's' : ''}`}
+                          {protocol.follow_up_days ? ` · control ${protocol.follow_up_days}d` : ''}
                         </span>
                       </button>
                     ))}
