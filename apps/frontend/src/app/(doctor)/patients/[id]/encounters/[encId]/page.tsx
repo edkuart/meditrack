@@ -169,44 +169,51 @@ function MedFormPanel({
       {/* Header */}
       <div style={{
         padding: '10px 14px', borderBottom: '1px solid var(--mt-border)',
-        background: 'var(--mt-bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'var(--mt-bg)',
       }}>
         <StepMarker number={2} title="Agregar medicamento" />
-        {/* Schedule quick-select */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          {SCHEDULE_PRESETS.map(preset => (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => setMedForm(p => ({
-                ...p,
-                frequency_type: preset.frequency_type,
-                frequency_value: preset.frequency_value,
-                times_per_day_count: preset.times_per_day_count,
-                times_per_day: preset.times_per_day,
-              }))}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 500,
-                border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
-                color: 'var(--mt-text-2)', cursor: 'pointer', transition: 'all .15s',
-              }}
-              onMouseEnter={e => {
-                const el = e.currentTarget as HTMLElement
-                el.style.borderColor = 'var(--mt-primary)'
-                el.style.color = 'var(--mt-primary)'
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget as HTMLElement
-                el.style.borderColor = 'var(--mt-border)'
-                el.style.color = 'var(--mt-text-2)'
-              }}
-            >
-              <Clock3 size={10} />
-              {preset.label}
-            </button>
-          ))}
-        </div>
+      </div>
+
+      {/* Schedule quick-select — single scrollable row */}
+      <div style={{
+        display: 'flex', gap: 5, padding: '7px 14px',
+        borderBottom: '1px solid var(--mt-border)', background: 'var(--mt-bg)',
+        overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+        msOverflowStyle: 'none', scrollbarWidth: 'none',
+      }}>
+        {SCHEDULE_PRESETS.map(preset => (
+          <button
+            key={preset.label}
+            type="button"
+            onClick={() => setMedForm(p => ({
+              ...p,
+              frequency_type: preset.frequency_type,
+              frequency_value: preset.frequency_value,
+              times_per_day_count: preset.times_per_day_count,
+              times_per_day: preset.times_per_day,
+            }))}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+              padding: '3px 9px', borderRadius: 6, fontSize: 11, fontWeight: 500,
+              border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+              color: 'var(--mt-text-2)', cursor: 'pointer', transition: 'all .15s',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={e => {
+              const el = e.currentTarget as HTMLElement
+              el.style.borderColor = 'var(--mt-primary)'
+              el.style.color = 'var(--mt-primary)'
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget as HTMLElement
+              el.style.borderColor = 'var(--mt-border)'
+              el.style.color = 'var(--mt-text-2)'
+            }}
+          >
+            <Clock3 size={10} />
+            {preset.label}
+          </button>
+        ))}
       </div>
 
       {/* Body */}
