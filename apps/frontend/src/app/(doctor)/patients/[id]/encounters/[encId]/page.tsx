@@ -125,22 +125,285 @@ function emptyMedForm(): MedForm {
   }
 }
 
+// ─── Shared field styles ──────────────────────────────────────────────────────
+
+const fldInput: React.CSSProperties = {
+  height: 36, padding: '0 10px', borderRadius: 8, width: '100%',
+  border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+  fontSize: 13, color: 'var(--mt-text)', fontFamily: 'var(--mt-font)',
+  outline: 'none', boxSizing: 'border-box',
+}
+const fldLabel: React.CSSProperties = {
+  fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)',
+  letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 4,
+}
+function focusRing(e: React.FocusEvent) { (e.target as HTMLElement).style.boxShadow = 'var(--mt-shadow-focus)' }
+function blurRing(e: React.FocusEvent)  { (e.target as HTMLElement).style.boxShadow = 'none' }
+
+// ─── Medication form panel ────────────────────────────────────────────────────
+
+function MedFormPanel({
+  medForm,
+  setMedForm,
+  onAdd,
+  onCancel,
+  updateTimesCount,
+  updateTime,
+}: {
+  medForm: MedForm
+  setMedForm: React.Dispatch<React.SetStateAction<MedForm>>
+  onAdd: () => void
+  onCancel: () => void
+  updateTimesCount: (v: string) => void
+  updateTime: (i: number, v: string) => void
+}) {
+  const set = <K extends keyof MedForm>(key: K) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setMedForm(p => ({ ...p, [key]: e.target.value }))
+
+  return (
+    <div style={{
+      borderRadius: 12, border: '1px solid var(--mt-border)',
+      background: 'var(--mt-surface)', overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '10px 14px', borderBottom: '1px solid var(--mt-border)',
+        background: 'var(--mt-bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <StepMarker number={2} title="Agregar medicamento" />
+        {/* Schedule quick-select */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          {SCHEDULE_PRESETS.map(preset => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setMedForm(p => ({
+                ...p,
+                frequency_type: preset.frequency_type,
+                frequency_value: preset.frequency_value,
+                times_per_day_count: preset.times_per_day_count,
+                times_per_day: preset.times_per_day,
+              }))}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 500,
+                border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+                color: 'var(--mt-text-2)', cursor: 'pointer', transition: 'all .15s',
+              }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLElement
+                el.style.borderColor = 'var(--mt-primary)'
+                el.style.color = 'var(--mt-primary)'
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLElement
+                el.style.borderColor = 'var(--mt-border)'
+                el.style.color = 'var(--mt-text-2)'
+              }}
+            >
+              <Clock3 size={10} />
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+        {/* Drug name — full width */}
+        <div>
+          <label style={fldLabel}>Medicamento *</label>
+          <input
+            value={medForm.drug_name}
+            onChange={set('drug_name')}
+            onFocus={focusRing} onBlur={blurRing}
+            placeholder="Ej: Enalapril"
+            style={fldInput}
+          />
+        </div>
+
+        {/* Dose row: amount + unit + route */}
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label style={fldLabel}>Dosis *</label>
+            <input
+              type="number"
+              value={medForm.dose_amount}
+              onChange={set('dose_amount')}
+              onFocus={focusRing} onBlur={blurRing}
+              placeholder="10"
+              style={fldInput}
+            />
+          </div>
+          <div>
+            <label style={fldLabel}>Unidad</label>
+            <select value={medForm.dose_unit} onChange={set('dose_unit')}
+              onFocus={focusRing} onBlur={blurRing}
+              style={fldInput}>
+              {DOSE_UNITS.map(u => <option key={u}>{u}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={fldLabel}>Vía</label>
+            <select value={medForm.route} onChange={set('route')}
+              onFocus={focusRing} onBlur={blurRing}
+              style={fldInput}>
+              {ROUTES.map(r => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Frequency row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label style={fldLabel}>Frecuencia</label>
+            <select value={medForm.frequency_type} onChange={set('frequency_type')}
+              onFocus={focusRing} onBlur={blurRing}
+              style={fldInput}>
+              <option value="DAILY">Diario</option>
+              <option value="EVERY_X_HOURS">Cada X horas</option>
+              <option value="WEEKLY">Semanal</option>
+              <option value="AS_NEEDED">Según necesidad</option>
+            </select>
+          </div>
+
+          {medForm.frequency_type === 'EVERY_X_HOURS' && (
+            <div>
+              <label style={fldLabel}>Cada (horas)</label>
+              <input type="number" min={1}
+                value={medForm.frequency_value} onChange={set('frequency_value')}
+                onFocus={focusRing} onBlur={blurRing}
+                style={fldInput} />
+            </div>
+          )}
+
+          {medForm.frequency_type === 'DAILY' && (
+            <div>
+              <label style={fldLabel}>Veces al día</label>
+              <input type="number" min={1} max={6}
+                value={medForm.times_per_day_count}
+                onChange={e => updateTimesCount(e.target.value)}
+                onFocus={focusRing} onBlur={blurRing}
+                style={{ ...fldInput, width: 72 }} />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {medForm.times_per_day.map((t, i) => (
+                  <input key={i} type="time" value={t}
+                    onChange={e => updateTime(i, e.target.value)}
+                    onFocus={focusRing} onBlur={blurRing}
+                    style={{ ...fldInput, width: 'auto' }} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label style={fldLabel}>Duración (días)</label>
+            <input type="number" min={1}
+              value={medForm.duration_days} onChange={set('duration_days')}
+              onFocus={focusRing} onBlur={blurRing}
+              style={fldInput} />
+          </div>
+        </div>
+
+        {/* Options */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={medForm.with_food}
+              onChange={e => setMedForm(p => ({ ...p, with_food: e.target.checked }))}
+              style={{ width: 15, height: 15, accentColor: 'var(--mt-primary)', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>Tomar con alimentos</span>
+          </label>
+          <div>
+            <label style={fldLabel}>Instrucciones especiales</label>
+            <input
+              value={medForm.special_instructions}
+              onChange={set('special_instructions')}
+              onFocus={focusRing} onBlur={blurRing}
+              placeholder="Ej: Evitar exposición al sol"
+              style={fldInput}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer actions */}
+      <div style={{
+        padding: '10px 14px', borderTop: '1px solid var(--mt-border)',
+        background: 'var(--mt-bg)', display: 'flex', justifyContent: 'flex-end', gap: 8,
+      }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            height: 34, padding: '0 14px', borderRadius: 8, border: '1px solid var(--mt-border)',
+            background: 'var(--mt-surface)', fontSize: 13, color: 'var(--mt-text-2)',
+            cursor: 'pointer', fontFamily: 'var(--mt-font)',
+          }}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={!medForm.drug_name.trim() || !medForm.dose_amount}
+          style={{
+            height: 34, padding: '0 16px', borderRadius: 8, border: 'none',
+            background: 'var(--mt-primary)', color: '#fff', fontSize: 13, fontWeight: 500,
+            cursor: 'pointer', fontFamily: 'var(--mt-font)',
+            opacity: !medForm.drug_name.trim() || !medForm.dose_amount ? 0.5 : 1,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <Plus size={14} />
+          Agregar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function MedicationCard({ med, onRemove }: { med: Partial<MedForm & { drug_name: string }>; onRemove: () => void }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white">
-      <Pill size={16} className="text-blue-500 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-800">{med.drug_name}</p>
-        <p className="text-xs text-slate-400">
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+      borderRadius: 10, border: '1px solid var(--mt-border)',
+      background: 'var(--mt-surface)', boxShadow: 'var(--mt-shadow-xs)',
+    }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+        background: 'var(--mt-primary-subtle)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Pill size={15} color="var(--mt-primary)" />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)' }}>
+          {med.drug_name}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--mt-text-2)', marginTop: 2 }}>
           {med.dose_amount} {med.dose_unit}
           {' · '}{FREQ_LABELS[med.frequency_type ?? ''] ?? med.frequency_type}
           {med.frequency_type === 'EVERY_X_HOURS' && ` c/${med.frequency_value}h`}
           {med.frequency_type === 'DAILY' && med.times_per_day && ` (${med.times_per_day.join(', ')})`}
           {med.duration_days && ` · ${med.duration_days} días`}
-        </p>
+        </div>
       </div>
-      <button onClick={onRemove} className="text-slate-300 hover:text-red-500 transition-colors">
-        <Trash2 size={15} />
+      <button
+        onClick={onRemove}
+        style={{
+          width: 28, height: 28, borderRadius: 6, border: 'none', background: 'transparent',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--mt-muted)', transition: 'color .2s', flexShrink: 0,
+        }}
+        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--mt-danger)')}
+        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--mt-muted)')}
+      >
+        <Trash2 size={14} />
       </button>
     </div>
   )
@@ -148,11 +411,14 @@ function MedicationCard({ med, onRemove }: { med: Partial<MedForm & { drug_name:
 
 function StepMarker({ number, title }: { number: number; title: string }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
-        {number}
-      </span>
-      <span className="text-sm font-semibold text-slate-800">{title}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{
+        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+        background: 'var(--mt-primary)', color: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 11, fontWeight: 700,
+      }}>{number}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)' }}>{title}</span>
     </div>
   )
 }
@@ -602,62 +868,130 @@ export default function EncounterPage() {
             <p className="text-sm text-slate-400 text-center py-4">Esta consulta no tiene plan de tratamiento.</p>
           ) : (
             <>
-              <div className="flex flex-col gap-3 rounded-lg border border-blue-100 bg-blue-50 p-4">
-                <StepMarker number={1} title="Elegir protocolo" />
-                <div className="grid gap-2 md:grid-cols-3">
-                  {protocols.slice(0, 6).map(protocol => (
-                    <button
-                      key={protocol.id}
-                      type="button"
-                      onClick={() => applyClinicalProtocol(protocol)}
-                      className="flex min-h-24 flex-col items-start gap-1 rounded-lg bg-white px-3 py-2 text-left shadow-sm transition-colors hover:bg-blue-100"
-                    >
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700">
-                        <ClipboardList size={13} />
-                        {protocol.name}
-                      </span>
-                      {protocol.description && (
-                        <span className="text-xs text-slate-500">{protocol.description}</span>
-                      )}
-                      <span className="mt-auto text-[11px] font-medium text-slate-400">
-                        {protocol.medications.length} med. {protocol.follow_up_days ? `· control ${protocol.follow_up_days}d` : ''}
-                      </span>
-                    </button>
-                  ))}
+              <div style={{
+                borderRadius: 12, border: '1px solid var(--mt-border)',
+                background: 'var(--mt-surface)', overflow: 'hidden',
+              }}>
+                <div style={{
+                  padding: '10px 14px', borderBottom: '1px solid var(--mt-border)',
+                  background: 'var(--mt-bg)',
+                }}>
+                  <StepMarker number={1} title="Elegir protocolo" />
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {PLAN_PRESETS.map(preset => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => applyPlanPreset(preset)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-blue-700 shadow-sm transition-colors hover:bg-blue-100"
-                    >
-                      <ClipboardList size={13} />
-                      {preset.label}
-                    </button>
-                  ))}
+                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {protocols.slice(0, 6).map(protocol => (
+                      <button
+                        key={protocol.id}
+                        type="button"
+                        onClick={() => applyClinicalProtocol(protocol)}
+                        title={protocol.description ?? ''}
+                        style={{
+                          display: 'flex', flexDirection: 'column', gap: 4,
+                          padding: '9px 12px', borderRadius: 8, textAlign: 'left',
+                          border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+                          cursor: 'pointer', transition: 'border-color .2s, background .2s',
+                          boxShadow: 'var(--mt-shadow-xs)',
+                        }}
+                        onMouseEnter={e => {
+                          const el = e.currentTarget as HTMLElement
+                          el.style.borderColor = 'var(--mt-primary)'
+                          el.style.background = 'var(--mt-primary-subtle)'
+                        }}
+                        onMouseLeave={e => {
+                          const el = e.currentTarget as HTMLElement
+                          el.style.borderColor = 'var(--mt-border)'
+                          el.style.background = 'var(--mt-surface)'
+                        }}
+                      >
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          fontSize: 12, fontWeight: 600, color: 'var(--mt-primary)',
+                        }}>
+                          <ClipboardList size={12} />
+                          {protocol.name}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
+                          {protocol.medications.length} med.{protocol.follow_up_days ? ` · control ${protocol.follow_up_days}d` : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Quick presets */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {PLAN_PRESETS.map(preset => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => applyPlanPreset(preset)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                          border: '1px solid var(--mt-border)', background: 'var(--mt-bg)',
+                          color: 'var(--mt-text-2)', cursor: 'pointer', transition: 'all .15s',
+                        }}
+                        onMouseEnter={e => {
+                          const el = e.currentTarget as HTMLElement
+                          el.style.borderColor = 'var(--mt-primary)'
+                          el.style.color = 'var(--mt-primary)'
+                        }}
+                        onMouseLeave={e => {
+                          const el = e.currentTarget as HTMLElement
+                          el.style.borderColor = 'var(--mt-border)'
+                          el.style.color = 'var(--mt-text-2)'
+                        }}
+                      >
+                        <Clock3 size={11} />
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* Treatment meta */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Nombre del plan</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    Nombre del plan
+                  </label>
                   <input
+                    list="plan-names-list"
                     value={treatmentName}
                     onChange={e => setTreatmentName(e.target.value)}
-                    placeholder="Ej: Tratamiento HTA"
-                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    placeholder="Seleccionar o escribir nombre…"
+                    style={{
+                      height: 36, padding: '0 10px', borderRadius: 8, width: '100%',
+                      border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+                      fontSize: 13, color: 'var(--mt-text)', fontFamily: 'var(--mt-font)',
+                      outline: 'none', boxSizing: 'border-box',
+                    }}
+                    onFocus={e => ((e.target as HTMLElement).style.boxShadow = 'var(--mt-shadow-focus)')}
+                    onBlur={e => ((e.target as HTMLElement).style.boxShadow = 'none')}
                   />
+                  <datalist id="plan-names-list">
+                    {protocols.map(p => (
+                      <option key={p.id} value={p.treatment_name || p.name} />
+                    ))}
+                  </datalist>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Fecha de inicio</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    Fecha de inicio
+                  </label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={e => setStartDate(e.target.value)}
-                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    style={{
+                      height: 36, padding: '0 10px', borderRadius: 8, width: '100%',
+                      border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+                      fontSize: 13, color: 'var(--mt-text)', fontFamily: 'var(--mt-font)',
+                      outline: 'none', boxSizing: 'border-box',
+                    }}
+                    onFocus={e => ((e.target as HTMLElement).style.boxShadow = 'var(--mt-shadow-focus)')}
+                    onBlur={e => ((e.target as HTMLElement).style.boxShadow = 'none')}
                   />
                 </div>
               </div>
@@ -677,171 +1011,22 @@ export default function EncounterPage() {
 
               {/* Add medication form */}
               {showMedForm ? (
-                <div className="border border-slate-200 rounded-xl p-4 flex flex-col gap-3 bg-slate-50">
-                  <div className="flex flex-col gap-3">
-                    <StepMarker number={2} title="Agregar medicamento" />
-                    <div className="flex flex-wrap gap-2">
-                      {SCHEDULE_PRESETS.map(preset => (
-                        <button
-                          key={preset.label}
-                          type="button"
-                          onClick={() => applySchedulePreset(preset)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:text-blue-700"
-                        >
-                          <Clock3 size={13} />
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1 col-span-1 sm:col-span-2">
-                      <label className="text-xs font-medium text-slate-500">Medicamento *</label>
-                      <input
-                        value={medForm.drug_name}
-                        onChange={e => setMedForm(p => ({ ...p, drug_name: e.target.value }))}
-                        placeholder="Ej: Enalapril"
-                        className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Dosis *</label>
-                      <input
-                        type="number"
-                        value={medForm.dose_amount}
-                        onChange={e => setMedForm(p => ({ ...p, dose_amount: e.target.value }))}
-                        placeholder="10"
-                        className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Unidad</label>
-                      <select
-                        value={medForm.dose_unit}
-                        onChange={e => setMedForm(p => ({ ...p, dose_unit: e.target.value }))}
-                        className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                      >
-                        {DOSE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Vía</label>
-                      <select
-                        value={medForm.route}
-                        onChange={e => setMedForm(p => ({ ...p, route: e.target.value }))}
-                        className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                      >
-                        {ROUTES.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Frecuencia</label>
-                      <select
-                        value={medForm.frequency_type}
-                        onChange={e => setMedForm(p => ({ ...p, frequency_type: e.target.value }))}
-                        className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                      >
-                        <option value="DAILY">Diario</option>
-                        <option value="EVERY_X_HOURS">Cada X horas</option>
-                        <option value="WEEKLY">Semanal</option>
-                        <option value="AS_NEEDED">Según necesidad</option>
-                      </select>
-                    </div>
-
-                    {/* Frequency-specific fields */}
-                    {medForm.frequency_type === 'EVERY_X_HOURS' && (
-                      <div className="flex flex-col gap-1">
-                        <label className="text-xs font-medium text-slate-500">Cada (horas)</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={medForm.frequency_value}
-                          onChange={e => setMedForm(p => ({ ...p, frequency_value: e.target.value }))}
-                          className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                        />
-                      </div>
-                    )}
-
-                    {medForm.frequency_type === 'DAILY' && (
-                      <div className="flex flex-col gap-1 col-span-2">
-                        <label className="text-xs font-medium text-slate-500">Veces al día</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={6}
-                          value={medForm.times_per_day_count}
-                          onChange={e => updateTimesCount(e.target.value)}
-                          className="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                        />
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {medForm.times_per_day.map((t, i) => (
-                            <input
-                              key={i}
-                              type="time"
-                              value={t}
-                              onChange={e => updateTime(i, e.target.value)}
-                              className="border border-slate-200 rounded-lg px-2 py-1 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Duración (días)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={medForm.duration_days}
-                        onChange={e => setMedForm(p => ({ ...p, duration_days: e.target.value }))}
-                        className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-2 col-span-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={medForm.with_food}
-                        onChange={e => setMedForm(p => ({ ...p, with_food: e.target.checked }))}
-                        className="w-4 h-4 rounded"
-                      />
-                      <span className="text-sm text-slate-600">Tomar con alimentos</span>
-                    </label>
-
-                    <div className="flex flex-col gap-1 col-span-2">
-                      <label className="text-xs font-medium text-slate-500">Instrucciones especiales</label>
-                      <input
-                        value={medForm.special_instructions}
-                        onChange={e => setMedForm(p => ({ ...p, special_instructions: e.target.value }))}
-                        placeholder="Ej: Evitar exposición al sol"
-                        className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => { setShowMedForm(false); setMedForm(emptyMedForm()) }}
-                      className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={addMedication}
-                      disabled={!medForm.drug_name.trim() || !medForm.dose_amount}
-                      className="px-4 py-1.5 rounded-lg bg-blue-500 text-white text-sm font-medium disabled:opacity-50 hover:bg-blue-600 transition-colors"
-                    >
-                      Agregar
-                    </button>
-                  </div>
-                </div>
+                <MedFormPanel
+                  medForm={medForm}
+                  setMedForm={setMedForm}
+                  onAdd={addMedication}
+                  onCancel={() => { setShowMedForm(false); setMedForm(emptyMedForm()) }}
+                  updateTimesCount={updateTimesCount}
+                  updateTime={updateTime}
+                />
               ) : (
                 <button
                   onClick={() => setShowMedForm(true)}
-                  className="flex items-center gap-2 text-sm text-blue-600 font-medium hover:text-blue-700"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 13, fontWeight: 500, color: 'var(--mt-primary)',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+                  }}
                 >
                   <Plus size={15} />
                   Agregar medicamento
