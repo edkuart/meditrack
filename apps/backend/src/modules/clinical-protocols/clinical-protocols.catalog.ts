@@ -45,14 +45,13 @@ export const SYSTEM_CLINICAL_PROTOCOLS: ClinicalProtocolDto[] = [
     treatment_instructions: 'Confirmar conciliación de medicamentos y disponibilidad en casa.',
     medications: [
       {
-        drug_name: 'Medicamento post-alta',
+        drug_name: '',
         dose_amount: 1,
         dose_unit: 'tableta(s)',
         route: 'oral',
         frequency_type: 'DAILY',
         times_per_day: ['08:00', '20:00'],
         duration_days: 14,
-        special_instructions: 'Reemplazar por medicamento conciliado antes de guardar.',
         sort_order: 0,
       },
     ],
@@ -72,14 +71,13 @@ export const SYSTEM_CLINICAL_PROTOCOLS: ClinicalProtocolDto[] = [
     treatment_instructions: 'Usar como punto de partida; ajustar medicamento, dosis y objetivos clínicos.',
     medications: [
       {
-        drug_name: 'Medicamento crónico',
+        drug_name: '',
         dose_amount: 1,
         dose_unit: 'tableta(s)',
         route: 'oral',
         frequency_type: 'DAILY',
         times_per_day: ['08:00'],
         duration_days: 30,
-        special_instructions: 'Personalizar antes de guardar.',
         sort_order: 0,
       },
     ],
@@ -118,7 +116,6 @@ export function validateSystemClinicalProtocols() {
     }
 
     for (const med of protocol.medications) {
-      if (!med.drug_name.trim()) throw new Error(`Protocol ${protocol.id} has an unnamed medication`)
       if (med.dose_amount <= 0) throw new Error(`Protocol ${protocol.id} has a non-positive dose`)
     }
   }
