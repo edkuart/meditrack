@@ -496,19 +496,6 @@ export default function EncounterPage() {
     setSummary(prev => prev.trim() ? prev : template.summary)
   }
 
-  function applyPlanPreset(preset: typeof PLAN_PRESETS[number]) {
-    setTreatmentName(prev => prev || preset.name)
-    setMedForm(prev => ({
-      ...prev,
-      duration_days: preset.duration,
-      frequency_type: 'DAILY',
-      frequency_value: '8',
-      times_per_day_count: preset.count,
-      times_per_day: preset.times,
-    }))
-    setShowMedForm(true)
-  }
-
   function applyClinicalProtocol(protocol: ClinicalProtocol) {
     if (protocol.note_template) {
       setNotes(prev => prev.trim() ? `${prev.trim()}\n\n${protocol.note_template}` : protocol.note_template ?? '')
@@ -918,35 +905,6 @@ export default function EncounterPage() {
                     ))}
                   </div>
 
-                  {/* Quick presets */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {PLAN_PRESETS.map(preset => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => applyPlanPreset(preset)}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-                          border: '1px solid var(--mt-border)', background: 'var(--mt-bg)',
-                          color: 'var(--mt-text-2)', cursor: 'pointer', transition: 'all .15s',
-                        }}
-                        onMouseEnter={e => {
-                          const el = e.currentTarget as HTMLElement
-                          el.style.borderColor = 'var(--mt-primary)'
-                          el.style.color = 'var(--mt-primary)'
-                        }}
-                        onMouseLeave={e => {
-                          const el = e.currentTarget as HTMLElement
-                          el.style.borderColor = 'var(--mt-border)'
-                          el.style.color = 'var(--mt-text-2)'
-                        }}
-                      >
-                        <Clock3 size={11} />
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
 
