@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -22,6 +22,8 @@ import {
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
 import { MTAvatar, MTLogo } from '@/components/doctor/clinical-ui'
+import { NotificationPanel } from '@/components/doctor/NotificationPanel'
+import { fetchClinicNotifications, type NotificationEntry } from '@/lib/doctor/notifications-api'
 
 const ADMIN_ROLES = new Set(['ADMIN_CLINIC', 'SUPER_ADMIN'])
 
@@ -250,8 +252,47 @@ function LogoutBtn({ onLogout }: { onLogout: () => void }) {
 // Topbar
 // ─────────────────────────────────────────────
 function Topbar({ onMenu }: { onMenu: () => void }) {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const clinicName = 'Clínica'
+
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [notifications, setNotifications] = useState<NotificationEntry[]>([])
+  const [failedCount, setFailedCount] = useState(0)
+  const [loadingNotif, setLoadingNotif] = useState(false)
+  const bellRef = useRef<HTMLDivElement>(null)
+
+  const loadNotifications = useCallback(async () => {
+    if (!token) return
+    setLoadingNotif(true)
+    try {
+      const res = await fetchClinicNotifications(token)
+      setNotifications(res.data)
+      setFailedCount(res.meta.failed)
+    } catch {
+      // silently fail — don't break the layout
+    } finally {
+      setLoadingNotif(false)
+    }
+  }, [token])
+
+  // Initial load + 60-second polling
+  useEffect(() => {
+    loadNotifications()
+    const id = setInterval(loadNotifications, 60_000)
+    return () => clearInterval(id)
+  }, [loadNotifications])
+
+  // Close panel on outside click
+  useEffect(() => {
+    if (!panelOpen) return
+    function handleClick(e: MouseEvent) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setPanelOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [panelOpen])
 
   return (
     <header className="mt-topbar-pad" style={{
@@ -305,19 +346,49 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-        {/* Bell */}
-        <button style={{
-          position: 'relative', width: 34, height: 34, borderRadius: 8,
-          border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--mt-text-2)', cursor: 'pointer',
-        }}>
-          <Bell size={16} />
-          <span style={{
-            position: 'absolute', top: 7, right: 7, width: 7, height: 7,
-            borderRadius: '50%', background: 'var(--mt-danger)', border: '2px solid #fff',
-          }} />
-        </button>
+        {/* Bell with notification panel */}
+        <div ref={bellRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setPanelOpen(v => !v)}
+            style={{
+              position: 'relative', width: 34, height: 34, borderRadius: 8,
+              border: `1px solid ${panelOpen ? 'var(--mt-primary)' : 'var(--mt-border)'}`,
+              background: panelOpen ? 'var(--mt-primary-subtle)' : 'var(--mt-surface)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: panelOpen ? 'var(--mt-primary)' : 'var(--mt-text-2)',
+              cursor: 'pointer', transition: 'all .2s',
+            }}
+          >
+            <Bell size={16} />
+            {failedCount > 0 && (
+              <span style={{
+                position: 'absolute', top: -4, right: -4,
+                minWidth: 16, height: 16, borderRadius: 999,
+                background: 'var(--mt-danger)', border: '2px solid #fff',
+                fontSize: 10, fontWeight: 700, color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 3px',
+              }}>
+                {failedCount > 99 ? '99+' : failedCount}
+              </span>
+            )}
+            {failedCount === 0 && notifications.length > 0 && (
+              <span style={{
+                position: 'absolute', top: 6, right: 6, width: 7, height: 7,
+                borderRadius: '50%', background: 'var(--mt-primary)', border: '2px solid #fff',
+              }} />
+            )}
+          </button>
+
+          {panelOpen && (
+            <NotificationPanel
+              notifications={notifications}
+              failedCount={failedCount}
+              loading={loadingNotif}
+              onRefresh={loadNotifications}
+            />
+          )}
+        </div>
 
         <div style={{ height: 24, width: 1, background: 'var(--mt-border)' }} />
 

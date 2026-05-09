@@ -1,10 +1,47 @@
 import { Hono } from 'hono'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, desc } from 'drizzle-orm'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 import { db, notificationLogs, patients } from '../../shared/db/index.ts'
 
 const router = new Hono()
 
+// ─── Clinic-level notification feed (doctor dashboard) ───────────────────────
+router.get('/notifications', requireAuth, async (c) => {
+  const auth = c.get('auth')
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '40'), 100)
+
+  const rows = await db
+    .select({
+      id: notificationLogs.id,
+      patient_id: notificationLogs.patient_id,
+      patient_first_name: patients.first_name,
+      patient_last_name: patients.last_name,
+      channel: notificationLogs.channel,
+      type: notificationLogs.type,
+      status: notificationLogs.status,
+      recipient: notificationLogs.recipient,
+      attempt_count: notificationLogs.attempt_count,
+      failed_reason: notificationLogs.failed_reason,
+      created_at: notificationLogs.created_at,
+      sent_at: notificationLogs.sent_at,
+    })
+    .from(notificationLogs)
+    .innerJoin(patients, eq(notificationLogs.patient_id, patients.id))
+    .where(eq(patients.tenant_id, auth.tenant_id))
+    .orderBy(desc(notificationLogs.created_at))
+    .limit(limit)
+
+  const data = rows.map(({ patient_first_name, patient_last_name, ...rest }) => ({
+    ...rest,
+    patient_name: `${patient_first_name} ${patient_last_name}`,
+  }))
+
+  const failed = data.filter(d => d.status === 'FAILED' || d.status === 'BOUNCED').length
+
+  return c.json({ success: true, data, meta: { total: data.length, failed } })
+})
+
+// ─── Per-patient notification log ────────────────────────────────────────────
 router.get('/patients/:patientId/notifications', requireAuth, async (c) => {
   const auth = c.get('auth')
   const patientId = c.req.param('patientId')!
