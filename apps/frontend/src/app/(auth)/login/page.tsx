@@ -40,10 +40,11 @@ function PulsePattern() {
 function BrandedPanel() {
   return (
     <div style={{
-      flex: '0 0 42%',
+      width: '100%',
+      minHeight: '100%',
       background: 'linear-gradient(160deg, #1e40af 0%, #1a56db 60%, #2563eb 100%)',
       color: '#fff', position: 'relative', overflow: 'hidden',
-      padding: '48px 44px',
+      padding: '40px clamp(28px, 4vw, 48px)',
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
     }}>
       <PulsePattern />
@@ -54,7 +55,7 @@ function BrandedPanel() {
       </div>
 
       {/* Main copy */}
-      <div style={{ position: 'relative', maxWidth: 380 }}>
+      <div style={{ position: 'relative', maxWidth: 360 }}>
         <div style={{
           fontSize: 11, fontWeight: 500, letterSpacing: '0.12em',
           textTransform: 'uppercase', color: 'rgba(255,255,255,.7)', marginBottom: 14,
@@ -62,8 +63,9 @@ function BrandedPanel() {
           Adherencia terapéutica
         </div>
         <h2 style={{
-          fontSize: 30, fontWeight: 700, lineHeight: 1.2,
-          letterSpacing: '-0.02em', marginBottom: 14, margin: '0 0 14px',
+          fontSize: 'clamp(28px, 3.2vw, 42px)', fontWeight: 700, lineHeight: 1.08,
+          letterSpacing: 0, marginBottom: 14, margin: '0 0 16px',
+          textWrap: 'balance',
         }}>
           Cuidado clínico que sigue al paciente fuera del consultorio.
         </h2>
@@ -71,14 +73,14 @@ function BrandedPanel() {
           Planes de tratamiento, seguimiento de dosis y comunicación con el paciente —
           todo en una sola vista para tu equipo.
         </p>
-        <div style={{ display: 'flex', gap: 24, marginTop: 28, flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 18, marginTop: 30 }}>
           {[
             { n: '128k', l: 'dosis confirmadas / mes' },
             { n: '+6 pp', l: 'adherencia promedio' },
             { n: '240+', l: 'clínicas en LATAM' },
           ].map(s => (
             <div key={s.n}>
-              <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em' }}>{s.n}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 0 }}>{s.n}</div>
               <div style={{
                 fontSize: 11, color: 'rgba(255,255,255,.7)',
                 textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2,
@@ -91,7 +93,7 @@ function BrandedPanel() {
       {/* Compliance badge */}
       <div style={{
         position: 'relative', display: 'flex', alignItems: 'center', gap: 8,
-        fontSize: 12, color: 'rgba(255,255,255,.7)',
+        fontSize: 11, color: 'rgba(255,255,255,.72)', flexWrap: 'wrap',
       }}>
         <ShieldCheck size={14} color="rgba(255,255,255,.7)" />
         HIPAA · Habeas Data Colombia · ISO 27001
@@ -116,7 +118,7 @@ function LoginForm({
 
   return (
     <form onSubmit={onSubmit} style={{
-      width: '100%', maxWidth: 380,
+      width: '100%', maxWidth: 410,
       display: 'flex', flexDirection: 'column', gap: 18,
     }}>
       <div>
@@ -125,7 +127,7 @@ function LoginForm({
         </div>
         <h1 style={{
           fontSize: 26, fontWeight: 700, color: 'var(--mt-text)',
-          letterSpacing: '-0.02em', margin: '0 0 6px',
+          letterSpacing: 0, margin: '0 0 8px',
         }}>
           Bienvenida de vuelta
         </h1>
@@ -164,7 +166,10 @@ function LoginForm({
         }
       />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        gap: 16, fontSize: 13, flexWrap: 'wrap',
+      }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--mt-text-2)' }}>
           <span style={{
             width: 16, height: 16, borderRadius: 4,
@@ -220,12 +225,12 @@ function LoginForm({
         <span style={{ flex: 1, height: 1, background: 'var(--mt-border)' }} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
         <MTButton variant="outline" type="button">SSO institucional</MTButton>
         <MTButton variant="outline" type="button">Google Workspace</MTButton>
       </div>
 
-      <p style={{ fontSize: 13, color: 'var(--mt-text-2)', margin: 0 }}>
+      <p style={{ fontSize: 13, color: 'var(--mt-text-2)', margin: 0, textAlign: 'center' }}>
         ¿Tu clínica aún no está registrada?{' '}
         <Link href="/register" style={{ color: 'var(--mt-primary)', fontWeight: 500 }}>
           Solicitar acceso →
@@ -263,11 +268,14 @@ export default function LoginPage() {
 
   return (
     <div style={{
-      display: 'flex', height: '100vh', background: 'var(--mt-bg)',
+      display: 'flex', minHeight: '100vh', background: 'var(--mt-bg)',
       fontFamily: 'var(--mt-font)',
     }}>
       {/* Branded left panel — hidden on mobile */}
-      <div className="hidden md:flex" style={{ flex: '0 0 42%' }}>
+      <div className="hidden md:flex" style={{
+        flex: '0 0 clamp(360px, 36vw, 520px)',
+        minHeight: '100vh',
+      }}>
         <BrandedPanel />
       </div>
 
@@ -275,7 +283,7 @@ export default function LoginPage() {
       <div className="px-5 sm:px-12" style={{
         flex: 1, display: 'flex', alignItems: 'center',
         justifyContent: 'center',
-        overflowY: 'auto', paddingTop: 32, paddingBottom: 32,
+        overflowY: 'auto', paddingTop: 40, paddingBottom: 40,
       }}>
         {/* Mobile logo */}
         <div className="md:hidden" style={{ position: 'absolute', top: 24, left: 24 }}>
