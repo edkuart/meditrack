@@ -1,16 +1,21 @@
 -- Phase 21: Compliance & Legal Hardening
 
 -- 1. Consent type enum
-CREATE TYPE "consent_type" AS ENUM (
-  'data_processing',
-  'treatment',
-  'third_party_sharing',
-  'research',
-  'marketing'
-);
+DO $$
+BEGIN
+  CREATE TYPE "consent_type" AS ENUM (
+    'data_processing',
+    'treatment',
+    'third_party_sharing',
+    'research',
+    'marketing'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 2. Patient consents table
-CREATE TABLE "patient_consents" (
+CREATE TABLE IF NOT EXISTS "patient_consents" (
   "id"                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "tenant_id"          uuid NOT NULL REFERENCES "tenants"("id") ON DELETE RESTRICT,
   "patient_id"         uuid NOT NULL REFERENCES "patients"("id") ON DELETE CASCADE,
@@ -26,15 +31,15 @@ CREATE TABLE "patient_consents" (
   "created_at"         timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX "patient_consents_patient_id_idx" ON "patient_consents"("patient_id");
-CREATE INDEX "patient_consents_tenant_id_idx" ON "patient_consents"("tenant_id", "created_at");
+CREATE INDEX IF NOT EXISTS "patient_consents_patient_id_idx" ON "patient_consents"("patient_id");
+CREATE INDEX IF NOT EXISTS "patient_consents_tenant_id_idx" ON "patient_consents"("tenant_id", "created_at");
 
 -- 3. GDPR erasure flag on patients
-ALTER TABLE "patients" ADD COLUMN "anonymized_at" timestamptz;
+ALTER TABLE "patients" ADD COLUMN IF NOT EXISTS "anonymized_at" timestamptz;
 
 -- 4. Legal acceptance on users
-ALTER TABLE "users" ADD COLUMN "tos_accepted_at"            timestamptz;
-ALTER TABLE "users" ADD COLUMN "privacy_policy_accepted_at" timestamptz;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "tos_accepted_at"            timestamptz;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "privacy_policy_accepted_at" timestamptz;
 
 -- 5. New audit action values
 ALTER TYPE "audit_action" ADD VALUE IF NOT EXISTS 'CONSENT_RECORDED';
