@@ -28,12 +28,13 @@ import { getJobHealth } from './shared/observability/job-health.ts'
 
 export function createApp() {
   const app = new Hono()
+  const allowedOrigins = new Set(config.frontendOrigins)
 
   app.use('*', requestContext)
   app.use('*', structuredRequestLogger)
   app.use('*', securityHeaders)
   app.use('*', cors({
-    origin: config.frontendUrl,
+    origin: (origin) => allowedOrigins.has(origin) ? origin : undefined,
     credentials: true,
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

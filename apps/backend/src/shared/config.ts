@@ -8,6 +8,13 @@ function optional(key: string, fallback: string): string {
   return process.env[key] ?? fallback
 }
 
+function csv(key: string, fallback: string): string[] {
+  return optional(key, fallback)
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
 function secureSecret(key: string, fallback: string): string {
   const value = optional(key, fallback)
   const isProduction = optional('NODE_ENV', 'development') === 'production'
@@ -19,8 +26,10 @@ function secureSecret(key: string, fallback: string): string {
 
 export const config = {
   env: optional('NODE_ENV', 'development'),
+  host: optional('HOST', '0.0.0.0'),
   port: Number(optional('PORT', '3001')),
   frontendUrl: optional('FRONTEND_URL', 'http://localhost:3000'),
+  frontendOrigins: csv('FRONTEND_URLS', optional('FRONTEND_URL', 'http://localhost:3000')),
 
   db: {
     url: required('DATABASE_URL'),
