@@ -84,12 +84,12 @@ export function createApp() {
   // Public routes (no auth middleware) — must come before any router that uses router.use('*', requireAuth)
   app.route('/api/v1/auth', authRouter)
   app.route('/api/v1', stripeWebhookRouter)
+  app.route('/api/v1', portalRouter)
 
   // Protected routes
   app.route('/api/v1/patients', patientsRouter)
   app.route('/api/v1', encountersRouter)
   app.route('/api/v1', treatmentsRouter)
-  app.route('/api/v1', portalRouter)
   app.route('/api/v1', documentsRouter)
   app.route('/api/v1', notificationsRouter)
   app.route('/api/v1', analyticsRouter)
