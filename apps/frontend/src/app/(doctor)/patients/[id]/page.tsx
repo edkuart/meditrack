@@ -7,7 +7,7 @@ import {
   ArrowLeft, FileText, Plus, ChevronUp, ChevronDown,
   QrCode, Link2, Hash, Loader2, ExternalLink, Download,
   Activity, CalendarClock, ClipboardList, Pill, Stethoscope, UserRound,
-  ShieldCheck, Trash2, AlertTriangle,
+  ShieldCheck, Trash2, AlertTriangle, Copy,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
@@ -55,24 +55,73 @@ const ENC_STATUS_COLORS: Record<string, string> = {
   ARCHIVED: 'bg-slate-50 text-slate-400',
 }
 
+const portalAccessStorageKey = (patientId: string) => `meditrack.portalAccess.${patientId}`
+
 // ─── Portal access section ─────────────────────────────────────────────────────
-function PortalAccessSection({ token, patientId }: { token: string; patientId: string }) {
+function PortalAccessSection({
+  token,
+  patientId,
+  treatments,
+}: {
+  token: string
+  patientId: string
+  treatments: TreatmentPlan[]
+}) {
   const [loading, setLoading] = useState<string | null>(null)
   const [result, setResult] = useState<AccessResult | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [error, setError] = useState('')
+
+  const activeTreatments = treatments.filter(t => t.status === 'ACTIVE')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function hydrateSavedAccess() {
+      try {
+        const raw = window.localStorage.getItem(portalAccessStorageKey(patientId))
+        if (!raw) return
+
+        const saved = JSON.parse(raw) as AccessResult
+        if (new Date(saved.expires_at) <= new Date()) {
+          window.localStorage.removeItem(portalAccessStorageKey(patientId))
+          return
+        }
+
+        if (cancelled) return
+        setResult(saved)
+
+        if ('qr_data' in saved) {
+          const url = await QRCode.toDataURL(saved.qr_data, { width: 240, margin: 2 })
+          if (!cancelled) setQrDataUrl(url)
+        }
+      } catch {
+        window.localStorage.removeItem(portalAccessStorageKey(patientId))
+      }
+    }
+
+    void hydrateSavedAccess()
+    return () => { cancelled = true }
+  }, [patientId])
 
   async function generate(channel: 'magic_link' | 'qr' | 'pin') {
     setLoading(channel)
-    setResult(null)
+    setError('')
+    setCopied(false)
     setQrDataUrl(null)
     try {
       const data = await generatePortalAccess(token, patientId, channel)
       setResult(data)
-      if ('qr_data' in data && (channel === 'qr' || channel === 'magic_link')) {
+      if (data.channel !== 'pin') {
+        window.localStorage.setItem(portalAccessStorageKey(patientId), JSON.stringify(data))
+      }
+      if ('qr_data' in data) {
         const url = await QRCode.toDataURL(data.qr_data, { width: 240, margin: 2 })
         setQrDataUrl(url)
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo generar el acceso del paciente')
     } finally {
       setLoading(null)
     }
@@ -80,32 +129,44 @@ function PortalAccessSection({ token, patientId }: { token: string; patientId: s
 
   async function copyLink() {
     if (!result || !('access_url' in result)) return
-    await navigator.clipboard.writeText(result.access_url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(result.access_url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('No se pudo copiar automáticamente. Selecciona el enlace y cópialo manualmente.')
+    }
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100">
-        <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-          <Link2 size={16} className="text-slate-500" />
-          Acceso al portal del paciente
-        </h2>
-      </div>
-      <div className="px-5 py-4">
-        <p className="text-xs text-slate-500 mb-4">Genera un enlace o PIN para que el paciente acceda a su portal de salud.</p>
-        <div className="flex flex-wrap gap-2 mb-4">
+    <ClinicalPanel title="Acceso al portal del paciente" icon={Link2} accent="green">
+      <div className="flex flex-col gap-4 p-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Tratamientos activos</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{activeTreatments.length}</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 md:col-span-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Estado del acceso</p>
+            <p className="mt-1 text-sm text-slate-700">
+              {result
+                ? `Link disponible hasta ${new Date(result.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                : 'Genera un enlace, QR o PIN para entregar el portal al paciente.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
           {[
-            { channel: 'qr' as const, label: 'Código QR', icon: <QrCode size={14} /> },
             { channel: 'magic_link' as const, label: 'Enlace mágico', icon: <Link2 size={14} /> },
+            { channel: 'qr' as const, label: 'Código QR', icon: <QrCode size={14} /> },
             { channel: 'pin' as const, label: 'PIN numérico', icon: <Hash size={14} /> },
           ].map(({ channel, label, icon }) => (
             <button
               key={channel}
               onClick={() => generate(channel)}
               disabled={!!loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:border-blue-300 hover:text-blue-600 disabled:opacity-50 transition-colors"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-600 disabled:opacity-50"
             >
               {loading === channel ? <Loader2 size={14} className="animate-spin" /> : icon}
               {label}
@@ -113,43 +174,87 @@ function PortalAccessSection({ token, patientId }: { token: string; patientId: s
           ))}
         </div>
 
+        {error && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        )}
+
         {result && (
-          <div className="mt-2 p-4 rounded-xl bg-slate-50 border border-slate-100 flex flex-col items-center gap-3">
-            {'pin' in result && result.channel === 'pin' ? (
-              <>
-                <p className="text-xs text-slate-500">PIN de acceso del paciente</p>
-                <p className="text-4xl font-bold tracking-[0.3em] text-blue-600">{result.pin}</p>
-                <p className="text-xs text-slate-400">
-                  Url: <span className="font-medium">{result.access_url}</span>
-                </p>
-              </>
-            ) : (
-              <>
-                {qrDataUrl && (
-                  <img src={qrDataUrl} alt="QR de acceso" className="rounded-lg" width={200} />
-                )}
-                <div className="flex items-center gap-2 w-full">
+          <div className="rounded-xl border border-green-100 bg-green-50/60 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium uppercase text-green-700">
+                {result.channel === 'pin' ? 'PIN listo para entregar' : 'Link listo para entregar'}
+              </p>
+              <p className="text-xs text-slate-500">
+                Expira: {new Date(result.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+            </div>
+
+            {result.channel === 'pin' && 'pin' in result ? (
+              <div className="flex flex-col gap-3">
+                <div className="rounded-xl border border-green-100 bg-white px-4 py-5 text-center">
+                  <p className="text-xs text-slate-500">PIN de acceso del paciente</p>
+                  <p className="mt-2 text-4xl font-bold tracking-[0.25em] text-blue-600">{result.pin}</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     readOnly
-                    value={'access_url' in result ? result.access_url : ''}
-                    className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-600 truncate"
+                    value={result.access_url}
+                    className="min-w-0 flex-1 rounded-lg border border-green-100 bg-white px-3 py-2 text-xs text-slate-700"
                   />
                   <button
                     onClick={copyLink}
-                    className="text-xs px-3 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors whitespace-nowrap"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
                   >
-                    {copied ? '¡Copiado!' : 'Copiar'}
+                    <Copy size={14} />
+                    {copied ? 'Copiado' : 'Copiar URL'}
                   </button>
                 </div>
-              </>
+                <p className="text-xs text-slate-500">
+                  Por seguridad, el PIN se muestra al generarlo. Si se pierde, genera uno nuevo.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+                {qrDataUrl && (
+                  <div className="flex justify-center rounded-xl border border-green-100 bg-white p-3">
+                    <img src={qrDataUrl} alt="QR de acceso al portal" className="h-48 w-48 rounded-lg" />
+                  </div>
+                )}
+                <div className="flex min-w-0 flex-col justify-center gap-3">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      readOnly
+                      value={'access_url' in result ? result.access_url : ''}
+                      className="min-w-0 flex-1 rounded-lg border border-green-100 bg-white px-3 py-2 text-xs text-slate-700"
+                    />
+                    <button
+                      onClick={copyLink}
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
+                    >
+                      <Copy size={14} />
+                      {copied ? 'Copiado' : 'Copiar'}
+                    </button>
+                    {'access_url' in result && (
+                      <Link
+                        href={result.access_url}
+                        target="_blank"
+                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
+                      >
+                        <ExternalLink size={14} />
+                        Abrir
+                      </Link>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Este mismo acceso queda disponible al volver al expediente desde este navegador.
+                  </p>
+                </div>
+              </div>
             )}
-            <p className="text-xs text-slate-400">
-              Expira: {new Date('expires_at' in result ? result.expires_at : '').toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
           </div>
         )}
       </div>
-    </section>
+    </ClinicalPanel>
   )
 }
 
@@ -686,7 +791,9 @@ export default function PatientProfilePage() {
       )}
 
       {/* Portal access */}
-      {activeTab === 'access' && token && <PortalAccessSection token={token} patientId={patientId} />}
+      {activeTab === 'access' && token && (
+        <PortalAccessSection token={token} patientId={patientId} treatments={treatments} />
+      )}
 
       {/* Adherence */}
       {activeTab === 'adherence' && adherence && adherence.total > 0 && (
