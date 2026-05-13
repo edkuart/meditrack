@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
-  ChevronDown, ChevronUp, ClipboardList, Clock3, Copy, ExternalLink, FileText, Link2,
+  ChevronDown, ChevronUp, ClipboardList, Copy, ExternalLink, FileText, Link2,
   Save, Sparkles, Stethoscope, Wand2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
@@ -93,14 +93,6 @@ const FALLBACK_PROTOCOLS: ClinicalProtocol[] = PLAN_PRESETS.map((preset) => ({
   tags: [],
 }))
 
-const SCHEDULE_PRESETS = [
-  { label: 'Mañana', frequency_type: 'DAILY', frequency_value: '8', times_per_day_count: '1', times_per_day: ['08:00'] },
-  { label: 'Mañana/noche', frequency_type: 'DAILY', frequency_value: '12', times_per_day_count: '2', times_per_day: ['08:00', '20:00'] },
-  { label: 'Tres veces', frequency_type: 'DAILY', frequency_value: '8', times_per_day_count: '3', times_per_day: ['08:00', '14:00', '20:00'] },
-  { label: 'Cada 8h', frequency_type: 'EVERY_X_HOURS', frequency_value: '8', times_per_day_count: '3', times_per_day: ['08:00', '16:00', '00:00'] },
-  { label: 'Según necesidad', frequency_type: 'AS_NEEDED', frequency_value: '8', times_per_day_count: '1', times_per_day: ['08:00'] },
-]
-
 // ─── Medication form ──────────────────────────────────────────────────────────
 
 interface MedForm {
@@ -174,48 +166,6 @@ function MedFormPanel({
         background: 'var(--mt-bg)',
       }}>
         <StepMarker number={2} title="Agregar medicamento" />
-      </div>
-
-      {/* Schedule quick-select — single scrollable row */}
-      <div style={{
-        display: 'flex', gap: 5, padding: '7px 14px',
-        borderBottom: '1px solid var(--mt-border)', background: 'var(--mt-bg)',
-        overflowX: 'auto', WebkitOverflowScrolling: 'touch',
-        msOverflowStyle: 'none', scrollbarWidth: 'none',
-      }}>
-        {SCHEDULE_PRESETS.map(preset => (
-          <button
-            key={preset.label}
-            type="button"
-            onClick={() => setMedForm(p => ({
-              ...p,
-              frequency_type: preset.frequency_type,
-              frequency_value: preset.frequency_value,
-              times_per_day_count: preset.times_per_day_count,
-              times_per_day: preset.times_per_day,
-            }))}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
-              padding: '3px 9px', borderRadius: 6, fontSize: 11, fontWeight: 500,
-              border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
-              color: 'var(--mt-text-2)', cursor: 'pointer', transition: 'all .15s',
-              whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={e => {
-              const el = e.currentTarget as HTMLElement
-              el.style.borderColor = 'var(--mt-primary)'
-              el.style.color = 'var(--mt-primary)'
-            }}
-            onMouseLeave={e => {
-              const el = e.currentTarget as HTMLElement
-              el.style.borderColor = 'var(--mt-border)'
-              el.style.color = 'var(--mt-text-2)'
-            }}
-          >
-            <Clock3 size={10} />
-            {preset.label}
-          </button>
-        ))}
       </div>
 
       {/* Body */}
