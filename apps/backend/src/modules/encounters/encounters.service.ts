@@ -100,13 +100,25 @@ export async function getEncounterById(tenantId: string, encounterId: string) {
   })
   if (!encounter) throw new NotFoundError('Encounter')
 
-  // Include active treatment plan if any
-  const activeTreatment = await db.query.treatmentPlans.findFirst({
+  // Prefer the plan created from this encounter; if the doctor opens another
+  // encounter for the same patient, still surface the active patient plan.
+  const encounterTreatment = await db.query.treatmentPlans.findFirst({
     where: and(
+      eq(treatmentPlans.tenant_id, tenantId),
       eq(treatmentPlans.patient_id, encounter.patient_id),
       eq(treatmentPlans.encounter_id, encounterId),
     ),
     with: { medications: true },
+  })
+
+  const activeTreatment = encounterTreatment ?? await db.query.treatmentPlans.findFirst({
+    where: and(
+      eq(treatmentPlans.tenant_id, tenantId),
+      eq(treatmentPlans.patient_id, encounter.patient_id),
+      eq(treatmentPlans.status, 'ACTIVE'),
+    ),
+    with: { medications: true },
+    orderBy: (plans, { desc }) => desc(plans.activated_at),
   })
 
   return { ...encounter, treatment_plan: activeTreatment ?? null }

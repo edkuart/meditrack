@@ -2,16 +2,17 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
-  ClipboardList, Clock3, FileText, Save, Sparkles, Stethoscope, Wand2,
+  ChevronDown, ChevronUp, ClipboardList, Clock3, Copy, ExternalLink, FileText, Link2,
+  Save, Sparkles, Stethoscope, Wand2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   getEncounter, updateEncounter, closeEncounter, createTreatment, activateTreatment,
-  listClinicalProtocols,
+  generatePortalAccess, listClinicalProtocols,
   runEncounterAiAssist,
+  type AccessResult,
   type AiAssistMode,
   type ClinicalProtocol,
   type Encounter,
@@ -41,6 +42,7 @@ const FREQ_LABELS: Record<string, string> = {
 
 const DOSE_UNITS = ['mg', 'ml', 'mcg', 'g', 'UI', 'tableta(s)', 'cápsula(s)', 'gota(s)', 'ampolla(s)', 'parche(s)']
 const ROUTES = ['oral', 'sublingual', 'inhalatoria', 'tópica', 'inyectable IV', 'inyectable IM', 'subcutánea', 'rectal', 'vaginal', 'oftálmica', 'ótica']
+const portalAccessStorageKey = (patientId: string) => `meditrack.portalAccess.${patientId}`
 
 const NOTE_TEMPLATES = [
   {
@@ -448,6 +450,8 @@ export default function EncounterPage() {
   const [notes, setNotes] = useState('')
   const [summary, setSummary] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [notesError, setNotesError] = useState('')
+  const [notesSaved, setNotesSaved] = useState(false)
   const [aiLoading, setAiLoading] = useState<AiAssistMode | null>(null)
   const [aiNotice, setAiNotice] = useState('')
   const [aiError, setAiError] = useState('')
@@ -464,6 +468,11 @@ export default function EncounterPage() {
   const [activating, setActivating] = useState(false)
   const [closing, setClosing] = useState(false)
   const [showTools, setShowTools] = useState(false)
+  const [showTreatmentDetails, setShowTreatmentDetails] = useState(false)
+  const [portalAccess, setPortalAccess] = useState<AccessResult | null>(null)
+  const [portalLoading, setPortalLoading] = useState(false)
+  const [portalCopied, setPortalCopied] = useState(false)
+  const [portalError, setPortalError] = useState('')
 
   const load = useCallback(async () => {
     if (!token) return
@@ -474,6 +483,7 @@ export default function EncounterPage() {
         listClinicalProtocols(token).catch(() => FALLBACK_PROTOCOLS),
       ])
       setEncounter(enc)
+      setTreatment(enc.treatment_plan ?? null)
       setNotes(enc.notes ?? '')
       setSummary(enc.summary ?? '')
       setProtocols(protocolList.length > 0 ? protocolList : FALLBACK_PROTOCOLS)
@@ -482,7 +492,27 @@ export default function EncounterPage() {
     }
   }, [token, encId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const id = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(id)
+  }, [load])
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(portalAccessStorageKey(patientId))
+      if (!raw) return
+
+      const saved = JSON.parse(raw) as AccessResult
+      if (new Date(saved.expires_at) <= new Date()) {
+        window.localStorage.removeItem(portalAccessStorageKey(patientId))
+        return
+      }
+
+      setPortalAccess(saved)
+    } catch {
+      window.localStorage.removeItem(portalAccessStorageKey(patientId))
+    }
+  }, [patientId])
 
   // Update times_per_day array when count changes
   function updateTimesCount(count: string) {
@@ -545,16 +575,6 @@ export default function EncounterPage() {
     }
   }
 
-  function applySchedulePreset(preset: typeof SCHEDULE_PRESETS[number]) {
-    setMedForm(prev => ({
-      ...prev,
-      frequency_type: preset.frequency_type,
-      frequency_value: preset.frequency_value,
-      times_per_day_count: preset.times_per_day_count,
-      times_per_day: preset.times_per_day,
-    }))
-  }
-
   function addMedication() {
     if (!medForm.drug_name.trim() || !medForm.dose_amount) return
     setMedications(prev => [...prev, { ...medForm }])
@@ -610,12 +630,18 @@ export default function EncounterPage() {
   async function handleSaveNotes() {
     if (!token) return
     setSavingNotes(true)
+    setNotesError('')
+    setNotesSaved(false)
     try {
       const updated = await updateEncounter(token, encId, {
-        notes: notes || undefined,
-        summary: summary || undefined,
+        notes,
+        summary,
       })
       setEncounter(updated)
+      setNotesSaved(true)
+      setTimeout(() => setNotesSaved(false), 3000)
+    } catch (err) {
+      setNotesError(err instanceof Error ? err.message : 'Error al guardar las notas')
     } finally {
       setSavingNotes(false)
     }
@@ -651,10 +677,40 @@ export default function EncounterPage() {
     if (!token || !confirm('¿Cerrar esta consulta?')) return
     setClosing(true)
     try {
-      await closeEncounter(token, encId, { summary: summary || undefined })
+      await closeEncounter(token, encId, {
+        notes,
+        summary,
+      })
       router.push(`/patients/${patientId}`)
     } finally {
       setClosing(false)
+    }
+  }
+
+  async function handleGeneratePortalLink() {
+    if (!token) return
+    setPortalLoading(true)
+    setPortalError('')
+    setPortalCopied(false)
+    try {
+      const access = await generatePortalAccess(token, patientId, 'magic_link')
+      setPortalAccess(access)
+      window.localStorage.setItem(portalAccessStorageKey(patientId), JSON.stringify(access))
+    } catch (err) {
+      setPortalError(err instanceof Error ? err.message : 'No se pudo generar el enlace del paciente')
+    } finally {
+      setPortalLoading(false)
+    }
+  }
+
+  async function handleCopyPortalLink() {
+    if (!portalAccess?.access_url) return
+    try {
+      await navigator.clipboard.writeText(portalAccess.access_url)
+      setPortalCopied(true)
+      window.setTimeout(() => setPortalCopied(false), 2000)
+    } catch {
+      setPortalError('No se pudo copiar automáticamente. Selecciona el enlace y cópialo manualmente.')
     }
   }
 
@@ -793,42 +849,85 @@ export default function EncounterPage() {
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">Evolución / Notas</label>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            disabled={isClosed}
-            rows={4}
-            placeholder="Anamnesis, exploración física, diagnóstico..."
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none disabled:bg-slate-50 disabled:text-slate-400"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">Resumen / Plan</label>
-          <textarea
-            value={summary}
-            onChange={e => setSummary(e.target.value)}
-            disabled={isClosed}
-            rows={3}
-            placeholder="Diagnóstico final, plan de acción..."
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none disabled:bg-slate-50 disabled:text-slate-400"
-          />
-        </div>
-
-        {!isClosed && (
-          <div className="flex justify-end">
-            <ClinicalButton
-              icon={savingNotes ? Loader2 : Save}
-              onClick={handleSaveNotes}
-              disabled={savingNotes}
-              variant="outline"
-              tone={hasUnsavedNotes ? 'blue' : 'slate'}
-            >
-              Guardar notas
-            </ClinicalButton>
+        {isClosed ? (
+          /* ── Read-only preview (closed encounter) ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{
+              borderRadius: 10, border: '1px solid var(--mt-border)',
+              background: 'var(--mt-bg)', overflow: 'hidden',
+            }}>
+              <div style={{
+                padding: '6px 14px', borderBottom: '1px solid var(--mt-border)',
+                fontSize: 11, fontWeight: 600, color: 'var(--mt-muted)',
+                letterSpacing: '0.06em', textTransform: 'uppercase',
+              }}>Evolución / Notas</div>
+              <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--mt-text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                {notes || <span style={{ color: 'var(--mt-muted)', fontStyle: 'italic' }}>Sin notas registradas</span>}
+              </div>
+            </div>
+            {summary && (
+              <div style={{
+                borderRadius: 10, border: '1px solid var(--mt-border)',
+                background: 'var(--mt-bg)', overflow: 'hidden',
+              }}>
+                <div style={{
+                  padding: '6px 14px', borderBottom: '1px solid var(--mt-border)',
+                  fontSize: 11, fontWeight: 600, color: 'var(--mt-muted)',
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                }}>Resumen / Plan</div>
+                <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--mt-text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                  {summary}
+                </div>
+              </div>
+            )}
           </div>
+        ) : (
+          /* ── Editable form (open encounter) ── */
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-500">Evolución / Notas</label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                rows={4}
+                placeholder="Anamnesis, exploración física, diagnóstico..."
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-500">Resumen / Plan</label>
+              <textarea
+                value={summary}
+                onChange={e => setSummary(e.target.value)}
+                rows={3}
+                placeholder="Diagnóstico final, plan de acción..."
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+              />
+            </div>
+
+            {notesError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{notesError}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              {notesSaved && (
+                <span style={{ fontSize: 12, color: 'var(--mt-success, #047857)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <CheckCircle size={13} />
+                  Guardado
+                </span>
+              )}
+              <ClinicalButton
+                icon={savingNotes ? Loader2 : Save}
+                onClick={handleSaveNotes}
+                disabled={savingNotes}
+                variant="outline"
+                tone={hasUnsavedNotes ? 'blue' : 'slate'}
+              >
+                Guardar notas
+              </ClinicalButton>
+            </div>
+          </>
         )}
         </div>
       </ClinicalPanel>
@@ -857,23 +956,76 @@ export default function EncounterPage() {
           {/* Existing treatment */}
           {treatment ? (
             <>
-              <div>
-                <p className="text-sm font-medium text-slate-700">{treatment.name}</p>
-                <p className="text-xs text-slate-400">Desde {new Date(treatment.start_date).toLocaleDateString('es')}</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowTreatmentDetails(prev => !prev)}
+                aria-expanded={showTreatmentDetails}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/40"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-700">{treatment.name}</p>
+                  <p className="text-xs text-slate-400">
+                    Desde {new Date(treatment.start_date).toLocaleDateString('es')}
+                    {treatment.end_date ? ` hasta ${new Date(treatment.end_date).toLocaleDateString('es')}` : ''}
+                  </p>
+                </div>
+                <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-blue-600">
+                  {showTreatmentDetails ? 'Ocultar detalles' : 'Ver detalles'}
+                  {showTreatmentDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </span>
+              </button>
+
+              {showTreatmentDetails && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase text-slate-400">Inicio</p>
+                      <p className="mt-1 text-sm text-slate-700">{new Date(treatment.start_date).toLocaleDateString('es')}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase text-slate-400">Fin estimado</p>
+                      <p className="mt-1 text-sm text-slate-700">
+                        {treatment.end_date ? new Date(treatment.end_date).toLocaleDateString('es') : 'Sin fecha'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase text-slate-400">Medicamentos</p>
+                      <p className="mt-1 text-sm text-slate-700">{treatment.medications.length}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 border-t border-blue-100 pt-4">
+                    <p className="text-xs font-medium uppercase text-slate-400">Indicaciones generales</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+                      {treatment.instructions || 'Sin indicaciones generales registradas.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col gap-2">
                 {(treatment.medications ?? []).map(med => (
                   <div key={med.id} className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50">
                     <Pill size={14} className="text-blue-500 mt-0.5 shrink-0" />
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-800">{med.drug_name}</p>
                       <p className="text-xs text-slate-500">
                         {med.dose_amount} {med.dose_unit}
+                        {med.presentation ? ` · ${med.presentation}` : ''}
+                        {med.route ? ` · ${med.route}` : ''}
                         {' · '}{FREQ_LABELS[med.frequency_type] ?? med.frequency_type}
                         {med.frequency_type === 'EVERY_X_HOURS' && med.frequency_value && ` c/${med.frequency_value}h`}
                         {med.frequency_type === 'DAILY' && med.times_per_day && ` (${med.times_per_day.join(', ')})`}
                         {med.duration_days && ` · ${med.duration_days} días`}
                       </p>
+                      {showTreatmentDetails && (
+                        <div className="mt-2 flex flex-col gap-1 text-xs text-slate-500">
+                          <p>{med.with_food ? 'Tomar con alimentos.' : 'Sin indicación de alimentos.'}</p>
+                          {med.special_instructions && (
+                            <p className="whitespace-pre-wrap text-slate-600">{med.special_instructions}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1049,7 +1201,11 @@ export default function EncounterPage() {
                 <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{treatmentError}</p>
               )}
 
-              {medications.length > 0 && (
+              {medications.length === 0 ? (
+                <ClinicalInsight tone="amber" title="Plan pendiente">
+                  Agrega al menos un medicamento para guardar el plan de tratamiento.
+                </ClinicalInsight>
+              ) : (
                 <button
                   onClick={saveTreatment}
                   disabled={savingTreatment}
@@ -1065,6 +1221,72 @@ export default function EncounterPage() {
           )}
         </div>
       </section>
+
+      <ClinicalPanel title="Acceso del paciente" icon={Link2} accent="green">
+        <div className="flex flex-col gap-4 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-800">Portal para seguimiento</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Genera un enlace seguro para que el paciente vea su tratamiento, dosis e historial compartido.
+              </p>
+            </div>
+            <ClinicalButton
+              icon={portalLoading ? Loader2 : Link2}
+              onClick={handleGeneratePortalLink}
+              disabled={portalLoading}
+              variant="outline"
+              tone="green"
+            >
+              Generar link
+            </ClinicalButton>
+          </div>
+
+          {portalError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{portalError}</p>
+          )}
+
+          {portalAccess && (
+            <div className="rounded-xl border border-green-100 bg-green-50/60 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase text-green-700">Link listo para entregar</p>
+                <p className="text-xs text-slate-500">
+                  Expira: {new Date(portalAccess.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  readOnly
+                  value={portalAccess.access_url}
+                  className="min-w-0 flex-1 rounded-lg border border-green-100 bg-white px-3 py-2 text-xs text-slate-700"
+                />
+                <div className="flex gap-2">
+                  <ClinicalButton
+                    icon={Copy}
+                    onClick={handleCopyPortalLink}
+                    variant="outline"
+                    tone="green"
+                  >
+                    {portalCopied ? 'Copiado' : 'Copiar'}
+                  </ClinicalButton>
+                  <ClinicalButton
+                    icon={ExternalLink}
+                    href={portalAccess.access_url}
+                    variant="outline"
+                    tone="slate"
+                  >
+                    Abrir
+                  </ClinicalButton>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Puedes pegar este link en WhatsApp, SMS o correo. Si el paciente tiene email registrado, el sistema también intenta enviarlo automáticamente.
+              </p>
+            </div>
+          )}
+        </div>
+      </ClinicalPanel>
     </ClinicalPage>
   )
 }

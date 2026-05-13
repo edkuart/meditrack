@@ -176,6 +176,7 @@ export interface Encounter {
   opened_at: string
   closed_at: string | null
   doctor: { first_name: string; last_name: string; specialty: string | null }
+  treatment_plan?: TreatmentPlan | null
 }
 
 export async function listEncounters(token: string, patientId: string): Promise<Encounter[]> {
