@@ -31,6 +31,7 @@ async function requirePatient(c: Context, next: Next) {
   }
 }
 
+const portalAuthRouter = new Hono()
 const router = new Hono()
 const portalAuthLimiter = rateLimit({ keyPrefix: 'portal-auth', windowMs: 15 * 60 * 1000, max: 20 })
 
@@ -61,7 +62,7 @@ router.delete('/patients/:patientId/access', requireAuth, async (c) => {
 
 // ── Patient auth: validate magic link / QR ─────────────────────────────────────
 
-router.post(
+portalAuthRouter.post(
   '/portal/auth/magic-link',
   portalAuthLimiter,
   zValidator('json', ValidateMagicLinkSchema),
@@ -75,7 +76,7 @@ router.post(
 
 // ── Patient auth: PIN ──────────────────────────────────────────────────────────
 
-router.post(
+portalAuthRouter.post(
   '/portal/auth/pin',
   zValidator('json', ValidatePinSchema),
   async (c) => {
@@ -150,4 +151,4 @@ router.get('/portal/documents/:id/url', requirePatient, async (c) => {
   return c.json({ success: true, data })
 })
 
-export { router as portalRouter }
+export { portalAuthRouter, router as portalRouter }

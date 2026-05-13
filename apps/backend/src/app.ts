@@ -9,7 +9,7 @@ import { authRouter } from './modules/auth/auth.router.ts'
 import { patientsRouter } from './modules/patients/patients.router.ts'
 import { encountersRouter } from './modules/encounters/encounters.router.ts'
 import { treatmentsRouter } from './modules/treatments/treatments.router.ts'
-import { portalRouter } from './modules/portal/portal.router.ts'
+import { portalAuthRouter, portalRouter } from './modules/portal/portal.router.ts'
 import { documentsRouter } from './modules/documents/documents.router.ts'
 import { notificationsRouter } from './modules/notifications/notifications.router.ts'
 import { analyticsRouter } from './modules/analytics/analytics.router.ts'
@@ -84,6 +84,7 @@ export function createApp() {
   // Public routes (no auth middleware) — must come before any router that uses router.use('*', requireAuth)
   app.route('/api/v1/auth', authRouter)
   app.route('/api/v1', stripeWebhookRouter)
+  app.route('/api/v1', portalAuthRouter)
 
   // Protected routes
   app.route('/api/v1/patients', patientsRouter)
