@@ -538,8 +538,8 @@ export default function EncounterPage() {
   function applyClinicalProtocol(protocol: ClinicalProtocol) {
     setSelectedProtocolId(protocol.id)
 
-    // Always replace treatment name and reset medications when switching protocols
-    setTreatmentName(protocol.treatment_name || protocol.name)
+    // Protocol selection defines follow-up cadence and optional defaults; the
+    // plan name remains a clinician-authored field.
     setMedications([])
     setShowMedForm(false)
     setMedForm(emptyMedForm())
@@ -1062,7 +1062,7 @@ export default function EncounterPage() {
                   padding: '10px 14px', borderBottom: '1px solid var(--mt-border)',
                   background: 'var(--mt-bg)',
                 }}>
-                  <StepMarker number={1} title="Elegir protocolo" />
+                  <StepMarker number={1} title="Definir control aproximado" />
                 </div>
                 <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div className="grid gap-2 md:grid-cols-3">
@@ -1121,10 +1121,9 @@ export default function EncounterPage() {
                     Nombre del plan
                   </label>
                   <input
-                    list="plan-names-list"
                     value={treatmentName}
                     onChange={e => setTreatmentName(e.target.value)}
-                    placeholder="Seleccionar o escribir nombre…"
+                    placeholder="Ej: Seguimiento de neumonía"
                     style={{
                       height: 36, padding: '0 10px', borderRadius: 8, width: '100%',
                       border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
@@ -1134,11 +1133,6 @@ export default function EncounterPage() {
                     onFocus={e => ((e.target as HTMLElement).style.boxShadow = 'var(--mt-shadow-focus)')}
                     onBlur={e => ((e.target as HTMLElement).style.boxShadow = 'none')}
                   />
-                  <datalist id="plan-names-list">
-                    {protocols.map(p => (
-                      <option key={p.id} value={p.treatment_name || p.name} />
-                    ))}
-                  </datalist>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
