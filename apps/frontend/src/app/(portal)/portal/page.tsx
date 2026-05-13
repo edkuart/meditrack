@@ -26,6 +26,7 @@ import {
   getAdherence,
   getEngagement,
   getTodayDoses,
+  isUnauthorizedPortalError,
   type DoseEvent,
   type PatientEngagement,
 } from '@/lib/portal/api'
@@ -169,16 +170,21 @@ function PortalContent() {
   useEffect(() => {
     async function init() {
       const urlToken = searchParams.get('token')
+      const forceFreshSession = searchParams.get('fresh') === '1'
       try {
+        if (forceFreshSession || urlToken) clearSession()
         if (urlToken) {
           const result = await authMagicLink(urlToken)
           const s: PatientSession = { token: result.session_token, patient: result.patient }
           saveSession(s)
           setSession(s)
-          window.history.replaceState({}, '', '/portal')
         } else {
           const existing = getSession()
-          if (!existing) { router.replace('/portal/auth'); return }
+          if (!existing) {
+            setError('Abre el enlace de acceso que te compartió tu equipo médico para entrar al portal.')
+            setLoading(false)
+            return
+          }
           setSession(existing)
         }
       } catch {
@@ -199,12 +205,20 @@ function PortalContent() {
       setDoses(dosesData)
       setAdherence(adherenceData)
       setEngagement(engagementData)
-    } catch {
+      if (window.location.search.includes('token=')) {
+        window.history.replaceState({}, '', '/portal')
+      }
+    } catch (err) {
+      if (isUnauthorizedPortalError(err)) {
+        clearSession()
+        setError('Tu enlace de acceso expiró o ya no es válido. Pide a tu equipo médico un nuevo enlace.')
+        return
+      }
       setError('No se pudo cargar tu información. Intenta de nuevo.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [router])
 
   useEffect(() => { if (session) loadData(session.token) }, [session, loadData])
 

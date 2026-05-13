@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import app from './app.ts'
 import { resetRateLimitBuckets } from './shared/middleware/rate-limit.middleware.ts'
+import { signPatientToken } from './shared/services/token.service.ts'
 
 type JsonBody = Record<string, unknown>
 
@@ -130,6 +131,24 @@ describe('REST app critical routes', () => {
       success: false,
       error: { code: 'RATE_LIMITED' },
     })
+  })
+
+  it('does not route patient portal sessions through doctor auth middleware', async () => {
+    const token = await signPatientToken({
+      sub: '00000000-0000-4000-8000-000000000001',
+      tenant_id: '00000000-0000-4000-8000-000000000002',
+      type: 'PATIENT',
+      access_token_id: '00000000-0000-4000-8000-000000000003',
+    })
+
+    const res = await app.fetch(new Request('http://localhost/api/v1/portal/me', {
+      headers: { authorization: `Bearer ${token}` },
+    }))
+    const body = await res.json() as JsonBody
+    const error = body.error as { message?: string } | undefined
+
+    expect(res.status).not.toBe(401)
+    expect(error?.message).not.toBe('Invalid or expired token')
   })
 })
 

@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, CalendarDays, Stethoscope } from 'lucide-react'
-import { getSession } from '@/lib/portal/session'
-import { getHistory } from '@/lib/portal/api'
+import { clearSession, getSession } from '@/lib/portal/session'
+import { getHistory, isUnauthorizedPortalError } from '@/lib/portal/api'
 
 type Encounter = Awaited<ReturnType<typeof getHistory>>[number]
 
@@ -25,11 +25,16 @@ export default function HistoryPage() {
 
   useEffect(() => {
     const session = getSession()
-    if (!session) { router.replace('/portal/auth'); return }
+    if (!session) { router.replace('/portal'); return }
 
     getHistory(session.token)
       .then(setHistory)
-      .catch(() => {})
+      .catch((err) => {
+        if (isUnauthorizedPortalError(err)) {
+          clearSession()
+          router.replace('/portal')
+        }
+      })
       .finally(() => setLoading(false))
   }, [router])
 

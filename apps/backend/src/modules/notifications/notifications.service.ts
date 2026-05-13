@@ -100,11 +100,36 @@ export async function sendMagicLinkNotification(
   }
 }
 
+export async function sendWhatsAppPortalAccessNotification(
+  patient: ContactInfo,
+  accessUrl: string,
+  pin: string,
+  expiresAt: Date,
+): Promise<DispatchResult> {
+  if (!patient.phone) {
+    return {
+      channel: 'whatsapp',
+      status: 'FAILED',
+      failedReason: 'Patient has no WhatsApp phone number',
+      attemptCount: 1,
+      nextRetryAt: null,
+    }
+  }
+
+  const expiresStr = expiresAt.toLocaleDateString('es', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+  const pinUrl = `${PORTAL_URL}/portal/auth?patient=${patient.id}`
+  const body = `Hola ${patient.first_name} 👋\n\nTu equipo médico ha compartido tu portal de salud meditrack.\n\nEntra directo aquí:\n${accessUrl}\n\nPIN de respaldo: ${pin}\nSi el enlace no abre, usa este acceso:\n${pinUrl}\n\nEste acceso expira el ${expiresStr}.`
+
+  return dispatchWhatsApp(patient.id, patient.phone, body, 'MAGIC_LINK', undefined, 1)
+}
+
 export async function sendPinNotification(
   patient: ContactInfo,
   pin: string,
 ): Promise<void> {
-  const portalUrl = `${PORTAL_URL}/portal/auth`
+  const portalUrl = `${PORTAL_URL}/portal/auth?patient=${patient.id}`
   const text = `Hola ${patient.first_name} 👋\n\nTu PIN de acceso al portal meditrack es: ${pin}\n\nÚsalo en: ${portalUrl}`
 
   if (patient.phone) {

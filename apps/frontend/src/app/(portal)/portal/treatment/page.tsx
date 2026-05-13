@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, CalendarDays, Clock, Info, Pill, ShieldCheck } from 'lucide-react'
-import { getSession } from '@/lib/portal/session'
-import { getActiveTreatments, type TreatmentPlan } from '@/lib/portal/api'
+import { clearSession, getSession } from '@/lib/portal/session'
+import { getActiveTreatments, isUnauthorizedPortalError, type TreatmentPlan } from '@/lib/portal/api'
 
 const FREQ_LABELS: Record<string, string> = {
   DAILY: 'Diario',
@@ -25,11 +25,16 @@ export default function TreatmentPage() {
 
   useEffect(() => {
     const session = getSession()
-    if (!session) { router.replace('/portal/auth'); return }
+    if (!session) { router.replace('/portal'); return }
 
     getActiveTreatments(session.token)
       .then(setPlans)
-      .catch(() => {})
+      .catch((err) => {
+        if (isUnauthorizedPortalError(err)) {
+          clearSession()
+          router.replace('/portal')
+        }
+      })
       .finally(() => setLoading(false))
   }, [router])
 

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
   ChevronDown, ChevronUp, ClipboardList, Copy, ExternalLink, FileText, Link2,
-  Save, Sparkles, Stethoscope, Wand2,
+  MessageCircle, Save, Sparkles, Stethoscope, Wand2,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
@@ -43,6 +43,12 @@ const FREQ_LABELS: Record<string, string> = {
 const DOSE_UNITS = ['mg', 'ml', 'mcg', 'g', 'UI', 'tableta(s)', 'cápsula(s)', 'gota(s)', 'ampolla(s)', 'parche(s)']
 const ROUTES = ['oral', 'sublingual', 'inhalatoria', 'tópica', 'inyectable IV', 'inyectable IM', 'subcutánea', 'rectal', 'vaginal', 'oftálmica', 'ótica']
 const portalAccessStorageKey = (patientId: string) => `meditrack.portalAccess.${patientId}`
+
+function withFreshPortalSession(url: string) {
+  const next = new URL(url)
+  next.searchParams.set('fresh', '1')
+  return next.toString()
+}
 
 const NOTE_TEMPLATES = [
   {
@@ -457,6 +463,10 @@ export default function EncounterPage() {
         window.localStorage.removeItem(portalAccessStorageKey(patientId))
         return
       }
+      if (saved.channel === 'pin') {
+        window.localStorage.removeItem(portalAccessStorageKey(patientId))
+        return
+      }
 
       setPortalAccess(saved)
     } catch {
@@ -637,17 +647,17 @@ export default function EncounterPage() {
     }
   }
 
-  async function handleGeneratePortalLink() {
+  async function handleGeneratePortalAccess(channel: 'magic_link' | 'whatsapp' = 'magic_link') {
     if (!token) return
     setPortalLoading(true)
     setPortalError('')
     setPortalCopied(false)
     try {
-      const access = await generatePortalAccess(token, patientId, 'magic_link')
+      const access = await generatePortalAccess(token, patientId, channel)
       setPortalAccess(access)
       window.localStorage.setItem(portalAccessStorageKey(patientId), JSON.stringify(access))
     } catch (err) {
-      setPortalError(err instanceof Error ? err.message : 'No se pudo generar el enlace del paciente')
+      setPortalError(err instanceof Error ? err.message : 'No se pudo generar o enviar el acceso del paciente')
     } finally {
       setPortalLoading(false)
     }
@@ -656,12 +666,20 @@ export default function EncounterPage() {
   async function handleCopyPortalLink() {
     if (!portalAccess?.access_url) return
     try {
-      await navigator.clipboard.writeText(portalAccess.access_url)
+      await navigator.clipboard.writeText(withFreshPortalSession(portalAccess.access_url))
       setPortalCopied(true)
       window.setTimeout(() => setPortalCopied(false), 2000)
     } catch {
       setPortalError('No se pudo copiar automáticamente. Selecciona el enlace y cópialo manualmente.')
     }
+  }
+
+  function handleOpenPortalAccess() {
+    if (!portalAccess?.access_url) return
+    try {
+      window.sessionStorage.removeItem('meditrack_patient_session')
+    } catch {}
+    window.open(withFreshPortalSession(portalAccess.access_url), '_blank', 'noopener,noreferrer')
   }
 
   if (loading) {
@@ -694,6 +712,17 @@ export default function EncounterPage() {
             <ClinicalButton href={`/patients/${patientId}`} icon={ArrowLeft} variant="outline" tone="slate">
               Paciente
             </ClinicalButton>
+            {!isClosed && (
+              <ClinicalButton
+                icon={portalLoading ? Loader2 : MessageCircle}
+                onClick={() => handleGeneratePortalAccess('whatsapp')}
+                disabled={portalLoading}
+                variant="outline"
+                tone="green"
+              >
+                Enviar WhatsApp
+              </ClinicalButton>
+            )}
             {!isClosed && (
               <ClinicalButton
                 icon={closing ? Loader2 : XCircle}
@@ -1172,18 +1201,29 @@ export default function EncounterPage() {
             <div>
               <p className="text-sm font-medium text-slate-800">Portal para seguimiento</p>
               <p className="mt-1 text-xs text-slate-500">
-                Genera un enlace seguro para que el paciente vea su tratamiento, dosis e historial compartido.
+                Envía WhatsApp con link directo y PIN de respaldo para que el paciente vea su tratamiento, dosis e historial compartido.
               </p>
             </div>
-            <ClinicalButton
-              icon={portalLoading ? Loader2 : Link2}
-              onClick={handleGeneratePortalLink}
-              disabled={portalLoading}
-              variant="outline"
-              tone="green"
-            >
-              Generar link
-            </ClinicalButton>
+            <div className="flex flex-wrap gap-2">
+              <ClinicalButton
+                icon={portalLoading ? Loader2 : Link2}
+                onClick={() => handleGeneratePortalAccess('magic_link')}
+                disabled={portalLoading}
+                variant="outline"
+                tone="green"
+              >
+                Generar link directo
+              </ClinicalButton>
+              <ClinicalButton
+                icon={portalLoading ? Loader2 : MessageCircle}
+                onClick={() => handleGeneratePortalAccess('whatsapp')}
+                disabled={portalLoading}
+                variant="outline"
+                tone="green"
+              >
+                Enviar WhatsApp
+              </ClinicalButton>
+            </div>
           </div>
 
           {portalError && (
@@ -1193,7 +1233,9 @@ export default function EncounterPage() {
           {portalAccess && (
             <div className="rounded-xl border border-green-100 bg-green-50/60 p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase text-green-700">Link listo para entregar</p>
+                <p className="text-xs font-medium uppercase text-green-700">
+                  {portalAccess.channel === 'whatsapp' ? 'WhatsApp enviado al paciente' : 'Link directo listo para entregar'}
+                </p>
                 <p className="text-xs text-slate-500">
                   Expira: {new Date(portalAccess.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
@@ -1202,7 +1244,7 @@ export default function EncounterPage() {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   readOnly
-                  value={portalAccess.access_url}
+                  value={withFreshPortalSession(portalAccess.access_url)}
                   className="min-w-0 flex-1 rounded-lg border border-green-100 bg-white px-3 py-2 text-xs text-slate-700"
                 />
                 <div className="flex gap-2">
@@ -1216,17 +1258,22 @@ export default function EncounterPage() {
                   </ClinicalButton>
                   <ClinicalButton
                     icon={ExternalLink}
-                    href={portalAccess.access_url}
+                    onClick={handleOpenPortalAccess}
                     variant="outline"
                     tone="slate"
                   >
-                    Abrir
+                    Probar acceso
                   </ClinicalButton>
                 </div>
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                Puedes pegar este link en WhatsApp, SMS o correo. Si el paciente tiene email registrado, el sistema también intenta enviarlo automáticamente.
+                {portalAccess.channel === 'whatsapp'
+                  ? 'El mensaje incluye este link directo y un PIN de respaldo.'
+                  : 'Puedes pegar este link en WhatsApp, SMS o correo. El paciente entra con este enlace sin escribir credenciales.'}
               </p>
+              {portalAccess.pin && (
+                <p className="mt-2 text-xs font-medium text-green-700">PIN enviado: {portalAccess.pin}</p>
+              )}
             </div>
           )}
         </div>

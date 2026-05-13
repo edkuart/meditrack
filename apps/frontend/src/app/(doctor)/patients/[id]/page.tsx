@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, FileText, Plus, ChevronUp, ChevronDown,
-  QrCode, Link2, Hash, Loader2, ExternalLink, Download,
+  QrCode, Link2, Loader2, ExternalLink, Download, MessageCircle,
   Activity, CalendarClock, ClipboardList, Pill, Stethoscope, UserRound,
   ShieldCheck, Trash2, AlertTriangle, Copy,
 } from 'lucide-react'
@@ -57,6 +57,12 @@ const ENC_STATUS_COLORS: Record<string, string> = {
 
 const portalAccessStorageKey = (patientId: string) => `meditrack.portalAccess.${patientId}`
 
+function withFreshPortalSession(url: string) {
+  const next = new URL(url)
+  next.searchParams.set('fresh', '1')
+  return next.toString()
+}
+
 // ─── Portal access section ─────────────────────────────────────────────────────
 function PortalAccessSection({
   token,
@@ -89,10 +95,15 @@ function PortalAccessSection({
           return
         }
 
+        if (saved.channel === 'pin') {
+          window.localStorage.removeItem(portalAccessStorageKey(patientId))
+          return
+        }
+
         if (cancelled) return
         setResult(saved)
 
-        if ('qr_data' in saved) {
+        if (saved.channel === 'qr' && 'qr_data' in saved) {
           const url = await QRCode.toDataURL(saved.qr_data, { width: 240, margin: 2 })
           if (!cancelled) setQrDataUrl(url)
         }
@@ -105,7 +116,7 @@ function PortalAccessSection({
     return () => { cancelled = true }
   }, [patientId])
 
-  async function generate(channel: 'magic_link' | 'qr' | 'pin') {
+  async function generate(channel: 'magic_link' | 'qr' | 'whatsapp') {
     setLoading(channel)
     setError('')
     setCopied(false)
@@ -113,10 +124,8 @@ function PortalAccessSection({
     try {
       const data = await generatePortalAccess(token, patientId, channel)
       setResult(data)
-      if (data.channel !== 'pin') {
-        window.localStorage.setItem(portalAccessStorageKey(patientId), JSON.stringify(data))
-      }
-      if ('qr_data' in data) {
+      window.localStorage.setItem(portalAccessStorageKey(patientId), JSON.stringify(data))
+      if (channel === 'qr' && 'qr_data' in data) {
         const url = await QRCode.toDataURL(data.qr_data, { width: 240, margin: 2 })
         setQrDataUrl(url)
       }
@@ -130,12 +139,20 @@ function PortalAccessSection({
   async function copyLink() {
     if (!result || !('access_url' in result)) return
     try {
-      await navigator.clipboard.writeText(result.access_url)
+      await navigator.clipboard.writeText(withFreshPortalSession(result.access_url))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
       setError('No se pudo copiar automáticamente. Selecciona el enlace y cópialo manualmente.')
     }
+  }
+
+  function openAccessLink() {
+    if (!result?.access_url) return
+    try {
+      window.sessionStorage.removeItem('meditrack_patient_session')
+    } catch {}
+    window.open(withFreshPortalSession(result.access_url), '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -151,16 +168,16 @@ function PortalAccessSection({
             <p className="mt-1 text-sm text-slate-700">
               {result
                 ? `Link disponible hasta ${new Date(result.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                : 'Genera un enlace, QR o PIN para entregar el portal al paciente.'}
+                : 'Genera un enlace directo, QR o WhatsApp con link y PIN de respaldo.'}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {[
-            { channel: 'magic_link' as const, label: 'Enlace mágico', icon: <Link2 size={14} /> },
-            { channel: 'qr' as const, label: 'Código QR', icon: <QrCode size={14} /> },
-            { channel: 'pin' as const, label: 'PIN numérico', icon: <Hash size={14} /> },
+            { channel: 'magic_link' as const, label: 'Link directo', icon: <Link2 size={14} /> },
+            { channel: 'qr' as const, label: 'QR directo', icon: <QrCode size={14} /> },
+            { channel: 'whatsapp' as const, label: 'Enviar WhatsApp', icon: <MessageCircle size={14} /> },
           ].map(({ channel, label, icon }) => (
             <button
               key={channel}
@@ -182,23 +199,24 @@ function PortalAccessSection({
           <div className="rounded-xl border border-green-100 bg-green-50/60 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-medium uppercase text-green-700">
-                {result.channel === 'pin' ? 'PIN listo para entregar' : 'Link listo para entregar'}
+                {result.channel === 'whatsapp' ? 'WhatsApp enviado al paciente' : 'Link directo listo para entregar'}
               </p>
               <p className="text-xs text-slate-500">
                 Expira: {new Date(result.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             </div>
 
-            {result.channel === 'pin' && 'pin' in result ? (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-xl border border-green-100 bg-white px-4 py-5 text-center">
-                  <p className="text-xs text-slate-500">PIN de acceso del paciente</p>
-                  <p className="mt-2 text-4xl font-bold tracking-[0.25em] text-blue-600">{result.pin}</p>
+            <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+              {qrDataUrl && (
+                <div className="flex justify-center rounded-xl border border-green-100 bg-white p-3">
+                  <img src={qrDataUrl} alt="QR de acceso directo al portal" className="h-48 w-48 rounded-lg" />
                 </div>
+              )}
+              <div className="flex min-w-0 flex-col justify-center gap-3">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     readOnly
-                    value={result.access_url}
+                    value={withFreshPortalSession(result.access_url)}
                     className="min-w-0 flex-1 rounded-lg border border-green-100 bg-white px-3 py-2 text-xs text-slate-700"
                   />
                   <button
@@ -206,51 +224,27 @@ function PortalAccessSection({
                     className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
                   >
                     <Copy size={14} />
-                    {copied ? 'Copiado' : 'Copiar URL'}
+                    {copied ? 'Copiado' : 'Copiar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openAccessLink}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
+                  >
+                    <ExternalLink size={14} />
+                    Probar acceso
                   </button>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Por seguridad, el PIN se muestra al generarlo. Si se pierde, genera uno nuevo.
+                  {result.channel === 'whatsapp'
+                    ? 'El mensaje incluye este link directo y un PIN de respaldo para el paciente.'
+                    : 'El paciente entra con este link sin escribir ID ni PIN. Si abre solo /portal, deberá usar de nuevo este enlace.'}
                 </p>
-              </div>
-            ) : (
-              <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-                {qrDataUrl && (
-                  <div className="flex justify-center rounded-xl border border-green-100 bg-white p-3">
-                    <img src={qrDataUrl} alt="QR de acceso al portal" className="h-48 w-48 rounded-lg" />
-                  </div>
+                {result.pin && (
+                  <p className="text-xs font-medium text-green-700">PIN enviado: {result.pin}</p>
                 )}
-                <div className="flex min-w-0 flex-col justify-center gap-3">
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                      readOnly
-                      value={'access_url' in result ? result.access_url : ''}
-                      className="min-w-0 flex-1 rounded-lg border border-green-100 bg-white px-3 py-2 text-xs text-slate-700"
-                    />
-                    <button
-                      onClick={copyLink}
-                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
-                    >
-                      <Copy size={14} />
-                      {copied ? 'Copiado' : 'Copiar'}
-                    </button>
-                    {'access_url' in result && (
-                      <Link
-                        href={result.access_url}
-                        target="_blank"
-                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
-                      >
-                        <ExternalLink size={14} />
-                        Abrir
-                      </Link>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Este mismo acceso queda disponible al volver al expediente desde este navegador.
-                  </p>
-                </div>
               </div>
-            )}
+            </div>
           </div>
         )}
       </div>

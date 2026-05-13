@@ -1,5 +1,19 @@
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
 
+export class PortalApiError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'PortalApiError'
+    this.status = status
+  }
+}
+
+export function isUnauthorizedPortalError(error: unknown) {
+  return error instanceof PortalApiError && error.status === 401
+}
+
 async function portalFetch<T>(
   path: string,
   token: string,
@@ -14,7 +28,7 @@ async function portalFetch<T>(
     },
   })
   const json = await res.json()
-  if (!json.success) throw new Error(json.error?.message ?? 'Request failed')
+  if (!json.success) throw new PortalApiError(json.error?.message ?? 'Request failed', res.status)
   return json.data as T
 }
 

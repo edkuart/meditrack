@@ -11,7 +11,11 @@ import {
 import { getSignedViewUrl } from '../../shared/storage/storage.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { UnauthorizedError, NotFoundError, AppError } from '../../shared/errors.ts'
-import { sendMagicLinkNotification, sendPinNotification } from '../notifications/notifications.service.ts'
+import {
+  sendMagicLinkNotification,
+  sendPinNotification,
+  sendWhatsAppPortalAccessNotification,
+} from '../notifications/notifications.service.ts'
 import { buildEngagementProfile } from './engagement.ts'
 import type { GenerateAccessInput, ValidatePinInput } from './portal.schema.ts'
 
@@ -33,12 +37,20 @@ export async function generatePatientAccess(
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + input.expires_in_days)
 
+  if (input.channel === 'whatsapp' && !patient.phone) {
+    throw new AppError(422, 'PATIENT_PHONE_REQUIRED', 'Patient does not have a WhatsApp phone number')
+  }
+
   let rawToken: string
   let tokenHash: string
   let pinPlain: string | undefined
 
-  if (input.channel === 'pin') {
+  if (input.channel === 'pin' || input.channel === 'whatsapp') {
     pinPlain = generatePin()
+  }
+
+  if (input.channel === 'pin') {
+    pinPlain = pinPlain ?? generatePin()
     // Store bcrypt hash of PIN — never the plain PIN
     tokenHash = await bcrypt.hash(pinPlain, 10)
     rawToken = pinPlain
@@ -85,7 +97,43 @@ export async function generatePatientAccess(
     }
   }
 
-  const accessUrl = `${frontendUrl}/portal?token=${rawToken}`
+  const accessUrl = `${frontendUrl}/portal?token=${rawToken}&fresh=1`
+
+  if (input.channel === 'whatsapp' && pinPlain) {
+    const pinHash = await bcrypt.hash(pinPlain, 10)
+    const [pinToken] = await db.insert(patientAccessTokens).values({
+      patient_id: patientId,
+      token_hash: pinHash,
+      channel: 'pin',
+      expires_at: expiresAt,
+      created_by: doctorId,
+    }).returning()
+
+    await createAuditLog({
+      tenant_id: tenantId,
+      actor_id: doctorId,
+      actor_type: 'USER',
+      actor_email: doctorEmail,
+      action: 'TOKEN_GENERATED',
+      resource_type: 'PATIENT_ACCESS_TOKEN',
+      resource_id: pinToken.id,
+      context: { patient_id: patientId, channel: 'pin', paired_channel: 'whatsapp' },
+    })
+
+    const delivery = await sendWhatsAppPortalAccessNotification(patient, accessUrl, pinPlain, expiresAt)
+    if (delivery.status === 'FAILED') {
+      throw new AppError(500, 'WHATSAPP_SEND_FAILED', delivery.failedReason ?? 'Could not send WhatsApp access message')
+    }
+
+    return {
+      channel: input.channel,
+      token: rawToken,
+      pin: pinPlain,
+      access_url: accessUrl,
+      qr_data: accessUrl,
+      expires_at: expiresAt,
+    }
+  }
 
   // Fire-and-forget: send magic link or WhatsApp to patient
   if (input.channel !== 'qr') {

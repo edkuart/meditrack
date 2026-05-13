@@ -84,9 +84,10 @@ export default function NewPatientPage() {
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-600">Teléfono</label>
-            <input type="tel" value={form.phone} onChange={set('phone')} placeholder="+52 55 1234 5678"
+            <label className="text-sm font-medium text-slate-600">WhatsApp del paciente</label>
+            <input type="tel" value={form.phone} onChange={set('phone')} placeholder="+502 5555 5555"
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+            <p className="text-xs text-slate-400">Incluye código de país para enviar el acceso por WhatsApp.</p>
           </div>
         </div>
 

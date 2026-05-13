@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, FileText, Download, Loader2, FolderOpen } from 'lucide-react'
-import { getSession } from '@/lib/portal/session'
-import { getDocuments, getDocumentUrl, type PatientDocument } from '@/lib/portal/api'
+import { clearSession, getSession } from '@/lib/portal/session'
+import { getDocuments, getDocumentUrl, isUnauthorizedPortalError, type PatientDocument } from '@/lib/portal/api'
 
 const TYPE_LABELS: Record<string, string> = {
   PRESCRIPTION: 'Receta médica',
@@ -79,12 +79,17 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     const session = getSession()
-    if (!session) { router.replace('/portal/auth'); return }
+    if (!session) { router.replace('/portal'); return }
     setToken(session.token)
 
     getDocuments(session.token)
       .then(setDocs)
-      .catch(() => {})
+      .catch((err) => {
+        if (isUnauthorizedPortalError(err)) {
+          clearSession()
+          router.replace('/portal')
+        }
+      })
       .finally(() => setLoading(false))
   }, [router])
 

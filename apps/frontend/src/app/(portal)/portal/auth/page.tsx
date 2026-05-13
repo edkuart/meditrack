@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Loader2, ShieldCheck } from 'lucide-react'
 import { saveSession } from '@/lib/portal/session'
 import { authPin } from '@/lib/portal/api'
 
@@ -11,6 +12,10 @@ export default function PortalAuthPage() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setPatientId(new URLSearchParams(window.location.search).get('patient') ?? '')
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,39 +33,36 @@ export default function PortalAuthPage() {
     }
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
-      <div className="w-full max-w-sm">
-
-        {/* Logo / header */}
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-blue-500 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-            <span className="text-white text-2xl">💊</span>
+  if (!patientId) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <ShieldCheck size={26} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">Mi tratamiento</h1>
-          <p className="text-slate-400 mt-1">Ingresa tu PIN de acceso</p>
+          <h1 className="text-xl font-semibold text-slate-900">Abre tu enlace de acceso</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Usa el link directo que recibiste por WhatsApp. Si necesitas un nuevo acceso, pídeselo a tu equipo médico.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500 text-white">
+            <ShieldCheck size={26} />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">Acceso de respaldo</h1>
+          <p className="mt-1 text-sm text-slate-400">Ingresa el PIN recibido por WhatsApp</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* Patient ID */}
           <div>
-            <label className="block text-slate-600 font-medium mb-2 text-sm">
-              ID de paciente
-            </label>
-            <input
-              type="text"
-              value={patientId}
-              onChange={e => setPatientId(e.target.value)}
-              placeholder="Proporcionado por tu médico"
-              className="w-full border-2 border-slate-200 rounded-2xl px-4 py-4 text-base text-slate-800 focus:outline-none focus:border-blue-400 bg-white"
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </div>
-
-          {/* PIN */}
-          <div>
-            <label className="block text-slate-600 font-medium mb-2 text-sm">
+            <label className="mb-2 block text-sm font-medium text-slate-600">
               PIN de 6 dígitos
             </label>
             <input
@@ -69,28 +71,24 @@ export default function PortalAuthPage() {
               value={pin}
               onChange={e => setPin(e.target.value.slice(0, 6))}
               placeholder="000000"
-              className="w-full border-2 border-slate-200 rounded-2xl px-4 py-4 text-2xl text-slate-800 tracking-widest text-center font-mono focus:outline-none focus:border-blue-400 bg-white"
+              className="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-4 text-center font-mono text-2xl tracking-widest text-slate-800 focus:border-blue-400 focus:outline-none"
             />
           </div>
 
           {error && (
-            <p className="text-red-500 text-sm text-center bg-red-50 rounded-xl py-3 px-4">
+            <p className="rounded-xl bg-red-50 px-4 py-3 text-center text-sm text-red-500">
               {error}
             </p>
           )}
 
           <button
             type="submit"
-            disabled={loading || pin.length !== 6 || !patientId}
-            className="w-full py-4 rounded-2xl bg-blue-500 text-white font-semibold text-lg disabled:opacity-50 active:bg-blue-600 transition-colors mt-2"
+            disabled={loading || pin.length !== 6}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-500 py-4 text-lg font-semibold text-white transition-colors active:bg-blue-600 disabled:opacity-50"
           >
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? <><Loader2 size={16} className="animate-spin" /> Entrando...</> : 'Entrar'}
           </button>
         </form>
-
-        <p className="text-center text-slate-400 text-sm mt-8">
-          Si no tienes PIN, pide a tu médico que te envíe el enlace de acceso.
-        </p>
       </div>
     </div>
   )

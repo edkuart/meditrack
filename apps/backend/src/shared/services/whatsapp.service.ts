@@ -1,9 +1,16 @@
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN
 const TWILIO_FROM = process.env.TWILIO_WHATSAPP_FROM ?? 'whatsapp:+14155238886'
+const META_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN
+const META_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
+const META_GRAPH_VERSION = process.env.WHATSAPP_GRAPH_VERSION ?? 'v23.0'
 
-// Returns Twilio message SID when configured, undefined in dev (console) mode
+// Returns provider message id when configured, undefined in dev (console) mode
 export async function sendWhatsApp(to: string, body: string): Promise<string | undefined> {
+  if (META_ACCESS_TOKEN || META_PHONE_NUMBER_ID) {
+    return sendMetaWhatsApp(to, body)
+  }
+
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
     console.log(`[whatsapp:dev] → ${to}\n${body}`)
     return undefined
@@ -35,4 +42,46 @@ export async function sendWhatsApp(to: string, body: string): Promise<string | u
 
   const { sid } = await res.json() as { sid: string }
   return sid
+}
+
+async function sendMetaWhatsApp(to: string, body: string): Promise<string> {
+  if (!META_ACCESS_TOKEN || !META_PHONE_NUMBER_ID) {
+    throw new Error('WhatsApp Cloud API config missing: WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID are required')
+  }
+
+  const normalizedTo = to.replace(/\D/g, '')
+  if (!normalizedTo) throw new Error('WhatsApp recipient phone is invalid')
+
+  const res = await fetch(
+    `https://graph.facebook.com/${META_GRAPH_VERSION}/${META_PHONE_NUMBER_ID}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: normalizedTo,
+        type: 'text',
+        text: { body },
+      }),
+    },
+  )
+
+  const raw = await res.json().catch(() => null) as {
+    messages?: Array<{ id?: string }>
+    error?: { message?: string; type?: string; code?: number }
+  } | null
+
+  if (!res.ok) {
+    const error = raw?.error
+    throw new Error(
+      `WhatsApp Cloud API error ${res.status}: ${error?.message ?? JSON.stringify(raw)}`
+    )
+  }
+
+  const id = raw?.messages?.[0]?.id
+  if (!id) throw new Error('WhatsApp Cloud API response did not include a message id')
+  return id
 }

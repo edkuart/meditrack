@@ -364,11 +364,11 @@ export async function listClinicalProtocols(token: string): Promise<ClinicalProt
 
 // ─── Portal access ────────────────────────────────────────────────────────────
 
-export type AccessChannel = 'magic_link' | 'qr' | 'pin' | 'whatsapp'
+export type AccessChannel = 'magic_link' | 'qr' | 'whatsapp'
 
 export type AccessResult =
   | { channel: 'pin'; pin: string; patient_id: string; access_url: string; expires_at: string }
-  | { channel: AccessChannel; token: string; access_url: string; qr_data: string; expires_at: string }
+  | { channel: AccessChannel; token: string; access_url: string; qr_data: string; expires_at: string; pin?: string }
 
 export async function generatePortalAccess(
   token: string,
