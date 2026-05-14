@@ -70,6 +70,34 @@ export interface DoseEvent {
   }
 }
 
+export type CheckInSeverity = 'OK' | 'WATCH' | 'ALERT'
+export type CheckInMood = 'better' | 'same' | 'worse'
+
+export interface PatientCheckIn {
+  id: string
+  check_in_date: string
+  pain_score: number | null
+  temperature_c: number | null
+  symptoms: string[]
+  red_flags: string[]
+  medication_issue: boolean
+  mood: CheckInMood | null
+  notes: string | null
+  severity: CheckInSeverity
+  created_at: string
+  updated_at: string
+}
+
+export interface PatientCheckInInput {
+  pain_score?: number | null
+  temperature_c?: number | null
+  symptoms: string[]
+  red_flags: string[]
+  medication_issue: boolean
+  mood?: CheckInMood | null
+  notes?: string | null
+}
+
 export interface TreatmentPlan {
   id: string
   name: string
@@ -88,6 +116,14 @@ export interface TreatmentPlan {
     special_instructions: string | null
     with_food: boolean
   }>
+  interventions: Array<{
+    id: string
+    type: string
+    title: string
+    frequency: string | null
+    duration: string | null
+    instructions: string | null
+  }>
 }
 
 export async function getMe(token: string) {
@@ -98,6 +134,17 @@ export async function getMe(token: string) {
 
 export async function getTodayDoses(token: string) {
   return portalFetch<DoseEvent[]>('/portal/doses/today', token)
+}
+
+export async function getTodayCheckIn(token: string) {
+  return portalFetch<PatientCheckIn | null>('/portal/check-ins/today', token)
+}
+
+export async function submitCheckIn(token: string, input: PatientCheckInInput) {
+  return portalFetch<PatientCheckIn>('/portal/check-ins', token, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
 export async function getActiveTreatment(token: string) {
@@ -164,8 +211,33 @@ export interface PatientDocument {
   created_at: string
 }
 
+export type PortalLabOrderStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+export type PortalLabResultStatus = 'PENDING' | 'NORMAL' | 'HIGH' | 'LOW' | 'CRITICAL_HIGH' | 'CRITICAL_LOW'
+
+export interface PortalLabOrder {
+  id: string
+  status: PortalLabOrderStatus
+  notes: string | null
+  ordered_at: string
+  updated_at: string
+  doctor: { first_name: string; last_name: string; specialty: string | null }
+  results: Array<{
+    id: string
+    panel_name: string
+    parameter_name: string
+    value: string | null
+    unit: string | null
+    status: PortalLabResultStatus
+    sort_order: number
+  }>
+}
+
 export async function getDocuments(token: string) {
   return portalFetch<PatientDocument[]>('/portal/documents', token)
+}
+
+export async function getLabOrders(token: string) {
+  return portalFetch<PortalLabOrder[]>('/portal/lab/orders', token)
 }
 
 export async function getDocumentUrl(token: string, documentId: string) {

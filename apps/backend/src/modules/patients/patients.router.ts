@@ -37,6 +37,15 @@ router.post('/', zValidator('json', CreatePatientSchema), async (c) => {
   return c.json({ success: true, data: patient }, 201)
 })
 
+// GET /patients/:id/check-ins
+router.get('/:id/check-ins', async (c) => {
+  const auth = c.get('auth')
+  const limitParam = Number(c.req.query('limit') ?? 14)
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.trunc(limitParam), 1), 60) : 14
+  const checkIns = await patientsService.listPatientCheckIns(auth.tenant_id, c.req.param('id'), limit)
+  return c.json({ success: true, data: checkIns })
+})
+
 // GET /patients/:id
 router.get('/:id', async (c) => {
   const auth = c.get('auth')

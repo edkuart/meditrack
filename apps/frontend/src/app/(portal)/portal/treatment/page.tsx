@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, CalendarDays, Clock, Info, Pill, ShieldCheck } from 'lucide-react'
+import { Activity, ArrowLeft, CalendarDays, Clock, Info, Pill, ShieldCheck } from 'lucide-react'
 import { clearSession, getSession } from '@/lib/portal/session'
 import { getActiveTreatments, isUnauthorizedPortalError, type TreatmentPlan } from '@/lib/portal/api'
 
@@ -40,14 +40,15 @@ export default function TreatmentPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="portal-body flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-md pb-10">
+    <div className="portal-body">
+    <div className="mx-auto max-w-md">
 
       <div className="flex items-center gap-3 px-5 pb-4 pt-6">
         <Link href="/portal" className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
@@ -136,11 +137,33 @@ export default function TreatmentPage() {
                   </div>
                 </div>
                 ))}
+                {(plan.interventions ?? []).map(iv => (
+                  <div key={iv.id} className="p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50">
+                        <Activity size={18} className="text-emerald-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base font-semibold text-slate-900">{iv.title}</p>
+                        {iv.frequency && (
+                          <p className="mt-1 text-sm text-slate-500">{iv.frequency}</p>
+                        )}
+                        {iv.duration && (
+                          <p className="text-sm text-slate-400">{iv.duration}</p>
+                        )}
+                        {iv.instructions && (
+                          <p className="mt-3 rounded-2xl bg-emerald-50 p-3 text-sm leading-6 text-emerald-800">{iv.instructions}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           ))}
         </div>
       )}
+    </div>
     </div>
   )
 }

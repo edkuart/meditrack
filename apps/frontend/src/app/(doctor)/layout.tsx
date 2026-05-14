@@ -18,6 +18,7 @@ import {
   Search,
   Menu,
   X,
+  FlaskConical,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
@@ -95,10 +96,11 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const isAdmin = user && ADMIN_ROLES.has(user.role)
 
   const main = [
-    { href: '/dashboard',  icon: LayoutGrid, label: 'Panel operativo', match: (p: string) => p === '/dashboard' },
-    { href: '/patients',   icon: Users,       label: 'Pacientes',      match: (p: string) => p.startsWith('/patients') },
-    { href: '/analytics',  icon: TrendingUp,  label: 'Analítica',      match: (p: string) => p.startsWith('/analytics'), adminOnly: true },
-    { href: '/staff',      icon: UserCog,     label: 'Equipo clínico', match: (p: string) => p === '/staff', adminOnly: true },
+    { href: '/dashboard',  icon: LayoutGrid,   label: 'Panel operativo', match: (p: string) => p === '/dashboard' },
+    { href: '/patients',   icon: Users,         label: 'Pacientes',       match: (p: string) => p.startsWith('/patients') },
+    { href: '/lab',        icon: FlaskConical,  label: 'Laboratorio',     match: (p: string) => p.startsWith('/lab') },
+    { href: '/analytics',  icon: TrendingUp,    label: 'Analítica',       match: (p: string) => p.startsWith('/analytics'), adminOnly: true },
+    { href: '/staff',      icon: UserCog,       label: 'Equipo clínico',  match: (p: string) => p === '/staff', adminOnly: true },
   ]
 
   const config = [
@@ -414,8 +416,9 @@ function MobileNav() {
   const pathname = usePathname()
 
   const items = [
-    { href: '/dashboard', label: 'Inicio',    icon: LayoutGrid, active: pathname === '/dashboard' },
-    { href: '/patients',  label: 'Pacientes', icon: Users,      active: pathname.startsWith('/patients') },
+    { href: '/dashboard', label: 'Inicio',    icon: LayoutGrid,  active: pathname === '/dashboard' },
+    { href: '/patients',  label: 'Pacientes', icon: Users,       active: pathname.startsWith('/patients') },
+    { href: '/lab',       label: 'Lab',       icon: FlaskConical, active: pathname.startsWith('/lab') },
   ]
 
   if (user && ADMIN_ROLES.has(user.role)) {

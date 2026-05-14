@@ -129,6 +129,25 @@ export async function getPatient(token: string, id: string): Promise<Patient> {
   return doctorFetch(`/patients/${id}`, token)
 }
 
+export interface PatientCheckIn {
+  id: string
+  check_in_date: string
+  pain_score: number | null
+  temperature_c: number | null
+  symptoms: string[]
+  red_flags: string[]
+  medication_issue: boolean
+  mood: 'better' | 'same' | 'worse' | null
+  notes: string | null
+  severity: 'OK' | 'WATCH' | 'ALERT'
+  created_at: string
+  updated_at: string
+}
+
+export async function listPatientCheckIns(token: string, patientId: string, limit = 14): Promise<PatientCheckIn[]> {
+  return doctorFetch(`/patients/${patientId}/check-ins?limit=${limit}`, token)
+}
+
 export async function createPatient(token: string, data: {
   first_name: string
   last_name: string
@@ -246,6 +265,20 @@ export async function runEncounterAiAssist(
 
 // ─── Treatments ───────────────────────────────────────────────────────────────
 
+export type InterventionType = 'EXERCISE' | 'DIET' | 'THERAPY' | 'MONITORING' | 'OTHER'
+
+export interface Intervention {
+  id:           string
+  type:         InterventionType
+  title:        string
+  description:  string | null
+  frequency:    string | null
+  duration:     string | null
+  instructions: string | null
+  sort_order:   number
+  is_active:    boolean
+}
+
 export interface MedicationItem {
   id: string
   drug_name: string
@@ -270,14 +303,15 @@ export interface TreatmentPlan {
   start_date: string
   end_date: string | null
   instructions: string | null
-  medications: MedicationItem[]
+  medications:   MedicationItem[]
+  interventions: Intervention[]
 }
 
 export async function createTreatment(token: string, encounterId: string, data: {
   name: string
   start_date: string
   instructions?: string
-  medications: Array<{
+  medications?: Array<{
     drug_name: string
     dose_amount: number
     dose_unit: string
@@ -291,12 +325,49 @@ export async function createTreatment(token: string, encounterId: string, data: 
     special_instructions?: string
     sort_order?: number
   }>
+  interventions?: Array<{
+    type?: InterventionType
+    title: string
+    description?: string
+    frequency?: string
+    duration?: string
+    instructions?: string
+    sort_order?: number
+  }>
 }): Promise<TreatmentPlan> {
   return doctorFetch(`/encounters/${encounterId}/treatments`, token, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
+}
+
+export async function addIntervention(
+  token: string,
+  treatmentId: string,
+  data: { type?: InterventionType; title: string; description?: string; frequency?: string; duration?: string; instructions?: string },
+): Promise<Intervention> {
+  return doctorFetch(`/treatments/${treatmentId}/interventions`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateIntervention(
+  token: string,
+  interventionId: string,
+  data: Partial<{ type: InterventionType; title: string; description: string; frequency: string; duration: string; instructions: string }>,
+): Promise<Intervention> {
+  return doctorFetch(`/interventions/${interventionId}`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteIntervention(token: string, interventionId: string): Promise<void> {
+  await doctorFetch(`/interventions/${interventionId}`, token, { method: 'DELETE' })
 }
 
 export async function getTreatment(token: string, id: string): Promise<TreatmentPlan> {

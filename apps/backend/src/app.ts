@@ -21,6 +21,7 @@ import { billingRouter, stripeWebhookRouter } from './modules/billing/billing.ro
 import { onboardingRouter } from './modules/onboarding/onboarding.router.ts'
 import { settingsRouter } from './modules/settings/settings.router.ts'
 import { complianceRouter } from './modules/compliance/compliance.router.ts'
+import { labRouter } from './modules/lab/lab.router.ts'
 import { rateLimit } from './shared/middleware/rate-limit.middleware.ts'
 import { securityHeaders } from './shared/middleware/security.middleware.ts'
 import { requestContext, structuredRequestLogger } from './shared/middleware/observability.middleware.ts'
@@ -102,6 +103,7 @@ export function createApp() {
   app.route('/api/v1', onboardingRouter)
   app.route('/api/v1', settingsRouter)
   app.route('/api/v1', complianceRouter)
+  app.route('/api/v1', labRouter)
 
   app.onError(errorHandler)
 

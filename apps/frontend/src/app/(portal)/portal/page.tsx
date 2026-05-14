@@ -4,18 +4,15 @@ export const dynamic = 'force-dynamic'
 
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import {
+  Activity,
+  AlertTriangle,
   Bell,
-  Calendar,
-  ChevronRight,
-  ClipboardList,
-  FileText,
-  Home,
+  ChevronDown,
+  FlaskConical,
   Loader2,
-  Pill,
   ShieldCheck,
-  Stethoscope,
+  Thermometer,
 } from 'lucide-react'
 import { DoseCard } from '@/components/portal/DoseCard'
 import { MTAvatar, MTLogo } from '@/components/doctor/clinical-ui'
@@ -24,18 +21,18 @@ import {
   authMagicLink,
   confirmDose,
   getAdherence,
-  getEngagement,
+  getLabOrders,
+  getTodayCheckIn,
   getTodayDoses,
   isUnauthorizedPortalError,
+  submitCheckIn,
   type DoseEvent,
-  type PatientEngagement,
+  type PatientCheckIn,
+  type PatientCheckInInput,
+  type PortalLabOrder,
 } from '@/lib/portal/api'
 
 type AvatarState = 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR'
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-}
 
 // ─────────────────────────────────────────────
 // Mood face SVG (geometric)
@@ -53,11 +50,11 @@ function MoodAvatar({ score }: { score: number }) {
 
   return (
     <div style={{
-      width: 88, height: 88, borderRadius: '50%',
+      width: 72, height: 72, borderRadius: '50%',
       background: bg, boxShadow: '0 6px 18px rgba(15,23,42,.08)',
       flexShrink: 0,
     }}>
-      <svg width="88" height="88" viewBox="0 0 88 88" style={{ display: 'block' }}>
+      <svg width="72" height="72" viewBox="0 0 88 88" style={{ display: 'block' }}>
         <circle cx="32" cy="40" r="3.5" fill={tone} />
         <circle cx="56" cy="40" r="3.5" fill={tone} />
         <path d={mouth} stroke={tone} strokeWidth="3" strokeLinecap="round" fill="none" />
@@ -83,7 +80,7 @@ function AdherenceCard({ confirmed, total }: { confirmed: number; total: number 
   return (
     <div style={{
       background: 'linear-gradient(135deg, #1e40af 0%, #1a56db 100%)',
-      color: '#fff', borderRadius: 14, padding: 16, marginBottom: 22,
+      color: '#fff', borderRadius: 14, padding: 16,
       boxShadow: '0 6px 18px rgba(26,86,219,.25)',
       position: 'relative', overflow: 'hidden',
     }}>
@@ -130,26 +127,402 @@ function AdherenceCard({ confirmed, total }: { confirmed: number; total: number 
   )
 }
 
-// ─────────────────────────────────────────────
-// Bottom nav button
-// ─────────────────────────────────────────────
-function NavBtn({ icon: Icon, label, active, href }: { icon: React.ElementType; label: string; active?: boolean; href: string }) {
+const SYMPTOM_OPTIONS = ['Dolor', 'Náusea', 'Mareo', 'Cansancio', 'Tos', 'Sueño difícil']
+const RED_FLAG_OPTIONS = ['Fiebre alta', 'Falta de aire', 'Dolor intenso', 'Sangrado', 'Vómitos persistentes', 'Reacción alérgica']
+
+function ToggleChip({
+  label,
+  selected,
+  onClick,
+  tone = 'blue',
+}: {
+  label: string
+  selected: boolean
+  onClick: () => void
+  tone?: 'blue' | 'red'
+}) {
+  const activeBg = tone === 'red' ? '#fef2f2' : 'var(--mt-primary-subtle)'
+  const activeColor = tone === 'red' ? '#b91c1c' : 'var(--mt-primary)'
+  const activeBorder = tone === 'red' ? '#fecaca' : '#bfdbfe'
   return (
-    <Link href={href} style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-      color: active ? 'var(--mt-primary)' : 'var(--mt-muted)',
-      textDecoration: 'none', fontSize: 10.5, fontWeight: active ? 500 : 400,
-    }}>
-      <span style={{
-        padding: '4px 14px', borderRadius: 999,
-        background: active ? 'var(--mt-primary-subtle)' : 'transparent',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background .2s',
-      }}>
-        <Icon size={18} color={active ? 'var(--mt-primary)' : 'var(--mt-muted)'} />
-      </span>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        minHeight: 30,
+        borderRadius: 999,
+        border: `1px solid ${selected ? activeBorder : 'var(--mt-border)'}`,
+        background: selected ? activeBg : '#fff',
+        color: selected ? activeColor : 'var(--mt-text-2)',
+        padding: '5px 10px',
+        fontSize: 12,
+        fontWeight: 600,
+        fontFamily: 'var(--mt-font)',
+      }}
+    >
       {label}
-    </Link>
+    </button>
+  )
+}
+
+function CheckInCard({
+  checkIn,
+  onSubmit,
+}: {
+  checkIn: PatientCheckIn | null
+  onSubmit: (input: PatientCheckInInput) => Promise<void>
+}) {
+  const [painScore, setPainScore] = useState(checkIn?.pain_score ?? 0)
+  const [temperature, setTemperature] = useState(checkIn?.temperature_c ? String(checkIn.temperature_c) : '')
+  const [symptoms, setSymptoms] = useState<string[]>(checkIn?.symptoms ?? [])
+  const [redFlags, setRedFlags] = useState<string[]>(checkIn?.red_flags ?? [])
+  const [showRedFlags, setShowRedFlags] = useState((checkIn?.red_flags ?? []).length > 0)
+  const [medicationIssue, setMedicationIssue] = useState(checkIn?.medication_issue ?? false)
+  const [mood, setMood] = useState<PatientCheckInInput['mood']>(checkIn?.mood ?? 'same')
+  const [notes, setNotes] = useState(checkIn?.notes ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    setPainScore(checkIn?.pain_score ?? 0)
+    setTemperature(checkIn?.temperature_c ? String(checkIn.temperature_c) : '')
+    setSymptoms(checkIn?.symptoms ?? [])
+    setRedFlags(checkIn?.red_flags ?? [])
+    setShowRedFlags((checkIn?.red_flags ?? []).length > 0)
+    setMedicationIssue(checkIn?.medication_issue ?? false)
+    setMood(checkIn?.mood ?? 'same')
+    setNotes(checkIn?.notes ?? '')
+  }, [checkIn])
+
+  function toggle(list: string[], value: string, setList: (next: string[]) => void) {
+    setList(list.includes(value) ? list.filter(item => item !== value) : [...list, value])
+  }
+
+  async function submit() {
+    setSaving(true)
+    setSaved(false)
+    try {
+      await onSubmit({
+        pain_score: painScore,
+        temperature_c: temperature ? Number(temperature) : null,
+        symptoms,
+        red_flags: redFlags,
+        medication_issue: medicationIssue,
+        mood,
+        notes: notes.trim() || null,
+      })
+      setSaved(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const severity = checkIn?.severity
+  const severityLabel = severity === 'ALERT' ? 'Requiere revisión' : severity === 'WATCH' ? 'En observación' : 'Estable'
+  const severityColor = severity === 'ALERT' ? '#b91c1c' : severity === 'WATCH' ? '#b45309' : '#047857'
+  const severityBg = severity === 'ALERT' ? '#fef2f2' : severity === 'WATCH' ? '#fffbeb' : '#ecfdf5'
+
+  return (
+    <section className="portal-card portal-checkin-card">
+      <div className="portal-card-header">
+        <div className="portal-card-title-row">
+          <div className="portal-card-icon">
+            <Activity size={18} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <h2 className="portal-card-title">
+              ¿Cómo vas hoy?
+            </h2>
+            <p className="portal-card-subtitle">
+              Reporte rápido para tu equipo médico
+            </p>
+          </div>
+        </div>
+        {checkIn && (
+          <span style={{
+            borderRadius: 999,
+            background: severityBg,
+            color: severityColor,
+            padding: '5px 9px',
+            fontSize: 11,
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
+          }}>
+            {severityLabel}
+          </span>
+        )}
+      </div>
+
+      <div className="portal-checkin-vitals">
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span className="portal-field-label">Dolor</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="range"
+              min={0}
+              max={10}
+              value={painScore}
+              onChange={e => setPainScore(Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+            <strong style={{ minWidth: 24, textAlign: 'right', color: 'var(--mt-text)' }}>{painScore}</strong>
+          </div>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span className="portal-field-label">Temperatura</span>
+          <div style={{ position: 'relative' }}>
+            <Thermometer size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--mt-muted)' }} />
+            <input
+              inputMode="decimal"
+              value={temperature}
+              onChange={e => setTemperature(e.target.value.replace(',', '.'))}
+              placeholder="37.0"
+              className="portal-input"
+              style={{ padding: '0 10px 0 31px' }}
+            />
+          </div>
+        </label>
+      </div>
+
+      <div className="portal-section-tight">
+        <div className="portal-field-label">Estado general</div>
+        <div className="portal-chip-row">
+          {[
+            { value: 'better', label: 'Mejor' },
+            { value: 'same', label: 'Igual' },
+            { value: 'worse', label: 'Peor' },
+          ].map(option => (
+            <ToggleChip
+              key={option.value}
+              label={option.label}
+              selected={mood === option.value}
+              onClick={() => setMood(option.value as PatientCheckInInput['mood'])}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="portal-section-tight">
+        <div className="portal-field-label">Síntomas</div>
+        <div className="portal-chip-row">
+          {SYMPTOM_OPTIONS.map(option => (
+            <ToggleChip key={option} label={option} selected={symptoms.includes(option)} onClick={() => toggle(symptoms, option, setSymptoms)} />
+          ))}
+        </div>
+      </div>
+
+      <div className="portal-section-tight">
+        <button
+          type="button"
+          onClick={() => setShowRedFlags(open => !open)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+            border: 'none', background: 'transparent', padding: '2px 0 8px',
+            fontSize: 12, fontWeight: 700, color: '#b91c1c',
+            fontFamily: 'var(--mt-font)', textAlign: 'left',
+          }}
+        >
+          <AlertTriangle size={13} />
+          Señales de alarma
+          <span style={{ marginLeft: 'auto', color: 'var(--mt-muted)', fontWeight: 600 }}>
+            {redFlags.length > 0 ? `${redFlags.length}` : showRedFlags ? 'Ocultar' : 'Agregar'}
+          </span>
+        </button>
+        {showRedFlags && (
+          <div className="portal-chip-row">
+            {RED_FLAG_OPTIONS.map(option => (
+              <ToggleChip key={option} label={option} selected={redFlags.includes(option)} onClick={() => toggle(redFlags, option, setRedFlags)} tone="red" />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <label style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        minHeight: 38,
+        marginBottom: 12,
+        fontSize: 13,
+        color: 'var(--mt-text-2)',
+      }}>
+        <input
+          type="checkbox"
+          checked={medicationIssue}
+          onChange={e => setMedicationIssue(e.target.checked)}
+        />
+        Tuve problema para tomar un medicamento
+      </label>
+
+      <textarea
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+        rows={2}
+        maxLength={500}
+        placeholder="Nota opcional para tu equipo médico"
+        style={{
+          width: '100%',
+          border: '1px solid var(--mt-border)',
+          borderRadius: 10,
+          padding: 10,
+          fontSize: 13,
+          resize: 'none',
+          fontFamily: 'var(--mt-font)',
+          marginBottom: 12,
+        }}
+      />
+
+      <button
+        type="button"
+        onClick={submit}
+        disabled={saving}
+        style={{
+          width: '100%',
+          height: 42,
+          border: 'none',
+          borderRadius: 10,
+          background: 'var(--mt-primary)',
+          color: '#fff',
+          fontSize: 14,
+          fontWeight: 700,
+          fontFamily: 'var(--mt-font)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          opacity: saving ? 0.75 : 1,
+        }}
+      >
+        {saving ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+        {checkIn ? 'Actualizar reporte' : 'Enviar reporte de hoy'}
+      </button>
+      {(saved || checkIn) && (
+        <p style={{ margin: '9px 0 0', textAlign: 'center', color: '#047857', fontSize: 12, fontWeight: 600 }}>
+          Reporte guardado para hoy
+        </p>
+      )}
+    </section>
+  )
+}
+
+const LAB_ORDER_LABELS: Record<string, string> = {
+  PENDING: 'Solicitado',
+  IN_PROGRESS: 'En proceso',
+  COMPLETED: 'Resultados listos',
+  CANCELLED: 'Cancelado',
+}
+
+function LabOrdersCard({ orders }: { orders: PortalLabOrder[] }) {
+  if (orders.length === 0) return null
+
+  const latest = orders[0]
+  const panels = Array.from(new Set(latest.results.map(result => result.panel_name))).filter(Boolean)
+  const abnormalCount = latest.results.filter(result =>
+    result.status === 'HIGH' ||
+    result.status === 'LOW' ||
+    result.status === 'CRITICAL_HIGH' ||
+    result.status === 'CRITICAL_LOW',
+  ).length
+  const statusColor = latest.status === 'COMPLETED'
+    ? '#047857'
+    : latest.status === 'CANCELLED'
+      ? '#64748b'
+      : '#1a56db'
+  const statusBg = latest.status === 'COMPLETED'
+    ? '#ecfdf5'
+    : latest.status === 'CANCELLED'
+      ? '#f8fafc'
+      : '#eff6ff'
+
+  return (
+    <details className="portal-card" style={{ overflow: 'hidden' }}>
+      <summary style={{
+        listStyle: 'none',
+        cursor: 'pointer',
+        padding: '13px 14px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 11,
+      }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: 9,
+          background: '#eff6ff',
+          color: '#1a56db',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <FlaskConical size={17} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--mt-text)' }}>
+              Laboratorios
+            </h2>
+            <span style={{
+              borderRadius: 999,
+              background: statusBg,
+              color: statusColor,
+              padding: '2px 7px',
+              fontSize: 10.5,
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            }}>
+              {LAB_ORDER_LABELS[latest.status] ?? latest.status}
+            </span>
+          </div>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--mt-muted)' }}>
+            {panels.length > 0 ? panels.slice(0, 2).join(', ') : `${latest.results.length} parámetro(s)`}
+          </p>
+        </div>
+        <ChevronDown size={16} color="var(--mt-muted)" />
+      </summary>
+
+      <div style={{ borderTop: '1px solid var(--mt-border)', padding: '10px 14px 13px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {orders.slice(0, 3).map(order => {
+            const orderPanels = Array.from(new Set(order.results.map(result => result.panel_name))).filter(Boolean)
+            return (
+              <div key={order.id} style={{
+                borderRadius: 10,
+                background: 'var(--mt-bg)',
+                border: '1px solid var(--mt-border)',
+                padding: '9px 10px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mt-text)' }}>
+                      {orderPanels[0] ?? 'Orden de laboratorio'}
+                    </div>
+                    <div style={{ marginTop: 2, fontSize: 12, color: 'var(--mt-muted)' }}>
+                      {new Date(order.ordered_at).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+                      {' · '}
+                      {order.results.length} parámetro(s)
+                    </div>
+                  </div>
+                  <span style={{
+                    flexShrink: 0,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: order.status === 'COMPLETED' ? '#047857' : '#1a56db',
+                  }}>
+                    {LAB_ORDER_LABELS[order.status] ?? order.status}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        {abnormalCount > 0 && (
+          <p style={{ margin: '9px 0 0', fontSize: 12, color: '#b45309', lineHeight: 1.4 }}>
+            Tu equipo médico revisará {abnormalCount} resultado(s) fuera de rango.
+          </p>
+        )}
+      </div>
+    </details>
   )
 }
 
@@ -163,7 +536,8 @@ function PortalContent() {
   const [session, setSession] = useState<PatientSession | null>(null)
   const [doses, setDoses] = useState<DoseEvent[]>([])
   const [adherence, setAdherence] = useState<{ score: number; avatar_state: AvatarState } | null>(null)
-  const [engagement, setEngagement] = useState<PatientEngagement | null>(null)
+  const [checkIn, setCheckIn] = useState<PatientCheckIn | null>(null)
+  const [labOrders, setLabOrders] = useState<PortalLabOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -197,14 +571,16 @@ function PortalContent() {
 
   const loadData = useCallback(async (token: string) => {
     try {
-      const [dosesData, adherenceData, engagementData] = await Promise.all([
+      const [dosesData, adherenceData] = await Promise.all([
         getTodayDoses(token),
         getAdherence(token),
-        getEngagement(token),
       ])
       setDoses(dosesData)
       setAdherence(adherenceData)
-      setEngagement(engagementData)
+      const checkInData = await getTodayCheckIn(token).catch(() => null)
+      setCheckIn(checkInData)
+      const labData = await getLabOrders(token).catch(() => [])
+      setLabOrders(labData)
       if (window.location.search.includes('token=')) {
         window.history.replaceState({}, '', '/portal')
       }
@@ -227,7 +603,12 @@ function PortalContent() {
     const updated = await confirmDose(session.token, doseId)
     setDoses(prev => prev.map(d => d.id === doseId ? { ...d, ...updated } : d))
     getAdherence(session.token).then(setAdherence).catch(() => {})
-    getEngagement(session.token).then(setEngagement).catch(() => {})
+  }
+
+  async function handleSubmitCheckIn(input: PatientCheckInInput) {
+    if (!session) return
+    const saved = await submitCheckIn(session.token, input)
+    setCheckIn(saved)
   }
 
   if (error) {
@@ -261,18 +642,9 @@ function PortalContent() {
   const today = new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' })
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', height: '100vh', maxWidth: 440,
-      margin: '0 auto', background: 'var(--mt-bg)', position: 'relative', overflow: 'hidden',
-    }}>
+    <>
       {/* Topbar */}
-      <header style={{
-        height: 56, padding: '0 18px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid var(--mt-border)',
-        background: 'rgba(255,255,255,.9)', backdropFilter: 'blur(8px)',
-        flexShrink: 0, position: 'sticky', top: 0, zIndex: 10,
-      }}>
+      <header className="portal-topbar">
         <MTLogo size={15} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button style={{
@@ -291,15 +663,12 @@ function PortalContent() {
       </header>
 
       {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 96px' }} className="mt-page-in mt-scroll">
+      <div className="portal-body mt-page-in mt-scroll">
         {/* Greeting + mood */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
+        <div className="portal-hero">
           <div style={{ flex: 1 }}>
             <div className="mt-micro" style={{ color: 'var(--mt-muted)', marginBottom: 6 }}>{greeting}</div>
-            <h1 style={{
-              fontSize: 22, fontWeight: 700, color: 'var(--mt-text)',
-              letterSpacing: '-0.02em', lineHeight: 1.2, margin: 0,
-            }}>
+            <h1 className="portal-hero-title">
               {firstName},<br />
               {score >= 80 ? 'vas muy bien.' : score >= 60 ? 'sigue adelante.' : 'un paso a la vez.'}
             </h1>
@@ -307,74 +676,47 @@ function PortalContent() {
           <MoodAvatar score={score} />
         </div>
 
-        {/* Adherence ring card */}
-        <AdherenceCard confirmed={confirmedToday} total={totalToday} />
+        <div className="portal-main-grid">
+          <div className="portal-column">
+            <AdherenceCard confirmed={confirmedToday} total={totalToday} />
+            <CheckInCard checkIn={checkIn} onSubmit={handleSubmitCheckIn} />
+          </div>
 
-        {/* Doses section */}
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--mt-text)', letterSpacing: '-0.01em', margin: 0 }}>
-            Dosis de hoy
-          </h2>
-          <span className="mt-small">{today}</span>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-live="polite">
-          {doses.length === 0 ? (
-            <div style={{
-              background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
-              borderRadius: 14, padding: '32px 24px', textAlign: 'center',
-            }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 12, background: 'var(--mt-success-subtle)',
-                color: 'var(--mt-success)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 12px',
-              }}>
-                <ShieldCheck size={22} />
-              </div>
-              <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--mt-text)', margin: '0 0 4px' }}>
-                No hay dosis programadas para hoy
-              </p>
-              <p style={{ fontSize: 13, color: 'var(--mt-muted)', margin: 0 }}>
-                Revisa tu tratamiento completo si tienes dudas.
-              </p>
+          <div className="portal-column">
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: -2 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--mt-text)', margin: 0 }}>
+                Dosis de hoy
+              </h2>
+              <span className="mt-small">{today}</span>
             </div>
-          ) : (
-            doses.map(dose => (
-              <DoseCard key={dose.id} dose={dose} onConfirm={handleConfirm} />
-            ))
-          )}
-        </div>
 
-        {/* Quick links */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
-          {[
-            { href: '/portal/treatment', icon: ClipboardList, label: 'Mi tratamiento completo', sub: 'Ver todos los medicamentos' },
-            { href: '/portal/history',   icon: Stethoscope,  label: 'Mis consultas',            sub: 'Historial de encuentros' },
-            { href: '/portal/documents', icon: FileText,     label: 'Mis documentos',           sub: 'Resultados y recetas' },
-          ].map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
-                background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
-                borderRadius: 12, textDecoration: 'none', transition: 'border-color .2s',
-              }}
-            >
-              <div style={{
-                width: 40, height: 40, borderRadius: 10,
-                background: 'var(--mt-elevated)', color: 'var(--mt-text-2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                <item.icon size={18} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)' }}>{item.label}</div>
-                <div style={{ fontSize: 13, color: 'var(--mt-muted)', marginTop: 1 }}>{item.sub}</div>
-              </div>
-              <ChevronRight size={16} color="var(--mt-muted)" />
-            </Link>
-          ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-live="polite">
+              {doses.length === 0 ? (
+                <div className="portal-card" style={{ padding: '28px 22px', textAlign: 'center' }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12, background: 'var(--mt-success-subtle)',
+                    color: 'var(--mt-success)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto 12px',
+                  }}>
+                    <ShieldCheck size={22} />
+                  </div>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--mt-text)', margin: '0 0 4px' }}>
+                    No hay dosis programadas para hoy
+                  </p>
+                  <p style={{ fontSize: 13, color: 'var(--mt-muted)', margin: 0 }}>
+                    Revisa tu tratamiento completo si tienes dudas.
+                  </p>
+                </div>
+              ) : (
+                doses.map(dose => (
+                  <DoseCard key={dose.id} dose={dose} onConfirm={handleConfirm} />
+                ))
+              )}
+            </div>
+
+            <LabOrdersCard orders={labOrders} />
+
+          </div>
         </div>
 
         <p style={{
@@ -384,21 +726,7 @@ function PortalContent() {
           Si algo no coincide con las indicaciones recibidas, consulta con tu equipo médico.
         </p>
       </div>
-
-      {/* Bottom nav */}
-      <nav style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        height: 76, padding: '8px 12px 22px',
-        background: 'rgba(255,255,255,.95)', backdropFilter: 'blur(10px)',
-        borderTop: '1px solid var(--mt-border)',
-        display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-      }}>
-        <NavBtn icon={Home}          label="Hoy"        href="/portal"           active />
-        <NavBtn icon={Pill}          label="Plan"       href="/portal/treatment"            />
-        <NavBtn icon={ClipboardList} label="Consultas"  href="/portal/history"              />
-        <NavBtn icon={FileText}      label="Documentos" href="/portal/documents"            />
-      </nav>
-    </div>
+    </>
   )
 }
 

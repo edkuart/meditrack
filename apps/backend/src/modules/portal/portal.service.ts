@@ -2,7 +2,8 @@ import { eq, and, desc, lte, gte, count, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import {
   db, patients, patientAccessTokens, encounters,
-  treatmentPlans, medicationItems, doseEvents, documents,
+  treatmentPlans, medicationItems, doseEvents, documents, patientCheckIns,
+  labOrders, treatmentInterventions,
 } from '../../shared/db/index.ts'
 import {
   generateOpaqueToken, generatePin, hashToken,
@@ -17,7 +18,7 @@ import {
   sendWhatsAppPortalAccessNotification,
 } from '../notifications/notifications.service.ts'
 import { buildEngagementProfile } from './engagement.ts'
-import type { GenerateAccessInput, ValidatePinInput } from './portal.schema.ts'
+import type { GenerateAccessInput, PatientCheckInInput, ValidatePinInput } from './portal.schema.ts'
 
 // ─── Doctor: generate patient access ──────────────────────────────────────────
 
@@ -316,6 +317,10 @@ export async function getActiveTreatments(patientId: string) {
         where: eq(medicationItems.is_active, true),
         orderBy: (m, { asc }) => asc(m.sort_order),
       },
+      interventions: {
+        where: eq(treatmentInterventions.is_active, true),
+        orderBy: (iv, { asc }) => asc(iv.sort_order),
+      },
     },
     orderBy: (t, { desc }) => desc(t.created_at),
   })
@@ -345,6 +350,85 @@ export async function getTodayDosesForPortal(patientId: string) {
     },
     orderBy: (d, { asc }) => asc(d.scheduled_at),
   })
+}
+
+function formatCheckInDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function severityForCheckIn(input: PatientCheckInInput) {
+  const pain = input.pain_score ?? null
+  const temperature = input.temperature_c ?? null
+  const hasRedFlags = input.red_flags.length > 0
+  const highPain = typeof pain === 'number' && pain >= 8
+  const fever = typeof temperature === 'number' && temperature >= 38
+
+  if (hasRedFlags || highPain || fever || input.medication_issue) return 'ALERT' as const
+  if ((typeof pain === 'number' && pain >= 4) || input.symptoms.length > 0 || input.mood === 'worse') return 'WATCH' as const
+  return 'OK' as const
+}
+
+export async function getTodayCheckInForPortal(patientId: string) {
+  return db.query.patientCheckIns.findFirst({
+    where: and(
+      eq(patientCheckIns.patient_id, patientId),
+      eq(patientCheckIns.check_in_date, formatCheckInDate(new Date())),
+    ),
+  })
+}
+
+export async function submitPatientCheckIn(
+  patientId: string,
+  tenantId: string,
+  input: PatientCheckInInput,
+) {
+  const checkInDate = formatCheckInDate(new Date())
+  const severity = severityForCheckIn(input)
+  const values = {
+    tenant_id: tenantId,
+    patient_id: patientId,
+    check_in_date: checkInDate,
+    pain_score: input.pain_score ?? null,
+    temperature_c: input.temperature_c ?? null,
+    symptoms: input.symptoms,
+    red_flags: input.red_flags,
+    medication_issue: input.medication_issue,
+    mood: input.mood ?? null,
+    notes: input.notes?.trim() || null,
+    severity,
+    updated_at: new Date(),
+  }
+
+  const existing = await db.query.patientCheckIns.findFirst({
+    where: and(eq(patientCheckIns.patient_id, patientId), eq(patientCheckIns.check_in_date, checkInDate)),
+    columns: { id: true },
+  })
+
+  const [checkIn] = existing
+    ? await db
+        .update(patientCheckIns)
+        .set(values)
+        .where(eq(patientCheckIns.id, existing.id))
+        .returning()
+    : await db
+        .insert(patientCheckIns)
+        .values(values)
+        .returning()
+
+  await createAuditLog({
+    tenant_id: tenantId,
+    actor_id: patientId,
+    actor_type: 'PATIENT',
+    action: 'CHECK_IN_SUBMITTED',
+    resource_type: 'PATIENT_CHECK_IN',
+    resource_id: checkIn.id,
+    context: { patient_id: patientId, severity },
+  })
+
+  return checkIn
 }
 
 export async function confirmDoseAsPatient(
@@ -414,6 +498,41 @@ export async function getPatientDocuments(patientId: string) {
     },
     orderBy: (d, { desc }) => desc(d.created_at),
     limit: 50,
+  })
+}
+
+export async function getLabOrdersForPortal(patientId: string, tenantId: string) {
+  return db.query.labOrders.findMany({
+    where: and(
+      eq(labOrders.tenant_id, tenantId),
+      eq(labOrders.patient_id, patientId),
+    ),
+    columns: {
+      id: true,
+      status: true,
+      notes: true,
+      ordered_at: true,
+      updated_at: true,
+    },
+    with: {
+      doctor: {
+        columns: { first_name: true, last_name: true, specialty: true },
+      },
+      results: {
+        columns: {
+          id: true,
+          panel_name: true,
+          parameter_name: true,
+          value: true,
+          unit: true,
+          status: true,
+          sort_order: true,
+        },
+        orderBy: (r, { asc }) => asc(r.sort_order),
+      },
+    },
+    orderBy: (order, { desc }) => desc(order.ordered_at),
+    limit: 5,
   })
 }
 

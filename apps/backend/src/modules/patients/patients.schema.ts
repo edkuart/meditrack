@@ -17,7 +17,7 @@ export const UpdatePatientSchema = CreatePatientSchema.partial()
 export const SearchPatientsSchema = z.object({
   q: z.string().min(1).max(100).trim().optional(),
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
 })
 
 export type CreatePatientInput = z.infer<typeof CreatePatientSchema>

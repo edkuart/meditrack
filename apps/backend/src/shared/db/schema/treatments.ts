@@ -5,6 +5,14 @@ import { patients } from './patients.ts'
 import { users } from './users.ts'
 import { encounters } from './encounters.ts'
 
+export const interventionTypeEnum = pgEnum('intervention_type', [
+  'EXERCISE',
+  'DIET',
+  'THERAPY',
+  'MONITORING',
+  'OTHER',
+])
+
 export const treatmentStatusEnum = pgEnum('treatment_status', [
   'DRAFT',
   'ACTIVE',
@@ -98,6 +106,28 @@ export const doseEvents = pgTable('dose_events', {
   index('dose_events_medication_status_scheduled_idx').on(table.medication_item_id, table.status, table.scheduled_at),
 ])
 
+// ─── Treatment Intervention ────────────────────────────────────────────────────
+
+export const treatmentInterventions = pgTable('treatment_interventions', {
+  id:                uuid('id').defaultRandom().primaryKey(),
+  tenant_id:         uuid('tenant_id').references(() => tenants.id, { onDelete: 'restrict' }).notNull(),
+  treatment_plan_id: uuid('treatment_plan_id').references(() => treatmentPlans.id, { onDelete: 'cascade' }).notNull(),
+  patient_id:        uuid('patient_id').references(() => patients.id, { onDelete: 'restrict' }).notNull(),
+  type:              interventionTypeEnum('type').default('OTHER').notNull(),
+  title:             varchar('title', { length: 200 }).notNull(),
+  description:       text('description'),
+  frequency:         varchar('frequency', { length: 100 }),
+  duration:          varchar('duration', { length: 50 }),
+  instructions:      text('instructions'),
+  sort_order:        integer('sort_order').default(0).notNull(),
+  is_active:         boolean('is_active').default(true).notNull(),
+  created_at:        timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at:        timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index('treatment_interventions_plan_idx').on(t.treatment_plan_id, t.is_active),
+  index('treatment_interventions_patient_idx').on(t.tenant_id, t.patient_id),
+])
+
 // ─── Relations ─────────────────────────────────────────────────────────────────
 
 export const treatmentPlansRelations = relations(treatmentPlans, ({ one, many }) => ({
@@ -105,7 +135,8 @@ export const treatmentPlansRelations = relations(treatmentPlans, ({ one, many })
   patient: one(patients, { fields: [treatmentPlans.patient_id], references: [patients.id] }),
   encounter: one(encounters, { fields: [treatmentPlans.encounter_id], references: [encounters.id] }),
   created_by_user: one(users, { fields: [treatmentPlans.created_by], references: [users.id] }),
-  medications: many(medicationItems),
+  medications:    many(medicationItems),
+  interventions:  many(treatmentInterventions),
 }))
 
 export const medicationItemsRelations = relations(medicationItems, ({ one, many }) => ({
@@ -118,9 +149,17 @@ export const doseEventsRelations = relations(doseEvents, ({ one }) => ({
   patient: one(patients, { fields: [doseEvents.patient_id], references: [patients.id] }),
 }))
 
-export type TreatmentPlan = typeof treatmentPlans.$inferSelect
-export type NewTreatmentPlan = typeof treatmentPlans.$inferInsert
-export type MedicationItem = typeof medicationItems.$inferSelect
-export type NewMedicationItem = typeof medicationItems.$inferInsert
-export type DoseEvent = typeof doseEvents.$inferSelect
-export type NewDoseEvent = typeof doseEvents.$inferInsert
+export const treatmentInterventionsRelations = relations(treatmentInterventions, ({ one }) => ({
+  treatment_plan: one(treatmentPlans, { fields: [treatmentInterventions.treatment_plan_id], references: [treatmentPlans.id] }),
+  patient:        one(patients,       { fields: [treatmentInterventions.patient_id],        references: [patients.id] }),
+  tenant:         one(tenants,        { fields: [treatmentInterventions.tenant_id],          references: [tenants.id] }),
+}))
+
+export type TreatmentPlan         = typeof treatmentPlans.$inferSelect
+export type NewTreatmentPlan      = typeof treatmentPlans.$inferInsert
+export type MedicationItem        = typeof medicationItems.$inferSelect
+export type NewMedicationItem     = typeof medicationItems.$inferInsert
+export type DoseEvent             = typeof doseEvents.$inferSelect
+export type NewDoseEvent          = typeof doseEvents.$inferInsert
+export type TreatmentIntervention    = typeof treatmentInterventions.$inferSelect
+export type NewTreatmentIntervention = typeof treatmentInterventions.$inferInsert

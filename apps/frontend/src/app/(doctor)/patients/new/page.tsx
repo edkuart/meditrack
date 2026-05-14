@@ -1,139 +1,198 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, UserPlus } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useAuth } from '@/lib/doctor/auth-context'
 import { createPatient } from '@/lib/doctor/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+
+const schema = z.object({
+  first_name: z.string().min(1, 'Nombre requerido'),
+  last_name: z.string().min(1, 'Apellido requerido'),
+  email: z.string().email('Correo inválido').optional().or(z.literal('')),
+  phone: z.string().optional(),
+  id_number: z.string().optional(),
+  date_of_birth: z.string().optional(),
+  sex: z.enum(['male', 'female', 'other', '']).optional(),
+  notes: z.string().optional(),
+})
+
+type FormValues = z.infer<typeof schema>
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null
+  return <p className="text-xs text-red-500 mt-1">{message}</p>
+}
 
 export default function NewPatientPage() {
   const router = useRouter()
   const { token } = useAuth()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
 
-  const [form, setForm] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    id_number: '',
-    date_of_birth: '',
-    sex: '',
-    notes: '',
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { sex: '' },
   })
 
-  function set(field: string) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm(prev => ({ ...prev, [field]: e.target.value }))
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function onSubmit(data: FormValues) {
     if (!token) return
-    setError('')
-    setLoading(true)
     try {
       const patient = await createPatient(token, {
-        first_name: form.first_name,
-        last_name: form.last_name,
-        email: form.email || undefined,
-        phone: form.phone || undefined,
-        id_number: form.id_number || undefined,
-        date_of_birth: form.date_of_birth || undefined,
-        sex: form.sex || undefined,
-        notes: form.notes || undefined,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+        id_number: data.id_number || undefined,
+        date_of_birth: data.date_of_birth || undefined,
+        sex: data.sex || undefined,
+        notes: data.notes || undefined,
       })
       router.push(`/patients/${patient.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al crear el paciente')
-    } finally {
-      setLoading(false)
+      setError('root', {
+        message: err instanceof Error ? err.message : 'Error al crear el paciente',
+      })
     }
   }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/patients" className="text-slate-400 hover:text-slate-600 transition-colors">
-          <ArrowLeft size={20} />
-        </Link>
-        <h1 className="text-xl font-bold text-slate-800">Nuevo paciente</h1>
+        <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-slate-400">
+          <Link href="/patients"><ArrowLeft size={18} /></Link>
+        </Button>
+        <div>
+          <h1 className="text-xl font-bold text-slate-800">Nuevo paciente</h1>
+          <p className="text-sm text-slate-400">Crea la ficha clínica del paciente</p>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col gap-5">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        {/* Datos personales */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-slate-700">Datos personales</CardTitle>
+            <CardDescription className="text-xs">Información de identificación del paciente</CardDescription>
+          </CardHeader>
+          <Separator className="mb-4" />
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="first_name" className="text-xs font-medium text-slate-600">
+                  Nombre <span className="text-red-400">*</span>
+                </Label>
+                <Input id="first_name" {...register('first_name')} className="h-9 text-sm" />
+                <FieldError message={errors.first_name?.message} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="last_name" className="text-xs font-medium text-slate-600">
+                  Apellido <span className="text-red-400">*</span>
+                </Label>
+                <Input id="last_name" {...register('last_name')} className="h-9 text-sm" />
+                <FieldError message={errors.last_name?.message} />
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-600">Nombre *</label>
-            <input required value={form.first_name} onChange={set('first_name')}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-600">Apellido *</label>
-            <input required value={form.last_name} onChange={set('last_name')}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
-          </div>
-        </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="id_number" className="text-xs font-medium text-slate-600">N° Cédula / ID</Label>
+                <Input id="id_number" {...register('id_number')} className="h-9 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="date_of_birth" className="text-xs font-medium text-slate-600">Fecha de nacimiento</Label>
+                <Input id="date_of_birth" type="date" {...register('date_of_birth')} className="h-9 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Sexo</Label>
+                <Select onValueChange={val => setValue('sex', val as FormValues['sex'])}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Masculino</SelectItem>
+                    <SelectItem value="female">Femenino</SelectItem>
+                    <SelectItem value="other">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-600">Correo electrónico</label>
-            <input type="email" value={form.email} onChange={set('email')}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-600">WhatsApp del paciente</label>
-            <input type="tel" value={form.phone} onChange={set('phone')} placeholder="+502 5555 5555"
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
-            <p className="text-xs text-slate-400">Incluye código de país para enviar el acceso por WhatsApp.</p>
-          </div>
-        </div>
+        {/* Contacto */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-slate-700">Contacto</CardTitle>
+            <CardDescription className="text-xs">Necesario para enviar el acceso al portal</CardDescription>
+          </CardHeader>
+          <Separator className="mb-4" />
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs font-medium text-slate-600">Correo electrónico</Label>
+                <Input id="email" type="email" {...register('email')} className="h-9 text-sm" />
+                <FieldError message={errors.email?.message} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="phone" className="text-xs font-medium text-slate-600">WhatsApp</Label>
+                <Input id="phone" type="tel" placeholder="+502 5555 5555" {...register('phone')} className="h-9 text-sm" />
+                <p className="text-xs text-slate-400">Con código de país para el acceso por WhatsApp</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="flex flex-col gap-1 col-span-1">
-            <label className="text-sm font-medium text-slate-600">N° de cédula / ID</label>
-            <input value={form.id_number} onChange={set('id_number')}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-600">Fecha de nacimiento</label>
-            <input type="date" value={form.date_of_birth} onChange={set('date_of_birth')}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-600">Sexo</label>
-            <select value={form.sex} onChange={set('sex')}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300">
-              <option value="">—</option>
-              <option value="male">Masculino</option>
-              <option value="female">Femenino</option>
-              <option value="other">Otro</option>
-            </select>
-          </div>
-        </div>
+        {/* Notas clínicas */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-slate-700">Notas clínicas</CardTitle>
+          </CardHeader>
+          <Separator className="mb-4" />
+          <CardContent>
+            <Textarea
+              {...register('notes')}
+              rows={3}
+              placeholder="Alergias, antecedentes relevantes, condiciones crónicas…"
+              className="text-sm resize-none"
+            />
+          </CardContent>
+        </Card>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Notas clínicas</label>
-          <textarea value={form.notes} onChange={set('notes')} rows={3}
-            placeholder="Alergias, antecedentes relevantes..."
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" />
-        </div>
-
-        {error && (
-          <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{error}</p>
+        {errors.root && (
+          <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 border border-red-200">
+            {errors.root.message}
+          </p>
         )}
 
         <div className="flex gap-3 justify-end">
-          <Link href="/patients"
-            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors">
-            Cancelar
-          </Link>
-          <button type="submit" disabled={loading}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium disabled:opacity-60 hover:bg-blue-600 transition-colors">
-            {loading ? <><Loader2 size={14} className="animate-spin" /> Guardando...</> : 'Crear paciente'}
-          </button>
+          <Button variant="ghost" asChild className="text-slate-600">
+            <Link href="/patients">Cancelar</Link>
+          </Button>
+          <Button type="submit" disabled={isSubmitting} className="gap-2 bg-blue-600 hover:bg-blue-700">
+            {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+            Crear paciente
+          </Button>
         </div>
       </form>
     </div>

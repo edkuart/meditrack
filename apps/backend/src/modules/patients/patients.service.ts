@@ -1,5 +1,5 @@
 import { eq, and, or, ilike, sql, desc, count } from 'drizzle-orm'
-import { db, patients, encounters, treatmentPlans } from '../../shared/db/index.ts'
+import { db, patients, encounters, treatmentPlans, patientCheckIns } from '../../shared/db/index.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { assertPatientLimit } from '../../shared/services/limits.service.ts'
 import { NotFoundError, ConflictError } from '../../shared/errors.ts'
@@ -162,6 +162,23 @@ export async function getPatientById(
       active_treatment: activeTreatment ?? null,
     },
   }
+}
+
+export async function listPatientCheckIns(tenantId: string, patientId: string, limit = 14) {
+  const patient = await db.query.patients.findFirst({
+    where: and(eq(patients.tenant_id, tenantId), eq(patients.id, patientId)),
+    columns: { id: true },
+  })
+  if (!patient) throw new NotFoundError('Patient')
+
+  return db.query.patientCheckIns.findMany({
+    where: and(
+      eq(patientCheckIns.tenant_id, tenantId),
+      eq(patientCheckIns.patient_id, patientId),
+    ),
+    orderBy: (c, { desc }) => desc(c.check_in_date),
+    limit,
+  })
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────

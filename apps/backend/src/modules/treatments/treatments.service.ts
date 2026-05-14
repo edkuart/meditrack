@@ -1,11 +1,15 @@
-import { eq, and, gte, lte, inArray, count } from 'drizzle-orm'
+import { eq, and, gte, lte, inArray, count, asc } from 'drizzle-orm'
 import {
   db, treatmentPlans, medicationItems, doseEvents,
-  encounters, patients, auditLogs,
+  encounters, patients, auditLogs, treatmentInterventions,
 } from '../../shared/db/index.ts'
 import { NotFoundError, ForbiddenError, AppError } from '../../shared/errors.ts'
 import { generateDoseSchedule } from './schedule.engine.ts'
-import type { CreateTreatmentInput, ConfirmDoseInput } from './treatments.schema.ts'
+import type {
+  CreateTreatmentInput, ConfirmDoseInput,
+  InterventionItemInput, UpdateInterventionInput,
+} from './treatments.schema.ts'
+
 
 // ─── Create treatment plan ─────────────────────────────────────────────────────
 
@@ -17,9 +21,8 @@ export async function createTreatment(
   input: CreateTreatmentInput,
 ) {
   // Calculate end_date from max duration across medications
-  const maxDuration = Math.max(
-    ...input.medications.map((m) => m.duration_days ?? 1),
-  )
+  const medDurations = input.medications.map(m => m.duration_days ?? 1)
+  const maxDuration = medDurations.length > 0 ? Math.max(...medDurations) : 30
   const endDate = new Date(input.start_date)
   endDate.setDate(endDate.getDate() + maxDuration - 1)
 
@@ -45,13 +48,27 @@ export async function createTreatment(
       status: 'DRAFT',
     }).returning()
 
-    const itemRows = await tx.insert(medicationItems).values(
-      input.medications.map((med, i) => ({
-        treatment_plan_id: plan.id,
-        ...med,
-        sort_order: med.sort_order ?? i,
-      })),
-    ).returning()
+    const itemRows = input.medications.length > 0
+      ? await tx.insert(medicationItems).values(
+          input.medications.map((med, i) => ({
+            treatment_plan_id: plan.id,
+            ...med,
+            sort_order: med.sort_order ?? i,
+          })),
+        ).returning()
+      : []
+
+    const interventionRows = input.interventions.length > 0
+      ? await tx.insert(treatmentInterventions).values(
+          input.interventions.map((iv, i) => ({
+            tenant_id:         tenantId,
+            treatment_plan_id: plan.id,
+            patient_id:        encounter.patient_id,
+            ...iv,
+            sort_order: iv.sort_order ?? i,
+          })),
+        ).returning()
+      : []
 
     await tx.insert(auditLogs).values({
       tenant_id: tenantId,
@@ -64,7 +81,7 @@ export async function createTreatment(
       context: { encounter_id: encounterId, patient_id: encounter.patient_id },
     })
 
-    return { ...plan, medications: itemRows }
+    return { ...plan, medications: itemRows, interventions: interventionRows }
   })
 }
 
@@ -236,6 +253,10 @@ export async function getTreatmentById(tenantId: string, planId: string) {
         where: eq(medicationItems.is_active, true),
         orderBy: (m, { asc }) => asc(m.sort_order),
       },
+      interventions: {
+        where: eq(treatmentInterventions.is_active, true),
+        orderBy: asc(treatmentInterventions.sort_order),
+      },
     },
   })
   if (!plan || plan.tenant_id !== tenantId) throw new NotFoundError('Treatment plan')
@@ -256,9 +277,76 @@ export async function listTreatmentsByPatient(tenantId: string, patientId: strin
         where: eq(medicationItems.is_active, true),
         orderBy: (m, { asc }) => asc(m.sort_order),
       },
+      interventions: {
+        where: eq(treatmentInterventions.is_active, true),
+        orderBy: asc(treatmentInterventions.sort_order),
+      },
     },
     orderBy: (plans, { desc }) => desc(plans.created_at),
   })
+}
+
+// ─── Intervention CRUD ────────────────────────────────────────────────────────
+
+export async function addIntervention(
+  tenantId: string,
+  planId: string,
+  input: InterventionItemInput,
+) {
+  const plan = await db.query.treatmentPlans.findFirst({
+    where: and(eq(treatmentPlans.tenant_id, tenantId), eq(treatmentPlans.id, planId)),
+    columns: { id: true, patient_id: true, status: true },
+  })
+  if (!plan) throw new NotFoundError('Treatment plan')
+
+  const [row] = await db.insert(treatmentInterventions).values({
+    tenant_id:         tenantId,
+    treatment_plan_id: planId,
+    patient_id:        plan.patient_id,
+    ...input,
+  }).returning()
+
+  return row
+}
+
+export async function updateIntervention(
+  tenantId: string,
+  interventionId: string,
+  input: UpdateInterventionInput,
+) {
+  const existing = await db.query.treatmentInterventions.findFirst({
+    where: and(
+      eq(treatmentInterventions.tenant_id, tenantId),
+      eq(treatmentInterventions.id, interventionId),
+      eq(treatmentInterventions.is_active, true),
+    ),
+    columns: { id: true },
+  })
+  if (!existing) throw new NotFoundError('Intervention')
+
+  const [updated] = await db
+    .update(treatmentInterventions)
+    .set({ ...input, updated_at: new Date() })
+    .where(eq(treatmentInterventions.id, interventionId))
+    .returning()
+
+  return updated
+}
+
+export async function deleteIntervention(tenantId: string, interventionId: string) {
+  const existing = await db.query.treatmentInterventions.findFirst({
+    where: and(
+      eq(treatmentInterventions.tenant_id, tenantId),
+      eq(treatmentInterventions.id, interventionId),
+    ),
+    columns: { id: true },
+  })
+  if (!existing) throw new NotFoundError('Intervention')
+
+  await db
+    .update(treatmentInterventions)
+    .set({ is_active: false, updated_at: new Date() })
+    .where(eq(treatmentInterventions.id, interventionId))
 }
 
 // ─── Dose confirmation (patient-facing) ──────────────────────────────────────

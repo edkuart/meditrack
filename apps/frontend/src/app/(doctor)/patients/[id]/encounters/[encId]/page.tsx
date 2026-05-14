@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
+  Activity, ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
   ChevronDown, ChevronUp, ClipboardList, Copy, ExternalLink, FileText, Link2,
   MessageCircle, Save, Sparkles, Stethoscope, Wand2,
 } from 'lucide-react'
@@ -38,6 +38,10 @@ const ENC_LABELS: Record<string, string> = {
 
 const FREQ_LABELS: Record<string, string> = {
   DAILY: 'Diario', EVERY_X_HOURS: 'Cada X horas', WEEKLY: 'Semanal', AS_NEEDED: 'Según necesidad',
+}
+
+const INTERV_TYPE_LABELS: Record<string, string> = {
+  EXERCISE: 'Ejercicio', DIET: 'Dieta', THERAPY: 'Terapia', MONITORING: 'Monitoreo', OTHER: 'Otro',
 }
 
 const DOSE_UNITS = ['mg', 'ml', 'mcg', 'g', 'UI', 'tableta(s)', 'cápsula(s)', 'gota(s)', 'ampolla(s)', 'parche(s)']
@@ -123,6 +127,21 @@ function emptyMedForm(): MedForm {
     times_per_day_count: '1', times_per_day: ['08:00'],
     duration_days: '30', with_food: false, special_instructions: '',
   }
+}
+
+// ─── Intervention form ────────────────────────────────────────────────────────
+
+interface IntervForm {
+  type: string
+  title: string
+  description: string
+  frequency: string
+  duration: string
+  instructions: string
+}
+
+function emptyIntervForm(): IntervForm {
+  return { type: 'OTHER', title: '', description: '', frequency: '', duration: '', instructions: '' }
 }
 
 // ─── Shared field styles ──────────────────────────────────────────────────────
@@ -388,6 +407,128 @@ function StepMarker({ number, title }: { number: number; title: string }) {
   )
 }
 
+// ─── Intervention form panel ──────────────────────────────────────────────────
+
+function IntervFormPanel({
+  intervForm,
+  setIntervForm,
+  onAdd,
+  onCancel,
+}: {
+  intervForm: IntervForm
+  setIntervForm: React.Dispatch<React.SetStateAction<IntervForm>>
+  onAdd: () => void
+  onCancel: () => void
+}) {
+  const set = <K extends keyof IntervForm>(key: K) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setIntervForm(p => ({ ...p, [key]: e.target.value }))
+
+  return (
+    <div style={{
+      borderRadius: 12, border: '1px solid var(--mt-border)',
+      background: 'var(--mt-surface)', overflow: 'hidden',
+    }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--mt-border)', background: 'var(--mt-bg)' }}>
+        <StepMarker number={3} title="Agregar intervención" />
+      </div>
+      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label style={fldLabel}>Tipo</label>
+            <select value={intervForm.type} onChange={set('type')} onFocus={focusRing} onBlur={blurRing} style={fldInput}>
+              <option value="EXERCISE">Ejercicio</option>
+              <option value="DIET">Dieta</option>
+              <option value="THERAPY">Terapia</option>
+              <option value="MONITORING">Monitoreo</option>
+              <option value="OTHER">Otro</option>
+            </select>
+          </div>
+          <div>
+            <label style={fldLabel}>Título *</label>
+            <input value={intervForm.title} onChange={set('title')} onFocus={focusRing} onBlur={blurRing}
+              placeholder="Ej: Caminata 30 min" style={fldInput} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label style={fldLabel}>Frecuencia</label>
+            <input value={intervForm.frequency} onChange={set('frequency')} onFocus={focusRing} onBlur={blurRing}
+              placeholder="Ej: 3 veces por semana" style={fldInput} />
+          </div>
+          <div>
+            <label style={fldLabel}>Duración</label>
+            <input value={intervForm.duration} onChange={set('duration')} onFocus={focusRing} onBlur={blurRing}
+              placeholder="Ej: 4 semanas" style={fldInput} />
+          </div>
+        </div>
+        <div>
+          <label style={fldLabel}>Instrucciones</label>
+          <input value={intervForm.instructions} onChange={set('instructions')} onFocus={focusRing} onBlur={blurRing}
+            placeholder="Indicaciones adicionales" style={fldInput} />
+        </div>
+      </div>
+      <div style={{
+        padding: '10px 14px', borderTop: '1px solid var(--mt-border)',
+        background: 'var(--mt-bg)', display: 'flex', justifyContent: 'flex-end', gap: 8,
+      }}>
+        <button type="button" onClick={onCancel} style={{
+          height: 34, padding: '0 14px', borderRadius: 8, border: '1px solid var(--mt-border)',
+          background: 'var(--mt-surface)', fontSize: 13, color: 'var(--mt-text-2)',
+          cursor: 'pointer', fontFamily: 'var(--mt-font)',
+        }}>Cancelar</button>
+        <button type="button" onClick={onAdd} disabled={!intervForm.title.trim()} style={{
+          height: 34, padding: '0 16px', borderRadius: 8, border: 'none',
+          background: 'var(--mt-primary)', color: '#fff', fontSize: 13, fontWeight: 500,
+          cursor: 'pointer', fontFamily: 'var(--mt-font)',
+          opacity: !intervForm.title.trim() ? 0.5 : 1,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+        }}>
+          <Plus size={14} />
+          Agregar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function InterventionCard({ interv, onRemove }: { interv: IntervForm; onRemove: () => void }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+      borderRadius: 10, border: '1px solid var(--mt-border)',
+      background: 'var(--mt-surface)', boxShadow: 'var(--mt-shadow-xs)',
+    }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+        background: 'oklch(97% 0.02 160)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Activity size={15} color="#059669" />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)' }}>{interv.title}</div>
+        <div style={{ fontSize: 12, color: 'var(--mt-text-2)', marginTop: 2 }}>
+          {INTERV_TYPE_LABELS[interv.type] ?? interv.type}
+          {interv.frequency && ` · ${interv.frequency}`}
+          {interv.duration && ` · ${interv.duration}`}
+        </div>
+      </div>
+      <button
+        onClick={onRemove}
+        style={{
+          width: 28, height: 28, borderRadius: 6, border: 'none', background: 'transparent',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--mt-muted)', transition: 'color .2s', flexShrink: 0,
+        }}
+        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--mt-danger)')}
+        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--mt-muted)')}
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  )
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function EncounterPage() {
@@ -421,6 +562,9 @@ export default function EncounterPage() {
   const [medForm, setMedForm] = useState<MedForm>(emptyMedForm())
   const [savingTreatment, setSavingTreatment] = useState(false)
   const [treatmentError, setTreatmentError] = useState('')
+  const [interventions, setInterventions] = useState<IntervForm[]>([])
+  const [showIntervForm, setShowIntervForm] = useState(false)
+  const [intervForm, setIntervForm] = useState<IntervForm>(emptyIntervForm())
   const [activating, setActivating] = useState(false)
   const [closing, setClosing] = useState(false)
   const [showTools, setShowTools] = useState(false)
@@ -542,8 +686,15 @@ export default function EncounterPage() {
     setShowMedForm(false)
   }
 
+  function addInterventionItem() {
+    if (!intervForm.title.trim()) return
+    setInterventions(prev => [...prev, { ...intervForm }])
+    setIntervForm(emptyIntervForm())
+    setShowIntervForm(false)
+  }
+
   async function saveTreatment() {
-    if (!token || medications.length === 0) return
+    if (!token || (medications.length === 0 && interventions.length === 0)) return
     setSavingTreatment(true)
     setTreatmentError('')
     try {
@@ -564,9 +715,19 @@ export default function EncounterPage() {
           special_instructions: m.special_instructions || undefined,
           sort_order: i,
         })),
+        interventions: interventions.map((iv, i) => ({
+          type: iv.type as 'EXERCISE' | 'DIET' | 'THERAPY' | 'MONITORING' | 'OTHER',
+          title: iv.title,
+          description: iv.description || undefined,
+          frequency: iv.frequency || undefined,
+          duration: iv.duration || undefined,
+          instructions: iv.instructions || undefined,
+          sort_order: i,
+        })),
       })
       setTreatment(plan)
       setMedications([])
+      setInterventions([])
       setSelectedProtocolId(null)
     } catch (err) {
       setTreatmentError(err instanceof Error ? err.message : 'Error al guardar el tratamiento')
@@ -956,7 +1117,7 @@ export default function EncounterPage() {
 
               {showTreatmentDetails && (
                 <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-4">
                     <div>
                       <p className="text-xs font-medium uppercase text-slate-400">Inicio</p>
                       <p className="mt-1 text-sm text-slate-700">{new Date(treatment.start_date).toLocaleDateString('es')}</p>
@@ -971,6 +1132,10 @@ export default function EncounterPage() {
                       <p className="text-xs font-medium uppercase text-slate-400">Medicamentos</p>
                       <p className="mt-1 text-sm text-slate-700">{treatment.medications.length}</p>
                     </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase text-slate-400">Intervenciones</p>
+                      <p className="mt-1 text-sm text-slate-700">{(treatment.interventions ?? []).length}</p>
+                    </div>
                   </div>
 
                   <div className="mt-4 border-t border-blue-100 pt-4">
@@ -982,33 +1147,56 @@ export default function EncounterPage() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-2">
-                {(treatment.medications ?? []).map(med => (
-                  <div key={med.id} className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50">
-                    <Pill size={14} className="text-blue-500 mt-0.5 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-800">{med.drug_name}</p>
-                      <p className="text-xs text-slate-500">
-                        {med.dose_amount} {med.dose_unit}
-                        {med.presentation ? ` · ${med.presentation}` : ''}
-                        {med.route ? ` · ${med.route}` : ''}
-                        {' · '}{FREQ_LABELS[med.frequency_type] ?? med.frequency_type}
-                        {med.frequency_type === 'EVERY_X_HOURS' && med.frequency_value && ` c/${med.frequency_value}h`}
-                        {med.frequency_type === 'DAILY' && med.times_per_day && ` (${med.times_per_day.join(', ')})`}
-                        {med.duration_days && ` · ${med.duration_days} días`}
-                      </p>
-                      {showTreatmentDetails && (
-                        <div className="mt-2 flex flex-col gap-1 text-xs text-slate-500">
-                          <p>{med.with_food ? 'Tomar con alimentos.' : 'Sin indicación de alimentos.'}</p>
-                          {med.special_instructions && (
-                            <p className="whitespace-pre-wrap text-slate-600">{med.special_instructions}</p>
-                          )}
-                        </div>
-                      )}
+              {(treatment.medications ?? []).length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {(treatment.medications ?? []).map(med => (
+                    <div key={med.id} className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50">
+                      <Pill size={14} className="text-blue-500 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">{med.drug_name}</p>
+                        <p className="text-xs text-slate-500">
+                          {med.dose_amount} {med.dose_unit}
+                          {med.presentation ? ` · ${med.presentation}` : ''}
+                          {med.route ? ` · ${med.route}` : ''}
+                          {' · '}{FREQ_LABELS[med.frequency_type] ?? med.frequency_type}
+                          {med.frequency_type === 'EVERY_X_HOURS' && med.frequency_value && ` c/${med.frequency_value}h`}
+                          {med.frequency_type === 'DAILY' && med.times_per_day && ` (${med.times_per_day.join(', ')})`}
+                          {med.duration_days && ` · ${med.duration_days} días`}
+                        </p>
+                        {showTreatmentDetails && (
+                          <div className="mt-2 flex flex-col gap-1 text-xs text-slate-500">
+                            <p>{med.with_food ? 'Tomar con alimentos.' : 'Sin indicación de alimentos.'}</p>
+                            {med.special_instructions && (
+                              <p className="whitespace-pre-wrap text-slate-600">{med.special_instructions}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+
+              {(treatment.interventions ?? []).length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {(treatment.interventions ?? []).map(iv => (
+                    <div key={iv.id} className="flex items-start gap-3 p-3 rounded-xl border border-emerald-100 bg-emerald-50/40">
+                      <Activity size={14} className="text-emerald-600 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">{iv.title}</p>
+                        <p className="text-xs text-slate-500">
+                          {INTERV_TYPE_LABELS[iv.type] ?? iv.type}
+                          {iv.frequency ? ` · ${iv.frequency}` : ''}
+                          {iv.duration ? ` · ${iv.duration}` : ''}
+                        </p>
+                        {showTreatmentDetails && iv.instructions && (
+                          <p className="mt-1 whitespace-pre-wrap text-xs text-slate-600">{iv.instructions}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {treatment.status === 'DRAFT' && !isClosed && (
                 <button
@@ -1158,7 +1346,7 @@ export default function EncounterPage() {
                 />
               ) : (
                 <button
-                  onClick={() => setShowMedForm(true)}
+                  onClick={() => { setShowMedForm(true); setShowIntervForm(false) }}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     fontSize: 13, fontWeight: 500, color: 'var(--mt-primary)',
@@ -1170,13 +1358,48 @@ export default function EncounterPage() {
                 </button>
               )}
 
+              {/* Intervention list */}
+              {interventions.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {interventions.map((iv, i) => (
+                    <InterventionCard
+                      key={i}
+                      interv={iv}
+                      onRemove={() => setInterventions(prev => prev.filter((_, j) => j !== i))}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Add intervention form */}
+              {showIntervForm ? (
+                <IntervFormPanel
+                  intervForm={intervForm}
+                  setIntervForm={setIntervForm}
+                  onAdd={addInterventionItem}
+                  onCancel={() => { setShowIntervForm(false); setIntervForm(emptyIntervForm()) }}
+                />
+              ) : (
+                <button
+                  onClick={() => { setShowIntervForm(true); setShowMedForm(false) }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 13, fontWeight: 500, color: '#059669',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+                  }}
+                >
+                  <Plus size={15} />
+                  Agregar intervención
+                </button>
+              )}
+
               {treatmentError && (
                 <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{treatmentError}</p>
               )}
 
-              {medications.length === 0 ? (
+              {medications.length === 0 && interventions.length === 0 ? (
                 <ClinicalInsight tone="amber" title="Plan pendiente">
-                  Agrega al menos un medicamento para guardar el plan de tratamiento.
+                  Agrega al menos un medicamento o una intervención para guardar el plan de tratamiento.
                 </ClinicalInsight>
               ) : (
                 <button

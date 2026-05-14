@@ -33,6 +33,8 @@ Thumbs.db
 # IDE
 .vscode
 .idea
+.claude/
+.tmp-screenshots/
 *.swp
 *.swo
 
@@ -41,3 +43,5 @@ coverage
 
 # Uploads (local dev only)
 uploads/
+
+.vercel

@@ -4,7 +4,7 @@ import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 import { verifyPatientToken } from '../../shared/services/token.service.ts'
 import { UnauthorizedError } from '../../shared/errors.ts'
 import {
-  GenerateAccessSchema, ValidateMagicLinkSchema, ValidatePinSchema,
+  GenerateAccessSchema, PatientCheckInSchema, ValidateMagicLinkSchema, ValidatePinSchema,
 } from './portal.schema.ts'
 import * as portalService from './portal.service.ts'
 import { rateLimit } from '../../shared/middleware/rate-limit.middleware.ts'
@@ -112,6 +112,18 @@ router.get('/portal/doses/today', requirePatient, async (c) => {
   return c.json({ success: true, data })
 })
 
+router.get('/portal/check-ins/today', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.getTodayCheckInForPortal(p.sub)
+  return c.json({ success: true, data })
+})
+
+router.post('/portal/check-ins', requirePatient, zValidator('json', PatientCheckInSchema), async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.submitPatientCheckIn(p.sub, p.tenant_id, c.req.valid('json'))
+  return c.json({ success: true, data }, 201)
+})
+
 router.post('/portal/doses/:id/confirm', requirePatient, async (c) => {
   const p = c.get('patient')
   const body = await c.req.json().catch(() => ({}))
@@ -130,6 +142,12 @@ router.get('/portal/history', requirePatient, async (c) => {
 router.get('/portal/documents', requirePatient, async (c) => {
   const p = c.get('patient')
   const data = await portalService.getPatientDocuments(p.sub)
+  return c.json({ success: true, data })
+})
+
+router.get('/portal/lab/orders', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.getLabOrdersForPortal(p.sub, p.tenant_id)
   return c.json({ success: true, data })
 })
 

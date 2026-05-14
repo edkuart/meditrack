@@ -7,18 +7,20 @@ import {
   ArrowLeft, FileText, Plus, ChevronUp, ChevronDown,
   QrCode, Link2, Loader2, ExternalLink, Download, MessageCircle,
   Activity, CalendarClock, ClipboardList, Pill, Stethoscope, UserRound,
-  ShieldCheck, Trash2, AlertTriangle, Copy,
+  ShieldCheck, Trash2, AlertTriangle, Copy, FlaskConical,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   getPatient, listEncounters, createEncounter, listDocuments,
   generatePortalAccess, getPatientFhirBundle, listPatientTreatments,
-  type Patient, type Encounter, type Document, type AccessResult, type TreatmentPlan,
+  listPatientCheckIns,
+  type Patient, type Encounter, type Document, type AccessResult, type TreatmentPlan, type PatientCheckIn,
 } from '@/lib/doctor/api'
 import {
   getPatientConsents, recordConsent, withdrawConsent, exportPatientData, anonymizePatient,
   type PatientConsent, type ConsentType,
 } from '@/lib/doctor/compliance-api'
+import { listLabOrders, ORDER_STATUS_CONFIG, type LabOrder } from '@/lib/doctor/lab-api'
 import { DocumentUploader } from '@/components/doctor/DocumentUploader'
 import { DocumentList } from '@/components/doctor/DocumentList'
 import { AdherenceCalendar } from '@/components/doctor/AdherenceCalendar'
@@ -262,7 +264,7 @@ const ENC_TYPES = [
   { value: 'EMERGENCY', label: 'Urgencia' },
 ]
 
-type PatientTab = 'summary' | 'encounters' | 'treatments' | 'adherence' | 'documents' | 'access' | 'compliance'
+type PatientTab = 'summary' | 'encounters' | 'treatments' | 'adherence' | 'documents' | 'lab' | 'access' | 'compliance'
 
 const TABS: Array<{ id: PatientTab; label: string; icon: typeof FileText }> = [
   { id: 'summary', label: 'Resumen', icon: Activity },
@@ -270,6 +272,7 @@ const TABS: Array<{ id: PatientTab; label: string; icon: typeof FileText }> = [
   { id: 'treatments', label: 'Tratamientos', icon: Pill },
   { id: 'adherence', label: 'Adherencia', icon: CalendarClock },
   { id: 'documents', label: 'Documentos', icon: FileText },
+  { id: 'lab', label: 'Laboratorio', icon: FlaskConical },
   { id: 'access', label: 'Portal', icon: Link2 },
   { id: 'compliance', label: 'Cumplimiento', icon: ShieldCheck },
 ]
@@ -318,6 +321,16 @@ function TreatmentCard({ treatment }: { treatment: TreatmentPlan }) {
         {treatment.medications.length > 3 && (
           <p className="text-xs text-slate-400">+{treatment.medications.length - 3} medicamentos más</p>
         )}
+        {(treatment.interventions ?? []).slice(0, 2).map(iv => (
+          <div key={iv.id} className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
+            <Activity size={12} className="shrink-0 text-emerald-600" />
+            <p className="text-xs font-medium text-slate-700">{iv.title}</p>
+            {iv.frequency && <p className="text-xs text-slate-400">· {iv.frequency}</p>}
+          </div>
+        ))}
+        {(treatment.interventions ?? []).length > 2 && (
+          <p className="text-xs text-slate-400">+{(treatment.interventions ?? []).length - 2} intervenciones más</p>
+        )}
       </div>
     </Link>
   )
@@ -335,7 +348,9 @@ export default function PatientProfilePage() {
   const [treatments, setTreatments] = useState<TreatmentPlan[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
   const [adherence, setAdherence] = useState<PatientAdherenceReport | null>(null)
+  const [checkIns, setCheckIns] = useState<PatientCheckIn[]>([])
   const [consents, setConsents] = useState<PatientConsent[]>([])
+  const [labOrders, setLabOrders] = useState<LabOrder[]>([])
   const [loadingPage, setLoadingPage] = useState(true)
   const [activeTab, setActiveTab] = useState<PatientTab>('summary')
 
@@ -369,20 +384,24 @@ export default function PatientProfilePage() {
     if (!token) return
     setLoadingPage(true)
     try {
-      const [p, encs, plans, docs, adh, cons] = await Promise.all([
+      const [p, encs, plans, docs, adh, checks, cons, orders] = await Promise.all([
         getPatient(token, patientId),
         listEncounters(token, patientId),
         listPatientTreatments(token, patientId).catch(() => []),
         listDocuments(token, patientId),
         getPatientAdherence(token, patientId, 30).catch(() => null),
+        listPatientCheckIns(token, patientId, 14).catch(() => []),
         getPatientConsents(token, patientId).catch(() => []),
+        listLabOrders(token, patientId).catch(() => []),
       ])
       setPatient(p)
       setEncounters(encs)
       setTreatments(plans)
       setDocuments(docs)
       setAdherence(adh)
+      setCheckIns(checks)
       setConsents(cons)
+      setLabOrders(orders)
     } finally {
       setLoadingPage(false)
     }
@@ -537,6 +556,13 @@ export default function PatientProfilePage() {
     : adherence && adherence.overall_score >= 50
       ? 'amber'
       : 'red'
+  const latestCheckIn = checkIns[0]
+  const latestCheckInTone: 'green' | 'amber' | 'red' = latestCheckIn?.severity === 'ALERT'
+    ? 'red'
+    : latestCheckIn?.severity === 'WATCH'
+      ? 'amber'
+      : 'green'
+  const alertCheckIns = checkIns.filter(check => check.severity === 'ALERT').length
 
   return (
     <ClinicalPage>
@@ -572,7 +598,7 @@ export default function PatientProfilePage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard icon={Stethoscope} label="Consultas" value={encounters.length} tone="blue" />
         <MetricCard
           icon={Pill}
@@ -587,6 +613,13 @@ export default function PatientProfilePage() {
           value={adherence && adherence.total > 0 ? `${adherence.overall_score}%` : '—'}
           helper={adherence && adherence.total > 0 ? `${adherence.confirmed} de ${adherence.total} dosis` : 'Sin dosis en el periodo'}
           tone={adherence && adherence.total > 0 ? adherenceTone : 'slate'}
+        />
+        <MetricCard
+          icon={Activity}
+          label="Seguimiento"
+          value={checkIns.length > 0 ? `${checkIns.length}` : '—'}
+          helper={alertCheckIns > 0 ? `${alertCheckIns} alerta(s)` : latestCheckIn ? 'Último reporte recibido' : 'Sin check-ins'}
+          tone={latestCheckIn ? latestCheckInTone : 'slate'}
         />
       </div>
 
@@ -634,29 +667,61 @@ export default function PatientProfilePage() {
             )}
           </ClinicalPanel>
 
-          <ClinicalPanel title="Resumen de expediente" icon={ClipboardList}>
-            <div className="flex flex-col gap-3 p-4">
-              <ClinicalInsight tone={activeTreatments.length > 0 ? 'green' : 'blue'} title="Tratamientos">
-                {activeTreatments.length > 0
-                  ? `${activeTreatments.length} tratamiento(s) activo(s) en seguimiento.`
-                  : 'No hay tratamientos activos registrados para este paciente.'}
-              </ClinicalInsight>
-              {adherence && adherence.total > 0 && (
-                <ClinicalInsight tone={adherenceTone} title="Adherencia">
-                  {adherence.overall_score}% en los últimos 30 días, con {adherence.missed} dosis perdidas.
+          <div className="flex flex-col gap-4">
+            <ClinicalPanel title="Seguimiento diario" icon={Activity}>
+              <div className="flex flex-col gap-3 p-4">
+                {latestCheckIn ? (
+                  <>
+                    <ClinicalInsight tone={latestCheckInTone} title={`Último check-in: ${new Date(latestCheckIn.check_in_date).toLocaleDateString('es', { day: 'numeric', month: 'short' })}`}>
+                      Dolor {latestCheckIn.pain_score ?? '—'}/10
+                      {latestCheckIn.temperature_c ? `, temperatura ${latestCheckIn.temperature_c}°C` : ''}
+                      {latestCheckIn.symptoms.length > 0 ? `, síntomas: ${latestCheckIn.symptoms.join(', ')}` : ''}
+                    </ClinicalInsight>
+                    {latestCheckIn.red_flags.length > 0 && (
+                      <ClinicalInsight tone="red" title="Señales de alarma">
+                        {latestCheckIn.red_flags.join(', ')}
+                      </ClinicalInsight>
+                    )}
+                    {latestCheckIn.notes && (
+                      <p className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                        {latestCheckIn.notes}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <EmptyClinicalState
+                    icon={Activity}
+                    title="Sin check-in diario"
+                    description="Cuando el paciente reporte cómo se siente, aparecerá aquí con prioridad clínica."
+                  />
+                )}
+              </div>
+            </ClinicalPanel>
+
+            <ClinicalPanel title="Resumen de expediente" icon={ClipboardList}>
+              <div className="flex flex-col gap-3 p-4">
+                <ClinicalInsight tone={activeTreatments.length > 0 ? 'green' : 'blue'} title="Tratamientos">
+                  {activeTreatments.length > 0
+                    ? `${activeTreatments.length} tratamiento(s) activo(s) en seguimiento.`
+                    : 'No hay tratamientos activos registrados para este paciente.'}
                 </ClinicalInsight>
-              )}
-              <ClinicalButton
-                icon={Plus}
-                onClick={() => {
-                  setActiveTab('encounters')
-                  setShowNewEnc(true)
-                }}
-              >
-                Nueva consulta
-              </ClinicalButton>
-            </div>
-          </ClinicalPanel>
+                {adherence && adherence.total > 0 && (
+                  <ClinicalInsight tone={adherenceTone} title="Adherencia">
+                    {adherence.overall_score}% en los últimos 30 días, con {adherence.missed} dosis perdidas.
+                  </ClinicalInsight>
+                )}
+                <ClinicalButton
+                  icon={Plus}
+                  onClick={() => {
+                    setActiveTab('encounters')
+                    setShowNewEnc(true)
+                  }}
+                >
+                  Nueva consulta
+                </ClinicalButton>
+              </div>
+            </ClinicalPanel>
+          </div>
         </div>
       )}
 
@@ -1011,6 +1076,76 @@ export default function PatientProfilePage() {
             </div>
           </section>
         </div>
+      )}
+
+      {/* Lab orders */}
+      {activeTab === 'lab' && (
+        <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <FlaskConical size={16} className="text-slate-500" />
+              <h2 className="font-semibold text-slate-800">Órdenes de laboratorio</h2>
+              <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">
+                {labOrders.length}
+              </span>
+            </div>
+            <Link
+              href={`/lab/new?patient=${patientId}`}
+              className="flex items-center gap-1 text-sm text-blue-600 font-medium hover:text-blue-700"
+            >
+              <Plus size={15} /> Nueva orden
+            </Link>
+          </div>
+          {labOrders.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-sm text-slate-400 mb-3">No hay órdenes de laboratorio para este paciente.</p>
+              <Link
+                href={`/lab/new?patient=${patientId}`}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 transition-colors"
+              >
+                <Plus size={14} /> Crear primera orden
+              </Link>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {labOrders.map(order => {
+                const cfg = ORDER_STATUS_CONFIG[order.status]
+                const critical = order.results.filter(r => r.status === 'CRITICAL_HIGH' || r.status === 'CRITICAL_LOW').length
+                const abnormal = order.results.filter(r => r.status === 'HIGH' || r.status === 'LOW').length
+                return (
+                  <Link
+                    key={order.id}
+                    href={`/lab/${order.id}`}
+                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-medium text-slate-800">
+                          {new Date(order.ordered_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </span>
+                        <span
+                          className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          style={{ color: cfg.color, background: cfg.bg }}
+                        >
+                          {cfg.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-400">{order.results.length} parámetro{order.results.length !== 1 ? 's' : ''}</span>
+                        {critical > 0 && <span className="font-bold text-red-600">{critical} crítico{critical > 1 ? 's' : ''}</span>}
+                        {critical === 0 && abnormal > 0 && <span className="font-semibold text-amber-600">{abnormal} fuera de rango</span>}
+                        {critical === 0 && abnormal === 0 && order.results.length > 0 && order.results.every(r => r.status === 'NORMAL') && (
+                          <span className="text-emerald-600">Todos normales</span>
+                        )}
+                      </div>
+                    </div>
+                    <ExternalLink size={14} className="text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" />
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </section>
       )}
 
       {/* Documents */}

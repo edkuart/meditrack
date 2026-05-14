@@ -30,6 +30,7 @@ export const auditActionEnum = pgEnum('audit_action', [
   'DOSE_MARKED_MISSED',
   'DOSE_SKIPPED',
   'DOSE_EDIT_WINDOW_EXPIRED',
+  'CHECK_IN_SUBMITTED',
   // Documents
   'DOCUMENT_UPLOADED',
   'DOCUMENT_VIEWED',
@@ -56,6 +57,10 @@ export const auditActionEnum = pgEnum('audit_action', [
   'DATA_EXPORT_REQUESTED',
   'TOS_ACCEPTED',
   'PRIVACY_POLICY_ACCEPTED',
+  // Lab
+  'LAB_ORDER_CREATED',
+  'LAB_ORDER_UPDATED',
+  'LAB_RESULTS_ENTERED',
   // Retention
   'DATA_RETENTION_PURGE',
 ])

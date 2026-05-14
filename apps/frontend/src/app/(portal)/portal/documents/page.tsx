@@ -95,14 +95,15 @@ export default function DocumentsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="portal-body flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-md pb-10">
+    <div className="portal-body">
+    <div className="mx-auto max-w-md">
 
       <div className="flex items-center gap-3 px-5 pb-4 pt-6">
         <Link
@@ -135,6 +136,7 @@ export default function DocumentsPage() {
           </>
         )}
       </div>
+    </div>
     </div>
   )
 }
