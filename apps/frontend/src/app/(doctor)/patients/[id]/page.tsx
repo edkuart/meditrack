@@ -758,7 +758,8 @@ export default function PatientProfilePage() {
             tone: (latestCheckIn ? latestCheckInTone : 'slate') as Tone,
           },
         ].map(({ icon: Icon, label, value, helper, tone }) => {
-          const t = { blue: { bg: '#eff6ff', fg: '#1d4ed8' }, green: { bg: '#f0fdf4', fg: '#15803d' }, amber: { bg: '#fffbeb', fg: '#b45309' }, red: { bg: '#fef2f2', fg: '#b91c1c' }, slate: { bg: '#f8fafc', fg: '#64748b' }, purple: { bg: '#f5f3ff', fg: '#7c3aed' } }[tone] ?? { bg: '#f8fafc', fg: '#64748b' }
+          const toneMap: Record<string, { bg: string; fg: string }> = { blue: { bg: '#eff6ff', fg: '#1d4ed8' }, green: { bg: '#f0fdf4', fg: '#15803d' }, amber: { bg: '#fffbeb', fg: '#b45309' }, red: { bg: '#fef2f2', fg: '#b91c1c' }, slate: { bg: '#f8fafc', fg: '#64748b' }, purple: { bg: '#f5f3ff', fg: '#7c3aed' }, sky: { bg: '#f0f9ff', fg: '#0369a1' } }
+          const t = toneMap[tone] ?? { bg: '#f8fafc', fg: '#64748b' }
           return (
             <div key={label} style={{
               background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
