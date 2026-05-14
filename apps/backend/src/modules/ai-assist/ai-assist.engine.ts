@@ -1,4 +1,9 @@
 export type AiAssistMode = 'SUMMARIZE_ENCOUNTER' | 'SIMPLIFY_FOR_PATIENT'
+export type ClinicalCopilotMode =
+  | 'PREPARE_CONSULTATION'
+  | 'SUGGEST_PATIENT_QUESTIONS'
+  | 'DRAFT_SOAP'
+  | 'REVIEW_CLINICAL_GAPS'
 
 export interface AiAssistDraft {
   mode: AiAssistMode
@@ -7,7 +12,25 @@ export interface AiAssistDraft {
   model: 'local-assist-v1'
 }
 
+export interface ClinicalCopilotDraft {
+  mode: ClinicalCopilotMode
+  model: 'meditrack-copilot-local-v1'
+  safety_notice: string
+  summary: string
+  suggested_questions: string[]
+  clinical_gaps: string[]
+  soft_alerts: string[]
+  soap_draft?: {
+    subjective: string
+    objective: string
+    assessment: string
+    plan: string
+  }
+  evidence: Array<{ label: string; value: string }>
+}
+
 const SAFETY_NOTICE = 'Borrador asistivo: revisar, editar y validar clínicamente antes de guardar. No genera diagnósticos ni indicaciones nuevas.'
+const COPILOT_NOTICE = 'Copiloto clínico asistivo: organiza información y propone preguntas/borradores. El médico debe revisar, corregir y validar antes de usar.'
 
 const SIMPLE_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\badherencia\b/gi, 'cumplimiento del tratamiento'],
@@ -82,4 +105,239 @@ export function buildAiAssistDraft(mode: AiAssistMode, sourceText: string): AiAs
 
 export function isSafeAiAssistMode(mode: string): mode is AiAssistMode {
   return mode === 'SUMMARIZE_ENCOUNTER' || mode === 'SIMPLIFY_FOR_PATIENT'
+}
+
+type SummaryLike = {
+  patient: {
+    first_name: string
+    last_name: string
+    date_of_birth: string | null
+    sex: string | null
+    notes: string | null
+  }
+  problems: Array<{ title: string; status: string; icd10_code: string | null; notes: string | null }>
+  background: Array<{ category: string; content: string }>
+  latest_encounters: Array<{
+    chief_complaint: string | null
+    subjective: string | null
+    objective: string | null
+    assessment: string | null
+    plan: string | null
+    summary: string | null
+  }>
+  latest_vitals: Array<{
+    blood_pressure_systolic: number | null
+    blood_pressure_diastolic: number | null
+    heart_rate: number | null
+    temperature_celsius: string | null
+    oxygen_saturation: number | null
+    recorded_at: Date
+  }>
+  latest_labs: Array<{
+    status: string
+    notes: string | null
+    results: Array<{
+      panel_name: string
+      parameter_name: string
+      value: string | null
+      numeric_value: string | null
+      unit: string | null
+      status: string
+    }>
+  }>
+  treatments: Array<{
+    name: string
+    status: string
+    medications: Array<{ drug_name: string; dose_amount: number; dose_unit: string; frequency_type: string }>
+    interventions?: Array<{ title: string; type: string }>
+  }>
+  pending_review_items: Array<{ title: string; item_type: string; priority: string }>
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>) {
+  return values.find(value => value && value.trim().length > 0)?.trim()
+}
+
+function formatPatientAge(dateOfBirth: string | null) {
+  if (!dateOfBirth) return 'edad no registrada'
+  const birth = new Date(`${dateOfBirth}T00:00:00Z`)
+  if (Number.isNaN(birth.getTime())) return 'edad no registrada'
+  const now = new Date()
+  let years = now.getUTCFullYear() - birth.getUTCFullYear()
+  const monthDelta = now.getUTCMonth() - birth.getUTCMonth()
+  if (monthDelta < 0 || (monthDelta === 0 && now.getUTCDate() < birth.getUTCDate())) years -= 1
+  return `${years} años`
+}
+
+function buildEvidence(summary: SummaryLike): ClinicalCopilotDraft['evidence'] {
+  const evidence: ClinicalCopilotDraft['evidence'] = [
+    {
+      label: 'Paciente',
+      value: `${summary.patient.first_name} ${summary.patient.last_name}, ${formatPatientAge(summary.patient.date_of_birth)}`,
+    },
+  ]
+
+  const activeProblems = summary.problems.filter(problem => problem.status === 'ACTIVE' || problem.status === 'CHRONIC')
+  if (activeProblems.length) {
+    evidence.push({
+      label: 'Problemas activos',
+      value: activeProblems.slice(0, 5).map(problem => problem.title).join('; '),
+    })
+  }
+
+  const allergies = summary.background.find(item => item.category === 'ALERGIAS')
+  if (allergies) evidence.push({ label: 'Alergias', value: allergies.content })
+
+  const meds = summary.treatments
+    .filter(plan => plan.status === 'ACTIVE')
+    .flatMap(plan => plan.medications.map(med => `${med.drug_name} ${med.dose_amount} ${med.dose_unit}`))
+  if (meds.length) evidence.push({ label: 'Tratamiento activo', value: meds.slice(0, 6).join('; ') })
+
+  const lastVitals = summary.latest_vitals[0]
+  if (lastVitals) {
+    const bp = lastVitals.blood_pressure_systolic && lastVitals.blood_pressure_diastolic
+      ? `${lastVitals.blood_pressure_systolic}/${lastVitals.blood_pressure_diastolic} mmHg`
+      : null
+    evidence.push({
+      label: 'Últimos signos vitales',
+      value: [
+        bp,
+        lastVitals.heart_rate ? `FC ${lastVitals.heart_rate}` : null,
+        lastVitals.oxygen_saturation ? `SpO2 ${lastVitals.oxygen_saturation}%` : null,
+        lastVitals.temperature_celsius ? `T ${lastVitals.temperature_celsius} C` : null,
+      ].filter(Boolean).join(', '),
+    })
+  }
+
+  const abnormalLabs = summary.latest_labs.flatMap(order =>
+    order.results
+      .filter(result => result.status !== 'NORMAL' && result.status !== 'PENDING')
+      .map(result => `${result.parameter_name}: ${result.value ?? result.numeric_value ?? 'sin valor'} ${result.unit ?? ''} (${result.status})`),
+  )
+  if (abnormalLabs.length) evidence.push({ label: 'Labs fuera de rango', value: abnormalLabs.slice(0, 6).join('; ') })
+
+  return evidence
+}
+
+function buildQuestions(summary: SummaryLike) {
+  const questions = new Set<string>()
+  questions.add('¿Cuál es el síntoma o preocupación principal hoy y desde cuándo inició?')
+  questions.add('¿Ha tenido signos de alarma como dolor torácico, dificultad respiratoria, fiebre persistente, desmayo o deterioro rápido?')
+
+  if (summary.problems.some(problem => /hipertensi|presi[oó]n/i.test(problem.title))) {
+    questions.add('¿Qué cifras de presión ha registrado en casa y en qué horarios?')
+    questions.add('¿Ha olvidado dosis, cambiado dosis o suspendido algún medicamento para la presión?')
+  }
+
+  if (summary.problems.some(problem => /diabetes|gluc/i.test(problem.title))) {
+    questions.add('¿Qué valores de glucosa ha observado recientemente y ha tenido síntomas de hipoglucemia?')
+  }
+
+  if (!summary.background.some(item => item.category === 'ALERGIAS')) {
+    questions.add('¿Tiene alergias a medicamentos, alimentos o sustancias?')
+  }
+
+  if (summary.treatments.some(plan => plan.status === 'ACTIVE')) {
+    questions.add('¿Ha podido seguir el tratamiento tal como fue indicado y ha notado efectos secundarios?')
+  }
+
+  return Array.from(questions).slice(0, 8)
+}
+
+function buildGaps(summary: SummaryLike) {
+  const gaps: string[] = []
+  if (!summary.background.some(item => item.category === 'ALERGIAS')) gaps.push('Alergias no documentadas de forma estructurada.')
+  if (!summary.background.some(item => item.category === 'MEDICAMENTOS')) gaps.push('Medicamentos actuales externos no documentados como antecedente.')
+  if (!summary.latest_vitals.length) gaps.push('No hay signos vitales recientes registrados.')
+  if (!summary.problems.length) gaps.push('Lista de problemas clínicos vacía.')
+  if (summary.pending_review_items.length) gaps.push(`${summary.pending_review_items.length} item(s) clínicos pendientes de revisión.`)
+  return gaps
+}
+
+function buildSoftAlerts(summary: SummaryLike) {
+  const alerts: string[] = []
+  const lastVitals = summary.latest_vitals[0]
+  if (lastVitals?.blood_pressure_systolic && lastVitals.blood_pressure_diastolic) {
+    if (lastVitals.blood_pressure_systolic >= 180 || lastVitals.blood_pressure_diastolic >= 120) {
+      alerts.push('Última presión registrada en rango severamente elevado; confirmar medición y síntomas de alarma.')
+    } else if (lastVitals.blood_pressure_systolic >= 140 || lastVitals.blood_pressure_diastolic >= 90) {
+      alerts.push('Última presión registrada por encima de meta usual; revisar contexto clínico y adherencia.')
+    }
+  }
+  if (lastVitals?.oxygen_saturation && lastVitals.oxygen_saturation < 92) {
+    alerts.push('Saturación de oxígeno baja registrada; verificar estado respiratorio y medición.')
+  }
+
+  const criticalLabs = summary.latest_labs.flatMap(order =>
+    order.results.filter(result => result.status === 'CRITICAL_HIGH' || result.status === 'CRITICAL_LOW'),
+  )
+  if (criticalLabs.length) alerts.push('Hay resultado(s) de laboratorio marcados como críticos pendientes de correlación clínica.')
+
+  return alerts
+}
+
+function buildSoap(summary: SummaryLike, sourceText?: string): NonNullable<ClinicalCopilotDraft['soap_draft']> {
+  const latest = summary.latest_encounters[0]
+  const activeProblems = summary.problems
+    .filter(problem => problem.status === 'ACTIVE' || problem.status === 'CHRONIC')
+    .map(problem => problem.title)
+    .slice(0, 4)
+    .join('; ')
+
+  const lastVitals = summary.latest_vitals[0]
+  const vitalsText = lastVitals
+    ? [
+      lastVitals.blood_pressure_systolic && lastVitals.blood_pressure_diastolic
+        ? `PA ${lastVitals.blood_pressure_systolic}/${lastVitals.blood_pressure_diastolic} mmHg`
+        : null,
+      lastVitals.heart_rate ? `FC ${lastVitals.heart_rate} lpm` : null,
+      lastVitals.oxygen_saturation ? `SpO2 ${lastVitals.oxygen_saturation}%` : null,
+      lastVitals.temperature_celsius ? `T ${lastVitals.temperature_celsius} C` : null,
+    ].filter(Boolean).join(', ')
+    : 'Signos vitales no registrados en esta vista.'
+
+  return {
+    subjective: firstNonEmpty(sourceText, latest?.subjective, latest?.chief_complaint)
+      ?? 'Completar motivo de consulta, evolución de síntomas, adherencia y síntomas asociados.',
+    objective: firstNonEmpty(latest?.objective, vitalsText) ?? vitalsText,
+    assessment: firstNonEmpty(latest?.assessment)
+      ?? (activeProblems ? `Problemas a correlacionar: ${activeProblems}.` : 'Completar impresión clínica y diagnósticos diferenciales.'),
+    plan: firstNonEmpty(latest?.plan)
+      ?? 'Completar plan diagnóstico/terapéutico, educación al paciente, signos de alarma y seguimiento.',
+  }
+}
+
+export function buildClinicalCopilotDraft(
+  mode: ClinicalCopilotMode,
+  summary: SummaryLike,
+  sourceText?: string,
+): ClinicalCopilotDraft {
+  const evidence = buildEvidence(summary)
+  const suggestedQuestions = buildQuestions(summary)
+  const clinicalGaps = buildGaps(summary)
+  const softAlerts = buildSoftAlerts(summary)
+  const activeProblemCount = summary.problems.filter(problem => problem.status === 'ACTIVE' || problem.status === 'CHRONIC').length
+  const latestEncounter = summary.latest_encounters[0]
+
+  const draft: ClinicalCopilotDraft = {
+    mode,
+    model: 'meditrack-copilot-local-v1',
+    safety_notice: COPILOT_NOTICE,
+    summary: [
+      `${summary.patient.first_name} ${summary.patient.last_name}, ${formatPatientAge(summary.patient.date_of_birth)}.`,
+      activeProblemCount ? `${activeProblemCount} problema(s) activo(s)/crónico(s) documentado(s).` : 'Sin problemas estructurados documentados.',
+      latestEncounter?.chief_complaint ? `Último motivo: ${latestEncounter.chief_complaint}.` : null,
+      summary.treatments.some(plan => plan.status === 'ACTIVE') ? 'Tiene tratamiento activo registrado.' : 'Sin tratamiento activo registrado en esta vista.',
+    ].filter(Boolean).join(' '),
+    suggested_questions: mode === 'DRAFT_SOAP' ? suggestedQuestions.slice(0, 4) : suggestedQuestions,
+    clinical_gaps: mode === 'SUGGEST_PATIENT_QUESTIONS' ? clinicalGaps.slice(0, 4) : clinicalGaps,
+    soft_alerts: softAlerts,
+    evidence,
+  }
+
+  if (mode === 'DRAFT_SOAP' || mode === 'PREPARE_CONSULTATION') {
+    draft.soap_draft = buildSoap(summary, sourceText)
+  }
+
+  return draft
 }

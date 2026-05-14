@@ -50,14 +50,60 @@ Copiar `apps/backend/.env.example` → `apps/backend/.env` y completar:
 - **Audit log**: tabla `audit_logs` append-only. Las reglas de BD bloquean UPDATE y DELETE. Nunca omitir el audit en operaciones clínicas.
 - **Dosis**: la ventana de edición es `can_edit_until = scheduled_at + 24h`. Esta regla es inmutable — nunca bypassear.
 
+## Historia Clínica — Método de Weed (POMR)
+
+Meditrack implementa el **Problem-Oriented Medical Record** (Lawrence Weed) adaptado al formato latinoamericano. Sin regulación guatemalteca específica, se sigue el estándar docente médico regional.
+
+### Estructura POMR
+
+| Componente | Tabla/Campo | Descripción |
+|---|---|---|
+| **Base de datos** | `patient_background` | Antecedentes estructurados por categoría |
+| **Lista de problemas** | `patient_problems` | Problemas numerados con ICD-10 y estado |
+| **Nota SOAP** | campos en `encounters` | Subjetivo, Objetivo, Assessment, Plan |
+| **Signos vitales** | `vital_signs` | Por encuentro, con trending histórico |
+
+### Campos SOAP en `encounters`
+
+- `chief_complaint` — Motivo de consulta (max 500 chars)
+- `subjective` — HPI, síntomas reportados, ROS
+- `objective` — Examen físico, hallazgos clínicos
+- `assessment` — Impresión diagnóstica, CIE-10, diferenciales
+- `plan` — Plan Dx, Rx, Ed (educación al paciente)
+
+### Antecedentes (`patient_background.category`)
+
+| Categoría | Significado |
+|---|---|
+| `AHF` | Antecedentes Heredofamiliares |
+| `APP` | Antecedentes Patológicos Personales |
+| `APNP` | Antecedentes Patológicos No Patológicos (hábitos/estilo de vida) |
+| `AQ` | Antecedentes Quirúrgicos |
+| `ATRAUMA` | Antecedentes Traumáticos |
+| `ALERGIAS` | Alergias (medicamentos, alimentos, ambientales) |
+| `GINECO_OBS` | Gineco-Obstétricos |
+| `MEDICAMENTOS` | Medicamentos actuales/previos relevantes |
+| `PERINATAL` | Antecedentes Perinatales (pediatría) |
+
+Cada PUT crea un nuevo registro y marca `is_current=false` en el anterior (historial de cambios).
+
+### Estados de problema (`patient_problems.status`)
+
+`ACTIVE` | `INACTIVE` | `RESOLVED` | `CHRONIC`
+
+Cada problema tiene `problem_number` auto-incremental por paciente (lista numerada de Weed) y campo opcional `icd10_code`.
+
 ## Módulos implementados (Fase 0 + Fase 1 parcial)
 
 | Módulo | Archivos | Estado |
 |---|---|---|
 | Auth | `modules/auth/` | ✅ Completo |
 | Patients | `modules/patients/` | ✅ Completo |
-| Encounters | `modules/encounters/` | ✅ Completo |
+| Encounters + SOAP | `modules/encounters/` | ✅ Completo |
 | Treatments + Schedule Engine | `modules/treatments/` | ✅ Completo |
+| Vital Signs | `modules/vital-signs/` | ✅ Completo |
+| Patient Problems (lista Weed) | `modules/patient-problems/` | ✅ Completo |
+| Patient Background (antecedentes) | `modules/patient-background/` | ✅ Completo |
 | Patient portal (passwordless) | — | 🔄 Fase 1 pendiente |
 | Documents upload | — | 🔄 Fase 1 pendiente |
 | Notifications | — | 🔄 Fase 2 |
@@ -90,6 +136,14 @@ Todos los endpoints del doctor requieren: `Authorization: Bearer <access_token>`
 | PATCH | `/treatments/:id/suspend` | Suspender tratamiento |
 | GET | `/treatments/:id/adherence` | Score de adherencia |
 | POST | `/doses/:id/confirm` | Confirmar dosis tomada |
+| POST | `/encounters/:id/vital-signs` | Registrar signos vitales |
+| GET | `/encounters/:id/vital-signs` | Signos vitales del encuentro |
+| GET | `/patients/:id/vital-signs` | Histórico de signos vitales |
+| GET | `/patients/:id/problems` | Lista de problemas (Weed) |
+| POST | `/patients/:id/problems` | Agregar problema |
+| PATCH | `/problems/:id` | Actualizar estado/datos del problema |
+| GET | `/patients/:id/background` | Antecedentes vigentes del paciente |
+| PUT | `/patients/:id/background` | Crear/actualizar antecedente por categoría |
 
 ## Tests
 

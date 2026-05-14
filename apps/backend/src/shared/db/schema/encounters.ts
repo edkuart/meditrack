@@ -28,6 +28,11 @@ export const encounters = pgTable('encounters', {
   encounter_type: encounterTypeEnum('encounter_type').default('CONSULTATION').notNull(),
   status: encounterStatusEnum('status').default('OPEN').notNull(),
   chief_complaint: varchar('chief_complaint', { length: 500 }),
+  // SOAP note fields (Método de Weed / POMR)
+  subjective: text('subjective'),   // HPI, síntomas, ROS reportado por paciente
+  objective: text('objective'),     // Examen físico, hallazgos clínicos
+  assessment: text('assessment'),   // Impresión diagnóstica, CIE-10, diferenciales
+  plan: text('plan'),               // Plan Dx, Rx, Ed (educación al paciente)
   notes: text('notes'),
   summary: text('summary'),
   metadata: jsonb('metadata').default({}).notNull(),

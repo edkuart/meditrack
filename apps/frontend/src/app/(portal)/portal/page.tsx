@@ -7,7 +7,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Activity,
   AlertTriangle,
-  Bell,
   ChevronDown,
   FlaskConical,
   Loader2,
@@ -647,17 +646,6 @@ function PortalContent() {
       <header className="portal-topbar">
         <MTLogo size={15} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button style={{
-            position: 'relative', width: 34, height: 34, borderRadius: 8, border: 'none',
-            background: 'var(--mt-elevated)', color: 'var(--mt-text-2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          }}>
-            <Bell size={16} />
-            <span style={{
-              position: 'absolute', top: 7, right: 7, width: 7, height: 7,
-              borderRadius: '50%', background: 'var(--mt-danger)', border: '1.5px solid #fff',
-            }} />
-          </button>
           {patientName && <MTAvatar name={patientName} size={32} tone={{ bg: '#dbeafe', fg: '#1a56db' }} />}
         </div>
       </header>

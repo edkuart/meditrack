@@ -5,6 +5,7 @@ import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { PLAN_LIMITS } from '../../shared/services/limits.service.ts'
 import { AppError } from '../../shared/errors.ts'
 import { config } from '../../shared/config.ts'
+import { getAiUsageStatus } from '../ai-usage/ai-usage.service.ts'
 
 const STRIPE_API = 'https://api.stripe.com/v1'
 
@@ -76,11 +77,12 @@ export async function getBillingStatus(tenantId: string) {
   const plan = tenant.plan_type as keyof typeof PLAN_LIMITS
   const limits = PLAN_LIMITS[plan]
 
-  const [[{ value: patientCount }], [{ value: staffCount }]] = await Promise.all([
+  const [[{ value: patientCount }], [{ value: staffCount }], aiUsage] = await Promise.all([
     db.select({ value: count() }).from(patients)
       .where(and(eq(patients.tenant_id, tenantId), eq(patients.is_active, true))),
     db.select({ value: count() }).from(users)
       .where(and(eq(users.tenant_id, tenantId), eq(users.is_active, true))),
+    getAiUsageStatus(tenantId),
   ])
 
   return {
@@ -88,10 +90,14 @@ export async function getBillingStatus(tenantId: string) {
     limits: {
       max_patients: limits.max_patients,
       max_staff: limits.max_staff,
+      max_ai_units_monthly: limits.max_ai_units_monthly,
     },
     usage: {
       patients: patientCount,
       staff: staffCount,
+      ai_units_monthly: aiUsage.used,
+      ai_units_remaining: aiUsage.remaining,
+      ai_period_starts_at: aiUsage.period.starts_at,
     },
     subscription: tenant.stripe_subscription_id
       ? { id: tenant.stripe_subscription_id, current_period_end: tenant.subscription_current_period_end }

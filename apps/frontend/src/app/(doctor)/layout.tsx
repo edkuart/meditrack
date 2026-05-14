@@ -1,6 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+
+// Module-level store: survives re-renders and component remounts within the session
+const _dismissed = new Set<string>(
+  (() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(localStorage.getItem('meditrack:dismissed-notifs') ?? '[]') as string[] }
+    catch { return [] }
+  })()
+)
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -19,6 +28,7 @@ import {
   Menu,
   X,
   FlaskConical,
+  BrainCircuit,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
@@ -99,6 +109,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     { href: '/dashboard',  icon: LayoutGrid,   label: 'Panel operativo', match: (p: string) => p === '/dashboard' },
     { href: '/patients',   icon: Users,         label: 'Pacientes',       match: (p: string) => p.startsWith('/patients') },
     { href: '/lab',        icon: FlaskConical,  label: 'Laboratorio',     match: (p: string) => p.startsWith('/lab') },
+    { href: '/clinical-intelligence', icon: BrainCircuit, label: 'Inteligencia clínica', match: (p: string) => p.startsWith('/clinical-intelligence') },
     { href: '/analytics',  icon: TrendingUp,    label: 'Analítica',       match: (p: string) => p.startsWith('/analytics'), adminOnly: true },
     { href: '/staff',      icon: UserCog,       label: 'Equipo clínico',  match: (p: string) => p === '/staff', adminOnly: true },
   ]
@@ -259,9 +270,19 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationEntry[]>([])
-  const [failedCount, setFailedCount] = useState(0)
   const [loadingNotif, setLoadingNotif] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
+
+  const [, rerender] = useState(0)
+
+  const handleDismiss = useCallback((id: string) => {
+    _dismissed.add(id)
+    try { localStorage.setItem('meditrack:dismissed-notifs', JSON.stringify([..._dismissed])) } catch {}
+    rerender(n => n + 1)
+  }, [])
+
+  const visibleNotifications = notifications.filter(n => !_dismissed.has(n.id))
+  const failedCount = visibleNotifications.filter(n => n.status === 'FAILED' || n.status === 'BOUNCED').length
 
   const loadNotifications = useCallback(async () => {
     if (!token) return
@@ -269,7 +290,6 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
     try {
       const res = await fetchClinicNotifications(token)
       setNotifications(res.data)
-      setFailedCount(res.meta.failed)
     } catch {
       // silently fail — don't break the layout
     } finally {
@@ -384,10 +404,11 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 
           {panelOpen && (
             <NotificationPanel
-              notifications={notifications}
+              notifications={visibleNotifications}
               failedCount={failedCount}
               loading={loadingNotif}
               onRefresh={loadNotifications}
+              onDismiss={handleDismiss}
             />
           )}
         </div>

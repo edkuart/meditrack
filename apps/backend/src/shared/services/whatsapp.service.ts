@@ -5,13 +5,37 @@ const META_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN
 const META_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
 const META_GRAPH_VERSION = process.env.WHATSAPP_GRAPH_VERSION ?? 'v23.0'
 
+function isPlaceholder(value: string | undefined, kind: 'sid' | 'token') {
+  const trimmed = value?.trim()
+  if (!trimmed) return true
+  if (kind === 'sid') return /^ACx{32}$/i.test(trimmed) || /^AC\[.+\]$/i.test(trimmed)
+  return /^x{20,}$/i.test(trimmed) || /^\[.+\]$/i.test(trimmed)
+}
+
+function hasUsableTwilioConfig() {
+  if (isPlaceholder(TWILIO_ACCOUNT_SID, 'sid') || isPlaceholder(TWILIO_AUTH_TOKEN, 'token')) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'Invalid Twilio WhatsApp config: set real TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN, or remove both to disable Twilio.',
+      )
+    }
+    return false
+  }
+
+  if (!/^AC[0-9a-f]{32}$/i.test(TWILIO_ACCOUNT_SID!)) {
+    throw new Error('Invalid TWILIO_ACCOUNT_SID format: expected an Account SID that starts with AC followed by 32 hex characters.')
+  }
+
+  return true
+}
+
 // Returns provider message id when configured, undefined in dev (console) mode
 export async function sendWhatsApp(to: string, body: string): Promise<string | undefined> {
   if (META_ACCESS_TOKEN || META_PHONE_NUMBER_ID) {
     return sendMetaWhatsApp(to, body)
   }
 
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+  if (!hasUsableTwilioConfig()) {
     console.log(`[whatsapp:dev] → ${to}\n${body}`)
     return undefined
   }

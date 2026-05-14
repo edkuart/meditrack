@@ -22,6 +22,11 @@ import { onboardingRouter } from './modules/onboarding/onboarding.router.ts'
 import { settingsRouter } from './modules/settings/settings.router.ts'
 import { complianceRouter } from './modules/compliance/compliance.router.ts'
 import { labRouter } from './modules/lab/lab.router.ts'
+import { vitalSignsRouter } from './modules/vital-signs/vital-signs.router.ts'
+import { patientProblemsRouter } from './modules/patient-problems/patient-problems.router.ts'
+import { patientBackgroundRouter } from './modules/patient-background/patient-background.router.ts'
+import { clinicalIntelligenceRouter } from './modules/clinical-intelligence/clinical-intelligence.router.ts'
+import { aiUsageRouter } from './modules/ai-usage/ai-usage.router.ts'
 import { rateLimit } from './shared/middleware/rate-limit.middleware.ts'
 import { securityHeaders } from './shared/middleware/security.middleware.ts'
 import { requestContext, structuredRequestLogger } from './shared/middleware/observability.middleware.ts'
@@ -104,6 +109,11 @@ export function createApp() {
   app.route('/api/v1', settingsRouter)
   app.route('/api/v1', complianceRouter)
   app.route('/api/v1', labRouter)
+  app.route('/api/v1', vitalSignsRouter)
+  app.route('/api/v1', patientProblemsRouter)
+  app.route('/api/v1', patientBackgroundRouter)
+  app.route('/api/v1', clinicalIntelligenceRouter)
+  app.route('/api/v1', aiUsageRouter)
 
   app.onError(errorHandler)
 

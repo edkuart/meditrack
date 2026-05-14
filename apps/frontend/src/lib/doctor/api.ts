@@ -598,3 +598,88 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+// ─── POMR — Patient problems (lista de Weed) ──────────────────────────────────
+
+export type ProblemStatus = 'ACTIVE' | 'INACTIVE' | 'RESOLVED' | 'CHRONIC'
+
+export interface PatientProblem {
+  id: string
+  problem_number: number
+  title: string
+  description: string | null
+  icd10_code: string | null
+  icd10_description: string | null
+  status: ProblemStatus
+  onset_date: string | null
+  resolved_date: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function listPatientProblems(token: string, patientId: string): Promise<PatientProblem[]> {
+  return doctorFetch(`/patients/${patientId}/problems`, token)
+}
+
+export async function createPatientProblem(token: string, patientId: string, data: {
+  title: string
+  status?: ProblemStatus
+  description?: string
+  icd10_code?: string
+  icd10_description?: string
+  onset_date?: string
+  notes?: string
+}): Promise<PatientProblem> {
+  return doctorFetch(`/patients/${patientId}/problems`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updatePatientProblem(token: string, problemId: string, data: Partial<{
+  title: string
+  status: ProblemStatus
+  description: string
+  icd10_code: string
+  icd10_description: string
+  onset_date: string
+  resolved_date: string
+  notes: string
+}>): Promise<PatientProblem> {
+  return doctorFetch(`/problems/${problemId}`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+// ─── POMR — Patient background (antecedentes) ─────────────────────────────────
+
+export type BackgroundCategory =
+  | 'AHF' | 'APP' | 'APNP' | 'AQ' | 'ATRAUMA'
+  | 'ALERGIAS' | 'GINECO_OBS' | 'MEDICAMENTOS' | 'PERINATAL'
+
+export interface PatientBackground {
+  id: string
+  category: BackgroundCategory
+  content: string
+  recorded_at: string | null
+  created_at: string
+}
+
+export async function listPatientBackground(token: string, patientId: string): Promise<PatientBackground[]> {
+  return doctorFetch(`/patients/${patientId}/background`, token)
+}
+
+export async function upsertPatientBackground(token: string, patientId: string, data: {
+  category: BackgroundCategory
+  content: string
+}): Promise<PatientBackground> {
+  return doctorFetch(`/patients/${patientId}/background`, token, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}

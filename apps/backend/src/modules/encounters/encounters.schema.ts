@@ -9,21 +9,31 @@ const EncounterType = z.enum([
   'EMERGENCY',
 ])
 
+const SoapFields = {
+  subjective: z.string().optional(),
+  objective: z.string().optional(),
+  assessment: z.string().optional(),
+  plan: z.string().optional(),
+}
+
 export const CreateEncounterSchema = z.object({
   encounter_type: EncounterType.default('CONSULTATION'),
   chief_complaint: z.string().max(500).trim().optional(),
   notes: z.string().optional(),
+  ...SoapFields,
 })
 
 export const UpdateEncounterSchema = z.object({
-  notes: z.string().optional(),
   chief_complaint: z.string().max(500).trim().optional(),
+  notes: z.string().optional(),
   summary: z.string().optional(),
+  ...SoapFields,
 })
 
 export const CloseEncounterSchema = z.object({
   summary: z.string().optional(),
   notes: z.string().optional(),
+  ...SoapFields,
 })
 
 export type CreateEncounterInput = z.infer<typeof CreateEncounterSchema>

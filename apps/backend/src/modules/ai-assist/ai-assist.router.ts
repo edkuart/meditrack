@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
-import { EncounterAiAssistSchema } from './ai-assist.schema.ts'
+import { ClinicalCopilotSchema, EncounterAiAssistSchema } from './ai-assist.schema.ts'
 import * as aiAssistService from './ai-assist.service.ts'
 
 const router = new Hono()
@@ -15,6 +15,18 @@ router.post('/encounters/:id/ai-assist', zValidator('json', EncounterAiAssistSch
     auth.sub,
     auth.email,
     c.req.param('id'),
+    c.req.valid('json'),
+  )
+  return c.json({ success: true, data: draft })
+})
+
+router.post('/patients/:patientId/clinical-copilot', zValidator('json', ClinicalCopilotSchema), async (c) => {
+  const auth = c.get('auth')
+  const draft = await aiAssistService.runClinicalCopilot(
+    auth.tenant_id,
+    auth.sub,
+    auth.email,
+    c.req.param('patientId'),
     c.req.valid('json'),
   )
   return c.json({ success: true, data: draft })

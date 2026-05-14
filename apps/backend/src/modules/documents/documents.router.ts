@@ -5,6 +5,11 @@ import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 import { ValidationError } from '../../shared/errors.ts'
 import { UploadDocumentSchema, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES } from './documents.schema.ts'
 import * as documentsService from './documents.service.ts'
+import {
+  StartDocumentProcessingSchema,
+  SubmitDocumentExtractionSchema,
+} from '../clinical-intelligence/clinical-intelligence.schema.ts'
+import * as clinicalIntelligenceService from '../clinical-intelligence/clinical-intelligence.service.ts'
 
 const router = new Hono()
 
@@ -55,6 +60,50 @@ router.get('/documents/:id/url', async (c) => {
   )
   return c.json({ success: true, data: result })
 })
+
+// GET /documents/:id/processing-jobs
+router.get('/documents/:id/processing-jobs', async (c) => {
+  const auth = c.get('auth')
+  const jobs = await clinicalIntelligenceService.listDocumentProcessingJobs(
+    auth.tenant_id,
+    c.req.param('id')!,
+  )
+  return c.json({ success: true, data: jobs })
+})
+
+// POST /documents/:id/process — starts local triage or queues an external/manual extraction pass
+router.post(
+  '/documents/:id/process',
+  zValidator('json', StartDocumentProcessingSchema),
+  async (c) => {
+    const auth = c.get('auth')
+    const job = await clinicalIntelligenceService.startDocumentProcessing(
+      auth.tenant_id,
+      c.req.param('id')!,
+      auth.sub,
+      auth.email,
+      c.req.valid('json'),
+    )
+    return c.json({ success: true, data: job }, 201)
+  },
+)
+
+// POST /documents/:id/extractions — submits OCR/AI/manual findings into the review queue
+router.post(
+  '/documents/:id/extractions',
+  zValidator('json', SubmitDocumentExtractionSchema),
+  async (c) => {
+    const auth = c.get('auth')
+    const result = await clinicalIntelligenceService.submitDocumentExtraction(
+      auth.tenant_id,
+      c.req.param('id')!,
+      auth.sub,
+      auth.email,
+      c.req.valid('json'),
+    )
+    return c.json({ success: true, data: result }, 201)
+  },
+)
 
 // PATCH /documents/:id/visibility
 router.patch(

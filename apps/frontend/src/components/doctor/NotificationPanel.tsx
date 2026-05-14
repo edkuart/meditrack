@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, CheckCircle, Clock, Mail, MessageCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle, Clock, Mail, MessageCircle, RefreshCw, X } from 'lucide-react'
 import type { NotificationEntry, NotificationStatus, NotificationChannel } from '@/lib/doctor/notifications-api'
 
 // ─── Label maps ───────────────────────────────────────────────────────────────
@@ -42,73 +42,101 @@ function relativeTime(iso: string): string {
   return `hace ${Math.floor(hrs / 24)} d`
 }
 
+function parseFailedReason(reason: string | null): string {
+  if (!reason) return ''
+  // Try to extract "message" field from embedded JSON (e.g. Twilio/Resend errors)
+  const jsonMatch = reason.match(/"message"\s*:\s*"([^"]+)"/)
+  if (jsonMatch) return jsonMatch[1]
+  // Try to extract after "error NNN:" prefix
+  const colonMatch = reason.match(/error\s+\d+:\s*(.+)/i)
+  if (colonMatch) {
+    const after = colonMatch[1].trim()
+    // If still JSON-like, give a generic message
+    if (after.startsWith('{')) return 'Error de autenticación — verifica las credenciales en .env'
+    return after.length > 80 ? after.substring(0, 77) + '…' : after
+  }
+  return reason.length > 80 ? reason.substring(0, 77) + '…' : reason
+}
+
 // ─── Item ─────────────────────────────────────────────────────────────────────
 
-function NotifItem({ n }: { n: NotificationEntry }) {
+function NotifItem({ n, onDismiss }: { n: NotificationEntry; onDismiss: (id: string) => void }) {
   const s = STATUS_CONFIG[n.status] ?? STATUS_CONFIG.QUEUED
   const StatusIcon = s.icon
   const ChannelIcon = CHANNEL_ICON[n.channel] ?? Mail
   const isCritical = n.status === 'FAILED' || n.status === 'BOUNCED'
 
   return (
-    <a
-      href={`/patients/${n.patient_id}`}
+    <div
       style={{
-        display: 'block', padding: '12px 16px', textDecoration: 'none',
+        display: 'flex', alignItems: 'flex-start', gap: 10,
+        padding: '12px 16px',
         borderBottom: '1px solid var(--mt-border)',
         background: isCritical ? '#fff8f8' : 'var(--mt-surface)',
-        transition: 'background .15s',
       }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--mt-elevated)' }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isCritical ? '#fff8f8' : 'var(--mt-surface)' }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        {/* Channel icon */}
-        <div style={{
-          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-          background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <ChannelIcon size={14} color={s.fg} />
-        </div>
-
-        {/* Content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {n.patient_name}
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--mt-muted)', flexShrink: 0 }}>
-              {relativeTime(n.created_at)}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            <span style={{ fontSize: 12, color: 'var(--mt-text-2)' }}>
-              {TYPE_LABELS[n.type] ?? n.type}
-            </span>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              fontSize: 11, fontWeight: 500, padding: '1px 6px', borderRadius: 999,
-              background: s.bg, color: s.fg,
-            }}>
-              <StatusIcon size={10} />
-              {s.label}
-            </span>
-          </div>
-
-          {/* Failed reason */}
-          {n.failed_reason && (
-            <div style={{
-              marginTop: 4, fontSize: 11, color: '#b91c1c',
-              background: '#fef2f2', borderRadius: 4, padding: '2px 6px',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {n.failed_reason}
-            </div>
-          )}
-        </div>
+      {/* Channel icon */}
+      <div style={{
+        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+        background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <ChannelIcon size={14} color={s.fg} />
       </div>
-    </a>
+
+      {/* Content — clickable link to patient */}
+      <a
+        href={`/patients/${n.patient_id}`}
+        style={{ flex: 1, minWidth: 0, textDecoration: 'none' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {n.patient_name}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--mt-muted)', flexShrink: 0 }}>
+            {relativeTime(n.created_at)}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <span style={{ fontSize: 12, color: 'var(--mt-text-2)' }}>
+            {TYPE_LABELS[n.type] ?? n.type}
+          </span>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            fontSize: 11, fontWeight: 500, padding: '1px 6px', borderRadius: 999,
+            background: s.bg, color: s.fg,
+          }}>
+            <StatusIcon size={10} />
+            {s.label}
+          </span>
+        </div>
+
+        {n.failed_reason && (
+          <div style={{
+            marginTop: 4, fontSize: 11, color: '#b91c1c',
+            background: '#fef2f2', borderRadius: 4, padding: '2px 6px',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {parseFailedReason(n.failed_reason)}
+          </div>
+        )}
+      </a>
+
+      {/* Dismiss — always visible */}
+      <button
+        type="button"
+        onClick={e => { e.preventDefault(); e.stopPropagation(); onDismiss(n.id) }}
+        title="Descartar"
+        style={{
+          flexShrink: 0, width: 22, height: 22, borderRadius: 4, border: 'none',
+          background: 'transparent', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--mt-muted)',
+        }}
+      >
+        <X size={12} />
+      </button>
+    </div>
   )
 }
 
@@ -119,11 +147,13 @@ export function NotificationPanel({
   failedCount,
   loading,
   onRefresh,
+  onDismiss,
 }: {
   notifications: NotificationEntry[]
   failedCount: number
   loading: boolean
   onRefresh: () => void
+  onDismiss: (id: string) => void
 }) {
   return (
     <div style={{
@@ -177,7 +207,7 @@ export function NotificationPanel({
             {loading ? 'Cargando alertas…' : 'Sin notificaciones recientes'}
           </div>
         ) : (
-          notifications.map(n => <NotifItem key={n.id} n={n} />)
+          notifications.map(n => <NotifItem key={n.id} n={n} onDismiss={onDismiss} />)
         )}
       </div>
 

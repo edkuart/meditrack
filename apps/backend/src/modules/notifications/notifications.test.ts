@@ -111,7 +111,27 @@ describe('sendEmail console fallback', () => {
 })
 
 describe('sendWhatsApp console fallback', () => {
+  beforeEach(() => {
+    delete process.env.TWILIO_ACCOUNT_SID
+    delete process.env.TWILIO_AUTH_TOKEN
+    vi.resetModules()
+  })
+
   it('logs to console and returns undefined when Twilio creds are not set', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const { sendWhatsApp } = await import('../../shared/services/whatsapp.service.ts')
+    const result = await sendWhatsApp('+5491112345678', 'Mensaje de prueba')
+
+    expect(result).toBeUndefined()
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('whatsapp:dev'))
+
+    consoleSpy.mockRestore()
+  })
+
+  it('treats example Twilio placeholders as unconfigured in non-production envs', async () => {
+    process.env.TWILIO_ACCOUNT_SID = 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    process.env.TWILIO_AUTH_TOKEN = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const { sendWhatsApp } = await import('../../shared/services/whatsapp.service.ts')

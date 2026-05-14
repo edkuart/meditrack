@@ -5,9 +5,9 @@ import { AppError } from '../errors.ts'
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 
 export const PLAN_LIMITS = {
-  free:       { max_patients: 50,   max_staff: 3  },
-  pro:        { max_patients: 2000, max_staff: 20 },
-  enterprise: { max_patients: -1,   max_staff: -1 },  // -1 = unlimited
+  free:       { max_patients: 50,   max_staff: 3,  max_ai_units_monthly: 25   },
+  pro:        { max_patients: 2000, max_staff: 20, max_ai_units_monthly: 2000 },
+  enterprise: { max_patients: -1,   max_staff: -1, max_ai_units_monthly: -1   },  // -1 = unlimited
 } as const
 
 type Plan = keyof typeof PLAN_LIMITS

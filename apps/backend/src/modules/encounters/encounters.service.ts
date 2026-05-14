@@ -28,6 +28,10 @@ export async function createEncounter(
       encounter_type: input.encounter_type,
       chief_complaint: input.chief_complaint,
       notes: input.notes,
+      subjective: input.subjective,
+      objective: input.objective,
+      assessment: input.assessment,
+      plan: input.plan,
       status: 'OPEN',
     })
     .returning()
@@ -171,6 +175,10 @@ export async function closeEncounter(
       closed_at: new Date(),
       summary: input.summary,
       notes: input.notes ?? existing.notes,
+      subjective: input.subjective ?? existing.subjective,
+      objective: input.objective ?? existing.objective,
+      assessment: input.assessment ?? existing.assessment,
+      plan: input.plan ?? existing.plan,
       updated_at: new Date(),
     })
     .where(and(eq(encounters.tenant_id, tenantId), eq(encounters.id, encounterId)))

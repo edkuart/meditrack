@@ -5,6 +5,7 @@ import { uploadFile, getSignedViewUrl, deleteFile, buildStorageKey } from '../..
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { NotFoundError, ValidationError } from '../../shared/errors.ts'
 import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES, type UploadDocumentInput } from './documents.schema.ts'
+import { recordProvenance } from '../clinical-intelligence/clinical-intelligence.service.ts'
 
 // ─── Upload ────────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,24 @@ export async function uploadDocument(
       file_name: file.name,
       file_size: file.size,
       type: input.type,
+    },
+  })
+
+  await recordProvenance(tenantId, patientId, doctorId, doctorEmail, {
+    encounter_id: input.encounter_id,
+    document_id: doc.id,
+    source_type: 'DOCUMENT_UPLOAD',
+    source_resource_type: 'DOCUMENT',
+    source_resource_id: doc.id,
+    source_label: file.name,
+    source_checksum: checksum,
+    target_resource_type: 'DOCUMENT',
+    target_resource_id: doc.id,
+    extraction_method: 'UPLOAD',
+    metadata: {
+      document_type: input.type,
+      mime_type: file.type,
+      file_size: file.size,
     },
   })
 

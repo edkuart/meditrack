@@ -92,6 +92,41 @@
       "when": 1700000011000,
       "tag": "0011_treatment_interventions",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778774806131,
+      "tag": "0012_pomr_weed",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1778774807000,
+      "tag": "0013_clinical_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1778774808000,
+      "tag": "0014_document_processing_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1778774809000,
+      "tag": "0015_clinical_audio_transcripts",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778774810000,
+      "tag": "0016_ai_usage_ledger",
+      "breakpoints": true
     }
   ]
 }

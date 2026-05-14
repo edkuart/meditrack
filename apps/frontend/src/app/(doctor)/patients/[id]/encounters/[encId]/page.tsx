@@ -209,7 +209,7 @@ function MedFormPanel({
         </div>
 
         {/* Dose row: amount + unit + route */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
             <label style={fldLabel}>Dosis *</label>
             <input
@@ -229,7 +229,7 @@ function MedFormPanel({
               {DOSE_UNITS.map(u => <option key={u}>{u}</option>)}
             </select>
           </div>
-          <div>
+          <div className="col-span-2 sm:col-span-1">
             <label style={fldLabel}>Vía</label>
             <select value={medForm.route} onChange={set('route')}
               onFocus={focusRing} onBlur={blurRing}
@@ -316,15 +316,13 @@ function MedFormPanel({
       </div>
 
       {/* Footer actions */}
-      <div style={{
-        padding: '10px 14px', borderTop: '1px solid var(--mt-border)',
-        background: 'var(--mt-bg)', display: 'flex', justifyContent: 'flex-end', gap: 8,
-      }}>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-3.5 py-2.5 border-t" style={{ background: 'var(--mt-bg)', borderColor: 'var(--mt-border)' }}>
         <button
           type="button"
           onClick={onCancel}
+          className="w-full sm:w-auto"
           style={{
-            height: 34, padding: '0 14px', borderRadius: 8, border: '1px solid var(--mt-border)',
+            height: 36, padding: '0 14px', borderRadius: 8, border: '1px solid var(--mt-border)',
             background: 'var(--mt-surface)', fontSize: 13, color: 'var(--mt-text-2)',
             cursor: 'pointer', fontFamily: 'var(--mt-font)',
           }}
@@ -335,12 +333,12 @@ function MedFormPanel({
           type="button"
           onClick={onAdd}
           disabled={!medForm.drug_name.trim() || !medForm.dose_amount}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5"
           style={{
-            height: 34, padding: '0 16px', borderRadius: 8, border: 'none',
+            height: 36, padding: '0 16px', borderRadius: 8, border: 'none',
             background: 'var(--mt-primary)', color: '#fff', fontSize: 13, fontWeight: 500,
             cursor: 'pointer', fontFamily: 'var(--mt-font)',
             opacity: !medForm.drug_name.trim() || !medForm.dose_amount ? 0.5 : 1,
-            display: 'inline-flex', alignItems: 'center', gap: 6,
           }}
         >
           <Plus size={14} />
@@ -430,10 +428,10 @@ function IntervFormPanel({
       background: 'var(--mt-surface)', overflow: 'hidden',
     }}>
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--mt-border)', background: 'var(--mt-bg)' }}>
-        <StepMarker number={3} title="Agregar intervención" />
+        <StepMarker number={3} title="Indicaciones no farmacológicas" />
       </div>
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label style={fldLabel}>Tipo</label>
             <select value={intervForm.type} onChange={set('type')} onFocus={focusRing} onBlur={blurRing} style={fldInput}>
@@ -450,7 +448,7 @@ function IntervFormPanel({
               placeholder="Ej: Caminata 30 min" style={fldInput} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label style={fldLabel}>Frecuencia</label>
             <input value={intervForm.frequency} onChange={set('frequency')} onFocus={focusRing} onBlur={blurRing}
@@ -468,22 +466,20 @@ function IntervFormPanel({
             placeholder="Indicaciones adicionales" style={fldInput} />
         </div>
       </div>
-      <div style={{
-        padding: '10px 14px', borderTop: '1px solid var(--mt-border)',
-        background: 'var(--mt-bg)', display: 'flex', justifyContent: 'flex-end', gap: 8,
-      }}>
-        <button type="button" onClick={onCancel} style={{
-          height: 34, padding: '0 14px', borderRadius: 8, border: '1px solid var(--mt-border)',
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-3.5 py-2.5 border-t" style={{ background: 'var(--mt-bg)', borderColor: 'var(--mt-border)' }}>
+        <button type="button" onClick={onCancel} className="w-full sm:w-auto" style={{
+          height: 36, padding: '0 14px', borderRadius: 8, border: '1px solid var(--mt-border)',
           background: 'var(--mt-surface)', fontSize: 13, color: 'var(--mt-text-2)',
           cursor: 'pointer', fontFamily: 'var(--mt-font)',
         }}>Cancelar</button>
-        <button type="button" onClick={onAdd} disabled={!intervForm.title.trim()} style={{
-          height: 34, padding: '0 16px', borderRadius: 8, border: 'none',
-          background: 'var(--mt-primary)', color: '#fff', fontSize: 13, fontWeight: 500,
-          cursor: 'pointer', fontFamily: 'var(--mt-font)',
-          opacity: !intervForm.title.trim() ? 0.5 : 1,
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-        }}>
+        <button type="button" onClick={onAdd} disabled={!intervForm.title.trim()}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5"
+          style={{
+            height: 36, padding: '0 16px', borderRadius: 8, border: 'none',
+            background: 'var(--mt-primary)', color: '#fff', fontSize: 13, fontWeight: 500,
+            cursor: 'pointer', fontFamily: 'var(--mt-font)',
+            opacity: !intervForm.title.trim() ? 0.5 : 1,
+          }}>
           <Plus size={14} />
           Agregar
         </button>
@@ -1133,7 +1129,7 @@ export default function EncounterPage() {
                       <p className="mt-1 text-sm text-slate-700">{treatment.medications.length}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium uppercase text-slate-400">Intervenciones</p>
+                      <p className="text-xs font-medium uppercase text-slate-400">Indicaciones</p>
                       <p className="mt-1 text-sm text-slate-700">{(treatment.interventions ?? []).length}</p>
                     </div>
                   </div>
@@ -1389,7 +1385,7 @@ export default function EncounterPage() {
                   }}
                 >
                   <Plus size={15} />
-                  Agregar intervención
+                  Agregar indicación
                 </button>
               )}
 
@@ -1399,7 +1395,7 @@ export default function EncounterPage() {
 
               {medications.length === 0 && interventions.length === 0 ? (
                 <ClinicalInsight tone="amber" title="Plan pendiente">
-                  Agrega al menos un medicamento o una intervención para guardar el plan de tratamiento.
+                  Agrega al menos un medicamento o una indicación para guardar el plan de tratamiento.
                 </ClinicalInsight>
               ) : (
                 <button
