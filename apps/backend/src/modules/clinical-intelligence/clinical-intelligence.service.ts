@@ -7,7 +7,6 @@ import {
   db,
   documents,
   encounters,
-  labOrders,
   patientBackground,
   patientProblems,
   patients,
@@ -16,6 +15,7 @@ import {
 } from '../../shared/db/index.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors.ts'
+import { listLabOrders } from '../lab/lab.service.ts'
 import type {
   CreateProvenanceInput,
   CreateClinicalTranscriptInput,
@@ -196,12 +196,7 @@ export async function getClinicalSummary(tenantId: string, patientId: string) {
       orderBy: desc(vitalSigns.recorded_at),
       limit: 10,
     }),
-    db.query.labOrders.findMany({
-      where: and(eq(labOrders.tenant_id, tenantId), eq(labOrders.patient_id, patientId)),
-      with: { results: { orderBy: (r, { asc }) => asc(r.sort_order) } },
-      orderBy: desc(labOrders.ordered_at),
-      limit: 10,
-    }),
+    listLabOrders(tenantId, patientId).then((rows) => rows.slice(0, 10)),
     db.query.documents.findMany({
       where: and(eq(documents.tenant_id, tenantId), eq(documents.patient_id, patientId)),
       columns: {

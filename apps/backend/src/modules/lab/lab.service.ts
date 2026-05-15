@@ -1,5 +1,5 @@
-import { eq, and, desc, inArray } from 'drizzle-orm'
-import { db, labOrders, labResults, patients, users, encounters } from '../../shared/db/index.ts'
+import { eq, and, sql } from 'drizzle-orm'
+import { db, labOrders, labResults, patients } from '../../shared/db/index.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { NotFoundError } from '../../shared/errors.ts'
 import type {
@@ -48,35 +48,165 @@ function toResultValues(r: LabResultInput, orderId: string, tenantId: string, id
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
-export async function listLabOrders(tenantId: string, patientId?: string) {
-  const rows = await db.query.labOrders.findMany({
-    where: patientId
-      ? and(eq(labOrders.tenant_id, tenantId), eq(labOrders.patient_id, patientId))
-      : eq(labOrders.tenant_id, tenantId),
-    orderBy: desc(labOrders.ordered_at),
-    with: {
-      patient: { columns: { id: true, first_name: true, last_name: true } },
-      doctor:  { columns: { id: true, first_name: true, last_name: true } },
-      results: { orderBy: (r, { asc }) => [asc(r.sort_order)] },
-    },
-  })
-  return rows
+type LabResultListRow = {
+  id: string
+  order_id: string
+  tenant_id: string
+  panel_name: string
+  parameter_name: string
+  value: string | null
+  numeric_value: string | null
+  unit: string | null
+  ref_min: string | null
+  ref_max: string | null
+  ref_text: string | null
+  status: string
+  notes: string | null
+  sort_order: number
+  created_at: Date | string
+  updated_at: Date | string
+}
+
+type RawLabOrderRow = {
+  id: string
+  tenant_id: string
+  patient_id: string
+  encounter_id: string | null
+  ordered_by: string
+  status: string
+  notes: string | null
+  ordered_at: Date | string
+  created_at: Date | string
+  updated_at: Date | string
+  patient__id: string | null
+  patient__first_name: string | null
+  patient__last_name: string | null
+  doctor__id: string | null
+  doctor__first_name: string | null
+  doctor__last_name: string | null
+}
+
+type LabOrderListRow = Omit<RawLabOrderRow,
+  'patient__id' | 'patient__first_name' | 'patient__last_name' |
+  'doctor__id' | 'doctor__first_name' | 'doctor__last_name'
+> & {
+  patient: { id: string; first_name: string | null; last_name: string | null } | null
+  doctor: { id: string; first_name: string | null; last_name: string | null } | null
+  results: LabResultListRow[]
+}
+
+export async function listLabOrders(tenantId: string, patientId?: string): Promise<LabOrderListRow[]> {
+  const [hasOrderedAt, hasLabOrderUpdatedAt, hasSortOrder, hasLabResultUpdatedAt] = await Promise.all([
+    hasColumn('lab_orders', 'ordered_at'),
+    hasColumn('lab_orders', 'updated_at'),
+    hasColumn('lab_results', 'sort_order'),
+    hasColumn('lab_results', 'updated_at'),
+  ])
+
+  const orderedAtExpr = sql.raw(hasOrderedAt ? 'lo.ordered_at' : 'lo.created_at')
+  const orderUpdatedAtExpr = sql.raw(hasLabOrderUpdatedAt ? 'lo.updated_at' : 'lo.created_at')
+  const where = patientId
+    ? sql`lo.tenant_id = ${tenantId} and lo.patient_id = ${patientId}`
+    : sql`lo.tenant_id = ${tenantId}`
+
+  const orderRows = rowsFromResult<RawLabOrderRow>(await db.execute(sql`
+    select
+      lo.id,
+      lo.tenant_id,
+      lo.patient_id,
+      lo.encounter_id,
+      lo.ordered_by,
+      lo.status,
+      lo.notes,
+      ${orderedAtExpr} as ordered_at,
+      lo.created_at,
+      ${orderUpdatedAtExpr} as updated_at,
+      p.id as patient__id,
+      p.first_name as patient__first_name,
+      p.last_name as patient__last_name,
+      u.id as doctor__id,
+      u.first_name as doctor__first_name,
+      u.last_name as doctor__last_name
+    from lab_orders lo
+    left join patients p on p.id = lo.patient_id
+    left join users u on u.id = lo.ordered_by
+    where ${where}
+    order by ${orderedAtExpr} desc
+  `))
+
+  const results = await Promise.all(orderRows.map(async (order) => {
+    const sortOrderExpr = sql.raw(hasSortOrder ? 'lr.sort_order' : '0')
+    const resultUpdatedAtExpr = sql.raw(hasLabResultUpdatedAt ? 'lr.updated_at' : 'lr.created_at')
+    const resultRows = rowsFromResult<LabResultListRow>(await db.execute(sql`
+      select
+        lr.id,
+        lr.order_id,
+        lr.tenant_id,
+        lr.panel_name,
+        lr.parameter_name,
+        lr.value,
+        lr.numeric_value,
+        lr.unit,
+        lr.ref_min,
+        lr.ref_max,
+        lr.ref_text,
+        lr.status,
+        lr.notes,
+        ${sortOrderExpr} as sort_order,
+        lr.created_at,
+        ${resultUpdatedAtExpr} as updated_at
+      from lab_results lr
+      where lr.order_id = ${String(order.id)}
+      order by ${sortOrderExpr} asc, lr.created_at asc
+    `))
+
+    return {
+      id: order.id,
+      tenant_id: order.tenant_id,
+      patient_id: order.patient_id,
+      encounter_id: order.encounter_id,
+      ordered_by: order.ordered_by,
+      status: order.status,
+      notes: order.notes,
+      ordered_at: order.ordered_at,
+      created_at: order.created_at,
+      updated_at: order.updated_at,
+      patient: order.patient__id
+        ? { id: order.patient__id, first_name: order.patient__first_name, last_name: order.patient__last_name }
+        : null,
+      doctor: order.doctor__id
+        ? { id: order.doctor__id, first_name: order.doctor__first_name, last_name: order.doctor__last_name }
+        : null,
+      results: resultRows,
+    }
+  }))
+
+  return results
 }
 
 // ─── Get one ──────────────────────────────────────────────────────────────────
 
 export async function getLabOrder(tenantId: string, orderId: string) {
-  const order = await db.query.labOrders.findFirst({
-    where: and(eq(labOrders.tenant_id, tenantId), eq(labOrders.id, orderId)),
-    with: {
-      patient:   { columns: { id: true, first_name: true, last_name: true, date_of_birth: true, sex: true } },
-      doctor:    { columns: { id: true, first_name: true, last_name: true, specialty: true } },
-      encounter: { columns: { id: true, encounter_type: true, opened_at: true } },
-      results:   { orderBy: (r, { asc }) => [asc(r.sort_order)] },
-    },
-  })
+  const order = (await listLabOrders(tenantId)).find((row) => row.id === orderId)
   if (!order) throw new NotFoundError('LabOrder')
   return order
+}
+
+async function hasColumn(tableName: string, columnName: string) {
+  const rows = rowsFromResult<{ exists: boolean }>(await db.execute(sql`
+    select exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = ${tableName}
+        and column_name = ${columnName}
+    ) as exists
+  `))
+  return Boolean(rows[0]?.exists)
+}
+
+function rowsFromResult<T extends object>(result: unknown): T[] {
+  return Array.isArray(result) ? result as T[] : Array.from(result as Iterable<T>)
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
