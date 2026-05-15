@@ -134,6 +134,13 @@
       "when": 1778774811000,
       "tag": "0017_patient_level_vitals",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778774812000,
+      "tag": "0018_vital_signs_recorded_at",
+      "breakpoints": true
     }
   ]
 }
