@@ -18,7 +18,7 @@ import {
   vitalSigns,
 } from '../shared/db/index.ts'
 
-const DOCTOR_EMAIL = 'doctor@demo.com'
+const DOCTOR_EMAIL = process.env.DEMO_DOCTOR_EMAIL?.trim() || 'doctor@demo.com'
 const SEED = 'triage-demo-patients-v1'
 const DEMO = 'DEMO TRIAGE IA'
 
