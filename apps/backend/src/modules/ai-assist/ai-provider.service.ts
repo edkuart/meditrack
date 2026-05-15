@@ -82,9 +82,9 @@ export async function generateClinicalCopilotDraft(
   modelTier: ClinicalCopilotModelTier = 'standard',
 ): Promise<ClinicalCopilotGeneration> {
   const localDraft = buildClinicalCopilotDraft(mode, summary, sourceText, question)
-  const provider = normalizeProvider(config.ai.provider)
+  const provider = resolveProvider()
 
-  if (!config.ai.externalEnabled || provider === 'local') {
+  if (provider === 'local') {
     return { draft: localDraft, provider: 'local', model: localDraft.model, model_tier: 'standard' }
   }
 
@@ -98,6 +98,13 @@ export async function generateClinicalCopilotDraft(
       model_tier: 'standard',
       fallback_reason: `${provider.toUpperCase()}_API_KEY_MISSING`,
     }
+  }
+
+  if (!config.ai.externalEnabled) {
+    log.info('clinical_ai_external_inferred_from_provider_key', {
+      provider,
+      model,
+    })
   }
 
   try {
@@ -131,6 +138,14 @@ export async function generateClinicalCopilotDraft(
 
 function normalizeProvider(value: string): AiProvider {
   if (value === 'openai' || value === 'anthropic') return value
+  return 'local'
+}
+
+function resolveProvider(): AiProvider {
+  const configuredProvider = normalizeProvider(config.ai.provider)
+  if (configuredProvider !== 'local') return configuredProvider
+  if (config.ai.openai.apiKey) return 'openai'
+  if (config.ai.anthropic.apiKey) return 'anthropic'
   return 'local'
 }
 

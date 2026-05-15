@@ -229,6 +229,7 @@ export async function runClinicalCopilot(
     ...draft,
     provider: generation.provider,
     model_tier: generation.model_tier,
+    fallback_reason: generation.fallback_reason,
     review_item: reviewItem,
   }
 }
