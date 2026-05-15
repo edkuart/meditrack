@@ -8,6 +8,10 @@ function optional(key: string, fallback: string): string {
   return process.env[key] ?? fallback
 }
 
+function bool(key: string, fallback = 'false'): boolean {
+  return ['1', 'true', 'yes', 'on'].includes(optional(key, fallback).toLowerCase())
+}
+
 function csv(key: string, fallback: string): string[] {
   return optional(key, fallback)
     .split(',')
@@ -59,5 +63,22 @@ export const config = {
     secretKey: optional('STRIPE_SECRET_KEY', ''),
     proPriceId: optional('STRIPE_PRO_PRICE_ID', ''),
     webhookSecret: optional('STRIPE_WEBHOOK_SECRET', ''),
+  },
+
+  ai: {
+    provider: optional('AI_PROVIDER', 'local'),
+    externalEnabled: bool('AI_EXTERNAL_ENABLED'),
+    fallbackToLocal: bool('AI_FALLBACK_TO_LOCAL', 'true'),
+    timeoutMs: Number(optional('AI_PROVIDER_TIMEOUT_MS', '25000')),
+    openai: {
+      apiKey: optional('OPENAI_API_KEY', ''),
+      model: optional('OPENAI_MODEL', 'gpt-5-mini'),
+      premiumModel: optional('OPENAI_PREMIUM_MODEL', 'gpt-5.5'),
+    },
+    anthropic: {
+      apiKey: optional('ANTHROPIC_API_KEY', ''),
+      model: optional('ANTHROPIC_MODEL', 'claude-haiku-4-5-20251001'),
+      premiumModel: optional('ANTHROPIC_PREMIUM_MODEL', 'claude-sonnet-4-6'),
+    },
   },
 } as const

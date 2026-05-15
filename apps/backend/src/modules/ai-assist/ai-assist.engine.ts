@@ -1,5 +1,6 @@
 export type AiAssistMode = 'SUMMARIZE_ENCOUNTER' | 'SIMPLIFY_FOR_PATIENT'
 export type ClinicalCopilotMode =
+  | 'ASK_CLINICAL_QUESTION'
   | 'PREPARE_CONSULTATION'
   | 'SUGGEST_PATIENT_QUESTIONS'
   | 'DRAFT_SOAP'
@@ -14,12 +15,13 @@ export interface AiAssistDraft {
 
 export interface ClinicalCopilotDraft {
   mode: ClinicalCopilotMode
-  model: 'meditrack-copilot-local-v1'
+  model: string
   safety_notice: string
   summary: string
   suggested_questions: string[]
   clinical_gaps: string[]
   soft_alerts: string[]
+  answer?: string
   soap_draft?: {
     subjective: string
     objective: string
@@ -107,7 +109,7 @@ export function isSafeAiAssistMode(mode: string): mode is AiAssistMode {
   return mode === 'SUMMARIZE_ENCOUNTER' || mode === 'SIMPLIFY_FOR_PATIENT'
 }
 
-type SummaryLike = {
+export type SummaryLike = {
   patient: {
     first_name: string
     last_name: string
@@ -129,8 +131,12 @@ type SummaryLike = {
     blood_pressure_systolic: number | null
     blood_pressure_diastolic: number | null
     heart_rate: number | null
+    respiratory_rate: number | null
     temperature_celsius: string | null
+    weight_kg: string | null
+    height_cm: string | null
     oxygen_saturation: number | null
+    glucose_mg_dl: number | null
     recorded_at: Date
   }>
   latest_labs: Array<{
@@ -203,7 +209,11 @@ function buildEvidence(summary: SummaryLike): ClinicalCopilotDraft['evidence'] {
       value: [
         bp,
         lastVitals.heart_rate ? `FC ${lastVitals.heart_rate}` : null,
+        lastVitals.respiratory_rate ? `FR ${lastVitals.respiratory_rate}` : null,
         lastVitals.oxygen_saturation ? `SpO2 ${lastVitals.oxygen_saturation}%` : null,
+        lastVitals.weight_kg ? `peso ${lastVitals.weight_kg} kg` : null,
+        lastVitals.height_cm ? `talla ${lastVitals.height_cm} cm` : null,
+        lastVitals.glucose_mg_dl ? `glucosa ${lastVitals.glucose_mg_dl} mg/dL` : null,
         lastVitals.temperature_celsius ? `T ${lastVitals.temperature_celsius} C` : null,
       ].filter(Boolean).join(', '),
     })
@@ -257,21 +267,42 @@ function buildGaps(summary: SummaryLike) {
 function buildSoftAlerts(summary: SummaryLike) {
   const alerts: string[] = []
   const lastVitals = summary.latest_vitals[0]
+  const activeProblemText = summary.problems.map(problem => `${problem.title} ${problem.notes ?? ''}`).join(' ')
   if (lastVitals?.blood_pressure_systolic && lastVitals.blood_pressure_diastolic) {
     if (lastVitals.blood_pressure_systolic >= 180 || lastVitals.blood_pressure_diastolic >= 120) {
       alerts.push('Última presión registrada en rango severamente elevado; confirmar medición y síntomas de alarma.')
-    } else if (lastVitals.blood_pressure_systolic >= 140 || lastVitals.blood_pressure_diastolic >= 90) {
+    } else if (
+      (lastVitals.blood_pressure_systolic >= 160 || lastVitals.blood_pressure_diastolic >= 100) ||
+      (/hipertensi|presi[oó]n/i.test(activeProblemText) && (lastVitals.blood_pressure_systolic >= 140 || lastVitals.blood_pressure_diastolic >= 90))
+    ) {
       alerts.push('Última presión registrada por encima de meta usual; revisar contexto clínico y adherencia.')
     }
   }
-  if (lastVitals?.oxygen_saturation && lastVitals.oxygen_saturation < 92) {
-    alerts.push('Saturación de oxígeno baja registrada; verificar estado respiratorio y medición.')
+  if (lastVitals?.oxygen_saturation) {
+    if (lastVitals.oxygen_saturation < 92) {
+      alerts.push('Saturación de oxígeno baja registrada; verificar estado respiratorio y medición.')
+    } else if (lastVitals.oxygen_saturation <= 94 && /disnea|edema|asma|respir|fatiga|anemia/i.test(activeProblemText)) {
+      alerts.push('SpO2 92-94% con disnea, edema o anemia: confirmar deterioro respiratorio/cardiopulmonar y necesidad de valoración presencial.')
+    }
+  }
+  if (lastVitals?.heart_rate && lastVitals.heart_rate >= 100 && /anemia|palpit|disnea|sangrado|fatiga/i.test(activeProblemText)) {
+    alerts.push('Taquicardia registrada en contexto de anemia/sangrado o disnea; confirmar estabilidad actual.')
   }
 
   const criticalLabs = summary.latest_labs.flatMap(order =>
     order.results.filter(result => result.status === 'CRITICAL_HIGH' || result.status === 'CRITICAL_LOW'),
   )
   if (criticalLabs.length) alerts.push('Hay resultado(s) de laboratorio marcados como críticos pendientes de correlación clínica.')
+
+  const relevantLowHemoglobin = summary.latest_labs.flatMap(order =>
+    order.results.filter(result =>
+      /hemoglobina|hb\b/i.test(result.parameter_name) &&
+      result.status === 'LOW' &&
+      Number(result.numeric_value ?? result.value) < 10.5 &&
+      /sangrado|anemia|palpit|disnea|fatiga/i.test(activeProblemText),
+    ),
+  )
+  if (relevantLowHemoglobin.length) alerts.push('Hemoglobina baja con síntomas o sangrado documentado; confirmar tendencia y estabilidad clínica.')
 
   return alerts
 }
@@ -291,7 +322,11 @@ function buildSoap(summary: SummaryLike, sourceText?: string): NonNullable<Clini
         ? `PA ${lastVitals.blood_pressure_systolic}/${lastVitals.blood_pressure_diastolic} mmHg`
         : null,
       lastVitals.heart_rate ? `FC ${lastVitals.heart_rate} lpm` : null,
+      lastVitals.respiratory_rate ? `FR ${lastVitals.respiratory_rate} rpm` : null,
       lastVitals.oxygen_saturation ? `SpO2 ${lastVitals.oxygen_saturation}%` : null,
+      lastVitals.weight_kg ? `peso ${lastVitals.weight_kg} kg` : null,
+      lastVitals.height_cm ? `talla ${lastVitals.height_cm} cm` : null,
+      lastVitals.glucose_mg_dl ? `glucosa ${lastVitals.glucose_mg_dl} mg/dL` : null,
       lastVitals.temperature_celsius ? `T ${lastVitals.temperature_celsius} C` : null,
     ].filter(Boolean).join(', ')
     : 'Signos vitales no registrados en esta vista.'
@@ -307,10 +342,46 @@ function buildSoap(summary: SummaryLike, sourceText?: string): NonNullable<Clini
   }
 }
 
+function buildClinicalAnswer(summary: SummaryLike, question?: string, sourceText?: string) {
+  const activeProblems = summary.problems
+    .filter(problem => problem.status === 'ACTIVE' || problem.status === 'CHRONIC')
+    .map(problem => problem.title)
+    .slice(0, 5)
+
+  const latestEncounter = summary.latest_encounters[0]
+  const allergies = summary.background.find(item => item.category === 'ALERGIAS')?.content
+  const gaps = buildGaps(summary)
+  const alerts = buildSoftAlerts(summary)
+
+  const contextLines = [
+    activeProblems.length ? `Problemas activos/crónicos registrados: ${activeProblems.join('; ')}.` : 'No hay problemas activos estructurados registrados.',
+    allergies ? `Alergias documentadas: ${allergies}.` : 'No hay alergias documentadas de forma estructurada.',
+    latestEncounter?.chief_complaint ? `Último motivo de consulta: ${latestEncounter.chief_complaint}.` : null,
+    sourceText?.trim() ? `Nota adicional aportada: ${sourceText.trim().slice(0, 500)}.` : null,
+  ].filter(Boolean)
+
+  const nextSteps = [
+    alerts.length ? `Revisar primero: ${alerts.join(' ')}` : null,
+    gaps.length ? `Datos incompletos a confirmar: ${gaps.slice(0, 3).join(' ')}` : null,
+    'Usa esta respuesta como orientación para revisar el expediente; no sustituye el juicio clínico ni debe guardarse sin validación.',
+  ].filter(Boolean)
+
+  return [
+    question ? `Pregunta: ${question.trim()}` : 'Pregunta clínica general sobre el expediente seleccionado.',
+    '',
+    'Respuesta asistiva basada en la información disponible:',
+    ...contextLines.map(line => `- ${line}`),
+    '',
+    'Siguientes puntos sugeridos:',
+    ...nextSteps.map(line => `- ${line}`),
+  ].join('\n')
+}
+
 export function buildClinicalCopilotDraft(
   mode: ClinicalCopilotMode,
   summary: SummaryLike,
   sourceText?: string,
+  question?: string,
 ): ClinicalCopilotDraft {
   const evidence = buildEvidence(summary)
   const suggestedQuestions = buildQuestions(summary)
@@ -333,6 +404,12 @@ export function buildClinicalCopilotDraft(
     clinical_gaps: mode === 'SUGGEST_PATIENT_QUESTIONS' ? clinicalGaps.slice(0, 4) : clinicalGaps,
     soft_alerts: softAlerts,
     evidence,
+  }
+
+  if (mode === 'ASK_CLINICAL_QUESTION') {
+    draft.answer = buildClinicalAnswer(summary, question, sourceText)
+    draft.suggested_questions = suggestedQuestions.slice(0, 4)
+    draft.clinical_gaps = clinicalGaps.slice(0, 4)
   }
 
   if (mode === 'DRAFT_SOAP' || mode === 'PREPARE_CONSULTATION') {

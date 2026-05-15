@@ -8,6 +8,7 @@ import {
   QrCode, Link2, Loader2, ExternalLink, Download, MessageCircle,
   Activity, CalendarClock, ClipboardList, Pill, Stethoscope, UserRound,
   ShieldCheck, Trash2, AlertTriangle, Copy, FlaskConical, BookOpen, Pencil,
+  Ruler, Scale,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
@@ -15,9 +16,11 @@ import {
   generatePortalAccess, getPatientFhirBundle, listPatientTreatments,
   listPatientCheckIns, listPatientProblems, createPatientProblem,
   listPatientBackground, upsertPatientBackground,
+  listPatientVitalSigns, createPatientVitalSigns,
   type Patient, type Encounter, type Document, type AccessResult,
   type TreatmentPlan, type PatientCheckIn,
   type PatientProblem, type PatientBackground, type BackgroundCategory, type ProblemStatus,
+  type VitalSignsRecord, type VitalSignsInput,
 } from '@/lib/doctor/api'
 import {
   getPatientConsents, recordConsent, withdrawConsent, exportPatientData, anonymizePatient,
@@ -346,12 +349,308 @@ function PortalAccessSection({
   )
 }
 
+function toNumberOrUndefined(value: string): number | undefined {
+  if (!value.trim()) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function calculateBmi(record?: VitalSignsRecord | null) {
+  const weight = Number(record?.weight_kg)
+  const height = Number(record?.height_cm)
+  if (!Number.isFinite(weight) || !Number.isFinite(height) || weight <= 0 || height <= 0) return null
+  const meters = height / 100
+  return Number((weight / (meters * meters)).toFixed(1))
+}
+
+function formatVitalDate(value: string) {
+  return new Date(value).toLocaleDateString('es-GT', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function BiometricMetric({
+  label,
+  value,
+  helper,
+  icon: Icon,
+}: {
+  label: string
+  value: string
+  helper?: string
+  icon: typeof Activity
+}) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white px-4 py-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
+        <Icon size={16} className="text-blue-500" />
+      </div>
+      <p className="text-xl font-semibold tabular-nums text-slate-900">{value}</p>
+      {helper && <p className="mt-1 text-xs text-slate-400">{helper}</p>}
+    </div>
+  )
+}
+
+function PatientBiometricsSection({
+  token,
+  patientId,
+  encounters,
+  records,
+  onSaved,
+}: {
+  token: string
+  patientId: string
+  encounters: Encounter[]
+  records: VitalSignsRecord[]
+  onSaved: (record: VitalSignsRecord) => void
+}) {
+  const latest = records[0]
+  const bmi = calculateBmi(latest)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState<Record<string, string>>({
+    encounter_id: '',
+    blood_pressure_systolic: '',
+    blood_pressure_diastolic: '',
+    heart_rate: '',
+    respiratory_rate: '',
+    temperature_celsius: '',
+    weight_kg: '',
+    height_cm: '',
+    oxygen_saturation: '',
+    glucose_mg_dl: '',
+    recorded_at: new Date().toISOString().slice(0, 16),
+  })
+
+  function setField(field: string, value: string) {
+    setForm(current => ({ ...current, [field]: value }))
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const payload: VitalSignsInput = {
+        encounter_id: form.encounter_id || undefined,
+        blood_pressure_systolic: toNumberOrUndefined(form.blood_pressure_systolic),
+        blood_pressure_diastolic: toNumberOrUndefined(form.blood_pressure_diastolic),
+        heart_rate: toNumberOrUndefined(form.heart_rate),
+        respiratory_rate: toNumberOrUndefined(form.respiratory_rate),
+        temperature_celsius: toNumberOrUndefined(form.temperature_celsius),
+        weight_kg: toNumberOrUndefined(form.weight_kg),
+        height_cm: toNumberOrUndefined(form.height_cm),
+        oxygen_saturation: toNumberOrUndefined(form.oxygen_saturation),
+        glucose_mg_dl: toNumberOrUndefined(form.glucose_mg_dl),
+        recorded_at: form.recorded_at ? new Date(form.recorded_at).toISOString() : undefined,
+      }
+      const saved = await createPatientVitalSigns(token, patientId, payload)
+      onSaved(saved)
+      setForm(current => ({
+        ...current,
+        blood_pressure_systolic: '',
+        blood_pressure_diastolic: '',
+        heart_rate: '',
+        respiratory_rate: '',
+        temperature_celsius: '',
+        weight_kg: '',
+        height_cm: '',
+        oxygen_saturation: '',
+        glucose_mg_dl: '',
+        recorded_at: new Date().toISOString().slice(0, 16),
+      }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar la biometría clínica')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="flex flex-col gap-4">
+        <ClinicalPanel title="Perfil biométrico reciente" icon={Activity} accent="blue">
+          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            <BiometricMetric
+              label="Presión arterial"
+              icon={Activity}
+              value={latest?.blood_pressure_systolic && latest.blood_pressure_diastolic
+                ? `${latest.blood_pressure_systolic}/${latest.blood_pressure_diastolic}`
+                : 'Sin dato'}
+              helper="mmHg"
+            />
+            <BiometricMetric
+              label="Peso / IMC"
+              icon={Scale}
+              value={latest?.weight_kg ? `${latest.weight_kg} kg` : 'Sin dato'}
+              helper={bmi ? `IMC ${bmi} kg/m²` : 'IMC calculado con peso y talla'}
+            />
+            <BiometricMetric
+              label="Talla"
+              icon={Ruler}
+              value={latest?.height_cm ? `${latest.height_cm} cm` : 'Sin dato'}
+              helper="Dato longitudinal"
+            />
+            <BiometricMetric
+              label="Glucosa capilar"
+              icon={FlaskConical}
+              value={latest?.glucose_mg_dl ? `${latest.glucose_mg_dl}` : 'Sin dato'}
+              helper="mg/dL"
+            />
+            <BiometricMetric
+              label="Frecuencia cardíaca"
+              icon={Activity}
+              value={latest?.heart_rate ? `${latest.heart_rate}` : 'Sin dato'}
+              helper="lpm"
+            />
+            <BiometricMetric
+              label="Frecuencia respiratoria"
+              icon={Activity}
+              value={latest?.respiratory_rate ? `${latest.respiratory_rate}` : 'Sin dato'}
+              helper="rpm"
+            />
+            <BiometricMetric
+              label="Temperatura"
+              icon={Activity}
+              value={latest?.temperature_celsius ? `${latest.temperature_celsius} °C` : 'Sin dato'}
+            />
+            <BiometricMetric
+              label="SpO₂"
+              icon={Activity}
+              value={latest?.oxygen_saturation ? `${latest.oxygen_saturation}%` : 'Sin dato'}
+              helper="Pulsioximetría"
+            />
+          </div>
+        </ClinicalPanel>
+
+        <ClinicalPanel title="Historial de observaciones" icon={ClipboardList} accent="sky">
+          {records.length === 0 ? (
+            <EmptyClinicalState
+              icon={Activity}
+              title="Sin biometría registrada"
+              description="Los datos opcionales del paciente aparecerán aquí y alimentarán el contexto de IA."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Fecha</th>
+                    <th className="px-4 py-3 font-medium">PA</th>
+                    <th className="px-4 py-3 font-medium">FC/FR</th>
+                    <th className="px-4 py-3 font-medium">Peso / Talla</th>
+                    <th className="px-4 py-3 font-medium">IMC</th>
+                    <th className="px-4 py-3 font-medium">SpO₂</th>
+                    <th className="px-4 py-3 font-medium">Glucosa</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {records.slice(0, 12).map(record => (
+                    <tr key={record.id} className="text-slate-600">
+                      <td className="px-4 py-3 text-xs text-slate-400">{formatVitalDate(record.recorded_at)}</td>
+                      <td className="px-4 py-3 tabular-nums">
+                        {record.blood_pressure_systolic && record.blood_pressure_diastolic
+                          ? `${record.blood_pressure_systolic}/${record.blood_pressure_diastolic}`
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">
+                        {[record.heart_rate ? `${record.heart_rate} lpm` : null, record.respiratory_rate ? `${record.respiratory_rate} rpm` : null].filter(Boolean).join(' · ') || '—'}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">
+                        {[record.weight_kg ? `${record.weight_kg} kg` : null, record.height_cm ? `${record.height_cm} cm` : null].filter(Boolean).join(' · ') || '—'}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">{calculateBmi(record) ?? '—'}</td>
+                      <td className="px-4 py-3 tabular-nums">{record.oxygen_saturation ? `${record.oxygen_saturation}%` : '—'}</td>
+                      <td className="px-4 py-3 tabular-nums">{record.glucose_mg_dl ? `${record.glucose_mg_dl} mg/dL` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </ClinicalPanel>
+      </div>
+
+      <ClinicalPanel title="Registrar datos opcionales" icon={Plus} accent="green">
+        <form onSubmit={submit} className="flex flex-col gap-4 p-4">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+            Registra solo los datos disponibles. Cada observación queda ligada al paciente y puede asociarse a una consulta si aplica.
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className={labelClass}>Consulta asociada</label>
+            <select value={form.encounter_id} onChange={e => setField('encounter_id', e.target.value)} className={fieldClass}>
+              <option value="">Sin consulta específica</option>
+              {encounters.slice(0, 12).map(encounter => (
+                <option key={encounter.id} value={encounter.id}>
+                  {ENC_LABELS[encounter.encounter_type]} · {new Date(encounter.opened_at).toLocaleDateString('es-GT')}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>Sistólica</label>
+              <input value={form.blood_pressure_systolic} onChange={e => setField('blood_pressure_systolic', e.target.value)} inputMode="numeric" placeholder="120" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>Diastólica</label>
+              <input value={form.blood_pressure_diastolic} onChange={e => setField('blood_pressure_diastolic', e.target.value)} inputMode="numeric" placeholder="80" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>Peso kg</label>
+              <input value={form.weight_kg} onChange={e => setField('weight_kg', e.target.value)} inputMode="decimal" placeholder="72.5" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>Talla cm</label>
+              <input value={form.height_cm} onChange={e => setField('height_cm', e.target.value)} inputMode="decimal" placeholder="170" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>FC lpm</label>
+              <input value={form.heart_rate} onChange={e => setField('heart_rate', e.target.value)} inputMode="numeric" placeholder="72" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>FR rpm</label>
+              <input value={form.respiratory_rate} onChange={e => setField('respiratory_rate', e.target.value)} inputMode="numeric" placeholder="16" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>Temperatura °C</label>
+              <input value={form.temperature_celsius} onChange={e => setField('temperature_celsius', e.target.value)} inputMode="decimal" placeholder="36.7" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>SpO₂ %</label>
+              <input value={form.oxygen_saturation} onChange={e => setField('oxygen_saturation', e.target.value)} inputMode="numeric" placeholder="98" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>Glucosa mg/dL</label>
+              <input value={form.glucose_mg_dl} onChange={e => setField('glucose_mg_dl', e.target.value)} inputMode="numeric" placeholder="95" className={fieldClass} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>Fecha/hora</label>
+              <input type="datetime-local" value={form.recorded_at} onChange={e => setField('recorded_at', e.target.value)} className={fieldClass} />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <button type="submit" disabled={saving} className={submitBtnClass}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+            Guardar biometría
+          </button>
+        </form>
+      </ClinicalPanel>
+    </div>
+  )
+}
+
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
-type PatientTab = 'summary' | 'historia' | 'encounters' | 'treatments' | 'adherence' | 'documents' | 'lab' | 'access' | 'compliance'
+type PatientTab = 'summary' | 'historia' | 'biometrics' | 'encounters' | 'treatments' | 'adherence' | 'documents' | 'lab' | 'access' | 'compliance'
 
 const TABS: Array<{ id: PatientTab; label: string; icon: typeof FileText }> = [
   { id: 'summary',     label: 'Resumen',      icon: Activity      },
   { id: 'historia',    label: 'Historia',     icon: BookOpen      },
+  { id: 'biometrics',  label: 'Biometría',    icon: Scale         },
   { id: 'encounters',  label: 'Consultas',    icon: Stethoscope   },
   { id: 'treatments',  label: 'Tratamientos', icon: Pill          },
   { id: 'adherence',   label: 'Adherencia',   icon: CalendarClock },
@@ -379,6 +678,7 @@ export default function PatientProfilePage() {
   const [labOrders, setLabOrders] = useState<LabOrder[]>([])
   const [problems, setProblems] = useState<PatientProblem[]>([])
   const [background, setBackground] = useState<PatientBackground[]>([])
+  const [vitalSigns, setVitalSigns] = useState<VitalSignsRecord[]>([])
   const [loadingPage, setLoadingPage] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<PatientTab>('summary')
@@ -416,6 +716,7 @@ export default function PatientProfilePage() {
   const [exportingData, setExportingData] = useState(false)
   const [anonymizing, setAnonymizing] = useState(false)
   const [anonymizeConfirm, setAnonymizeConfirm] = useState(false)
+  const [ageReferenceTime] = useState(() => Date.now())
 
   // Documents
   const [showUploader, setShowUploader] = useState(false)
@@ -428,7 +729,7 @@ export default function PatientProfilePage() {
     setLoadingPage(true)
     setLoadError(null)
     try {
-      const [p, encs, plans, docs, adh, checks, cons, orders, probs, bg] = await Promise.all([
+      const [p, encs, plans, docs, adh, checks, cons, orders, probs, bg, vitals] = await Promise.all([
         getPatient(token, patientId),
         listEncounters(token, patientId),
         listPatientTreatments(token, patientId).catch(() => []),
@@ -439,6 +740,7 @@ export default function PatientProfilePage() {
         listLabOrders(token, patientId).catch(() => []),
         listPatientProblems(token, patientId).catch(() => []),
         listPatientBackground(token, patientId).catch(() => []),
+        listPatientVitalSigns(token, patientId).catch(() => []),
       ])
       setPatient(p)
       setEncounters(encs)
@@ -450,6 +752,7 @@ export default function PatientProfilePage() {
       setLabOrders(orders)
       setProblems(probs)
       setBackground(bg)
+      setVitalSigns(vitals)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor')
     } finally {
@@ -457,7 +760,13 @@ export default function PatientProfilePage() {
     }
   }, [token, patientId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    void Promise.resolve().then(() => load())
+  }, [load])
+
+  function handleVitalSaved(record: VitalSignsRecord) {
+    setVitalSigns(current => [record, ...current].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime()))
+  }
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
@@ -644,7 +953,7 @@ export default function PatientProfilePage() {
 
   function calcAge(dob: string | null) {
     if (!dob) return null
-    return Math.floor((Date.now() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 365))
+    return Math.floor((ageReferenceTime - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 365))
   }
 
   const age = calcAge(patient.date_of_birth)
@@ -664,7 +973,7 @@ export default function PatientProfilePage() {
   const alertCheckIns = checkIns.filter(c => c.severity === 'ALERT').length
   const activeProblems = problems.filter(p => p.status === 'ACTIVE' || p.status === 'CHRONIC')
 
-  const timelineItems: TimelineItem[] = [
+  const timelineItemsWithSort = [
     ...encounters.map(enc => ({
       id: enc.id,
       title: ENC_LABELS[enc.encounter_type] ?? enc.encounter_type,
@@ -681,11 +990,21 @@ export default function PatientProfilePage() {
       sortAt: doc.created_at,
       date: new Date(doc.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short' }),
       tone: 'slate' as const,
+      href: undefined,
     })),
   ]
+
+  const timelineItems: TimelineItem[] = timelineItemsWithSort
     .sort((a, b) => new Date(b.sortAt).getTime() - new Date(a.sortAt).getTime())
     .slice(0, 6)
-    .map(({ sortAt, ...item }) => item)
+    .map(item => ({
+      id: item.id,
+      title: item.title,
+      subtitle: item.subtitle,
+      date: item.date,
+      tone: item.tone,
+      href: item.href,
+    }))
 
   const consentTypeLabel: Record<string, string> = {
     data_processing:   'Tratamiento de datos',
@@ -1059,6 +1378,19 @@ export default function PatientProfilePage() {
             </div>
           </ClinicalPanel>
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB: BIOMETRÍA                                                        */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'biometrics' && token && (
+        <PatientBiometricsSection
+          token={token}
+          patientId={patientId}
+          encounters={encounters}
+          records={vitalSigns}
+          onSaved={handleVitalSaved}
+        />
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════ */}

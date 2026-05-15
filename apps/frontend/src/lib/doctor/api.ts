@@ -179,6 +179,57 @@ export async function updatePatient(token: string, id: string, data: Partial<{
   })
 }
 
+// ─── Patient vitals / biometrics ─────────────────────────────────────────────
+
+export interface VitalSignsRecord {
+  id: string
+  tenant_id: string
+  patient_id: string
+  encounter_id: string | null
+  blood_pressure_systolic: number | null
+  blood_pressure_diastolic: number | null
+  heart_rate: number | null
+  respiratory_rate: number | null
+  temperature_celsius: string | null
+  weight_kg: string | null
+  height_cm: string | null
+  oxygen_saturation: number | null
+  glucose_mg_dl: number | null
+  recorded_by: string | null
+  recorded_at: string
+  created_at: string
+}
+
+export type VitalSignsInput = Partial<{
+  encounter_id: string
+  blood_pressure_systolic: number
+  blood_pressure_diastolic: number
+  heart_rate: number
+  respiratory_rate: number
+  temperature_celsius: number
+  weight_kg: number
+  height_cm: number
+  oxygen_saturation: number
+  glucose_mg_dl: number
+  recorded_at: string
+}>
+
+export async function listPatientVitalSigns(token: string, patientId: string): Promise<VitalSignsRecord[]> {
+  return doctorFetch(`/patients/${patientId}/vital-signs`, token)
+}
+
+export async function createPatientVitalSigns(
+  token: string,
+  patientId: string,
+  data: VitalSignsInput,
+): Promise<VitalSignsRecord> {
+  return doctorFetch(`/patients/${patientId}/vital-signs`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
 // ─── Encounters ───────────────────────────────────────────────────────────────
 
 export type EncounterType =

@@ -340,8 +340,8 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         <Menu size={18} />
       </button>
 
-      {/* Search bar — label hidden on mobile */}
-      <div style={{ flex: 1, maxWidth: 360 }}>
+      {/* Search bar — full bar on desktop only */}
+      <div className="hidden md:block" style={{ flex: 1, maxWidth: 360 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 12px',
           border: '1px solid var(--mt-border)', borderRadius: 8,
@@ -349,8 +349,8 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           cursor: 'pointer',
         }}>
           <Search size={14} color="var(--mt-muted)" />
-          <span className="hidden sm:block" style={{ flex: 1 }}>Buscar paciente…</span>
-          <div className="hidden sm:flex" style={{ gap: 2 }}>
+          <span style={{ flex: 1 }}>Buscar paciente…</span>
+          <div style={{ display: 'flex', gap: 2 }}>
             <kbd style={{
               fontSize: 10, fontFamily: 'var(--mt-font-mono)',
               padding: '1px 5px', background: 'var(--mt-surface)',
@@ -367,7 +367,23 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+      {/* Spacer — pushes right group to the edge on mobile */}
+      <div className="flex-1 md:hidden" />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Search icon button — mobile only */}
+        <button
+          className="md:hidden"
+          style={{
+            width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+            border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--mt-text-2)', cursor: 'pointer',
+          }}
+        >
+          <Search size={16} />
+        </button>
+
         {/* Bell with notification panel */}
         <div ref={bellRef} style={{ position: 'relative' }}>
           <button
@@ -413,16 +429,17 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           )}
         </div>
 
-        <div style={{ height: 24, width: 1, background: 'var(--mt-border)' }} />
-
-        {/* Clinic label — hidden on mobile */}
-        <div className="hidden sm:block" style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>
-          {clinicName}{' '}
-          {user && (
-            <span style={{ fontWeight: 500, color: 'var(--mt-text)' }}>
-              {user.first_name} {user.last_name}
-            </span>
-          )}
+        {/* Divider + clinic label — desktop only */}
+        <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 12 }}>
+          <div style={{ height: 24, width: 1, background: 'var(--mt-border)' }} />
+          <div style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>
+            {clinicName}{' '}
+            {user && (
+              <span style={{ fontWeight: 500, color: 'var(--mt-text)' }}>
+                {user.first_name} {user.last_name}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </header>
@@ -437,13 +454,14 @@ function MobileNav() {
   const pathname = usePathname()
 
   const items = [
-    { href: '/dashboard', label: 'Inicio',    icon: LayoutGrid,  active: pathname === '/dashboard' },
-    { href: '/patients',  label: 'Pacientes', icon: Users,       active: pathname.startsWith('/patients') },
-    { href: '/lab',       label: 'Lab',       icon: FlaskConical, active: pathname.startsWith('/lab') },
+    { href: '/dashboard',              label: 'Panel',     icon: LayoutGrid,   active: pathname === '/dashboard' },
+    { href: '/patients',               label: 'Pacientes', icon: Users,        active: pathname.startsWith('/patients') },
+    { href: '/lab',                    label: 'Lab',       icon: FlaskConical, active: pathname.startsWith('/lab') },
+    { href: '/clinical-intelligence',  label: 'Clínica IA', icon: BrainCircuit, active: pathname.startsWith('/clinical-intelligence') },
   ]
 
   if (user && ADMIN_ROLES.has(user.role)) {
-    items.push({ href: '/staff',     label: 'Equipo', icon: UserCog,   active: pathname === '/staff' })
+    items.push({ href: '/staff',     label: 'Equipo', icon: UserCog,    active: pathname === '/staff' })
     items.push({ href: '/analytics', label: 'Stats',  icon: TrendingUp, active: pathname.startsWith('/analytics') })
   }
 

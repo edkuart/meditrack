@@ -2,7 +2,8 @@ import { and, eq } from 'drizzle-orm'
 import { db, encounters } from '../../shared/db/index.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { NotFoundError, ValidationError } from '../../shared/errors.ts'
-import { buildAiAssistDraft, buildClinicalCopilotDraft } from './ai-assist.engine.ts'
+import { buildAiAssistDraft } from './ai-assist.engine.ts'
+import { generateClinicalCopilotDraft } from './ai-provider.service.ts'
 import { createReviewItem, getClinicalSummary } from '../clinical-intelligence/clinical-intelligence.service.ts'
 import { aiFeatureFromAssistMode, recordAiUsage } from '../ai-usage/ai-usage.service.ts'
 import type { ClinicalCopilotInput, EncounterAiAssistInput } from './ai-assist.schema.ts'
@@ -131,22 +132,45 @@ export async function runClinicalCopilot(
     ].filter(Boolean).join('\n')
     : undefined)
 
-  const draft = buildClinicalCopilotDraft(input.mode, clinicalSummary, sourceText)
+  const generation = await generateClinicalCopilotDraft(
+    input.mode,
+    clinicalSummary,
+    sourceText,
+    input.question,
+    input.model_tier,
+  )
+  const { draft } = generation
+  const units = generation.model_tier === 'premium'
+    ? (input.save_to_review_queue ? 4 : 3)
+    : (input.save_to_review_queue ? 2 : 1)
 
   await recordAiUsage(tenantId, actorId, actorEmail, {
     patient_id: patientId,
     encounter_id: input.encounter_id,
     feature: aiFeatureFromAssistMode(input.mode),
-    provider: 'local',
-    model: draft.model,
-    units: input.save_to_review_queue ? 2 : 1,
+    provider: generation.provider,
+    model: generation.model,
+    units,
     resource_type: input.encounter_id ? 'ENCOUNTER' : 'PATIENT',
     resource_id: input.encounter_id ?? patientId,
     metadata: {
       mode: input.mode,
+      question: input.question,
+      provider: generation.provider,
+      model: generation.model,
+      model_tier: generation.model_tier,
+      fallback_reason: generation.fallback_reason,
       saved_to_review_queue: input.save_to_review_queue,
       evidence_count: draft.evidence.length,
       soft_alert_count: draft.soft_alerts.length,
+      response_snapshot: {
+        summary: draft.summary,
+        answer: draft.answer,
+        suggested_questions: draft.suggested_questions.slice(0, 5),
+        clinical_gaps: draft.clinical_gaps.slice(0, 5),
+        soft_alerts: draft.soft_alerts.slice(0, 4),
+        safety_notice: draft.safety_notice,
+      },
     },
   })
 
@@ -163,7 +187,9 @@ export async function runClinicalCopilot(
         priority: draft.soft_alerts.length ? 'HIGH' : 'NORMAL',
         title: input.mode === 'DRAFT_SOAP'
           ? 'Borrador SOAP generado por copiloto'
-          : `Copiloto clínico: ${input.mode}`,
+          : input.mode === 'ASK_CLINICAL_QUESTION'
+            ? 'Respuesta del copiloto clínico pendiente de revisión'
+            : `Copiloto clínico: ${input.mode}`,
         summary: draft.summary,
         proposed_payload: { ...draft },
         normalized_payload: draft.soap_draft ? { ...draft.soap_draft } : {
@@ -171,8 +197,10 @@ export async function runClinicalCopilot(
           clinical_gaps: draft.clinical_gaps,
           soft_alerts: draft.soft_alerts,
         },
-        confidence: 0.5,
-        reasoning: 'Generado por reglas locales a partir del resumen clínico estructurado; requiere validación médica.',
+        confidence: generation.provider === 'local' ? 0.5 : 0.62,
+        reasoning: generation.provider === 'local'
+          ? 'Generado por reglas locales a partir del resumen clínico estructurado; requiere validación médica.'
+          : `Generado por ${generation.provider} (${generation.model}) a partir del resumen clínico estructurado; requiere validación médica.`,
       },
     )
   }
@@ -188,13 +216,19 @@ export async function runClinicalCopilot(
     context: {
       patient_id: patientId,
       mode: input.mode,
+      question: input.question,
       model: draft.model,
+      provider: generation.provider,
+      model_tier: generation.model_tier,
+      fallback_reason: generation.fallback_reason,
       saved_to_review_queue: input.save_to_review_queue,
     },
   })
 
   return {
     ...draft,
+    provider: generation.provider,
+    model_tier: generation.model_tier,
     review_item: reviewItem,
   }
 }

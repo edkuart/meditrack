@@ -127,6 +127,13 @@
       "when": 1778774810000,
       "tag": "0016_ai_usage_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778774811000,
+      "tag": "0017_patient_level_vitals",
+      "breakpoints": true
     }
   ]
 }

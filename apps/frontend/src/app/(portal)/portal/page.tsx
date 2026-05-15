@@ -14,7 +14,7 @@ import {
   Thermometer,
 } from 'lucide-react'
 import { DoseCard } from '@/components/portal/DoseCard'
-import { MTAvatar, MTLogo } from '@/components/doctor/clinical-ui'
+import { MTLogo } from '@/components/doctor/clinical-ui'
 import { getSession, saveSession, clearSession, type PatientSession } from '@/lib/portal/session'
 import {
   authMagicLink,
@@ -645,9 +645,7 @@ function PortalContent() {
       {/* Topbar */}
       <header className="portal-topbar">
         <MTLogo size={15} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {patientName && <MTAvatar name={patientName} size={32} tone={{ bg: '#dbeafe', fg: '#1a56db' }} />}
-        </div>
+        <div />
       </header>
 
       {/* Scrollable body */}

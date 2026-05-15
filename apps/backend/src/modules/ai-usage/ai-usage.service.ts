@@ -25,6 +25,7 @@ export function aiFeatureFromAssistMode(mode: string): RecordAiUsageInput['featu
   if (mode === 'SUMMARIZE_ENCOUNTER') return 'ENCOUNTER_SUMMARY'
   if (mode === 'SIMPLIFY_FOR_PATIENT') return 'PATIENT_SIMPLIFICATION'
   if (
+    mode === 'ASK_CLINICAL_QUESTION' ||
     mode === 'PREPARE_CONSULTATION' ||
     mode === 'SUGGEST_PATIENT_QUESTIONS' ||
     mode === 'DRAFT_SOAP' ||
@@ -129,9 +130,11 @@ export async function recordAiUsage(
   return event
 }
 
-export async function listAiUsageEvents(tenantId: string, limit = 50) {
+export async function listAiUsageEvents(tenantId: string, limit = 50, patientId?: string) {
   return db.query.aiUsageEvents.findMany({
-    where: eq(aiUsageEvents.tenant_id, tenantId),
+    where: patientId
+      ? and(eq(aiUsageEvents.tenant_id, tenantId), eq(aiUsageEvents.patient_id, patientId))
+      : eq(aiUsageEvents.tenant_id, tenantId),
     orderBy: desc(aiUsageEvents.created_at),
     limit,
   })

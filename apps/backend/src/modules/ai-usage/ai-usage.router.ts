@@ -17,10 +17,14 @@ router.get('/ai-usage/status', async (c) => {
 
 router.get(
   '/ai-usage/events',
-  zValidator('query', z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) })),
+  zValidator('query', z.object({
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    patient_id: z.string().uuid().optional(),
+  })),
   async (c) => {
     const auth = c.get('auth')
-    const rows = await aiUsageService.listAiUsageEvents(auth.tenant_id, c.req.valid('query').limit)
+    const query = c.req.valid('query')
+    const rows = await aiUsageService.listAiUsageEvents(auth.tenant_id, query.limit, query.patient_id)
     return c.json({ success: true, data: rows })
   },
 )

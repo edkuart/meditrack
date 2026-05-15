@@ -280,7 +280,7 @@ function buildVitalObservations(vital: typeof vitalSigns.$inferSelect): FhirReso
       status: 'final',
       code: { coding: [{ system: LOINC, code: '85354-9', display: 'Blood pressure panel' }], text: 'Blood pressure' },
       subject: fhirPatientRef(vital.patient_id),
-      encounter: fhirEncounterRef(vital.encounter_id),
+      ...(vital.encounter_id ? { encounter: fhirEncounterRef(vital.encounter_id) } : {}),
       effectiveDateTime: effective,
       component: [
         {

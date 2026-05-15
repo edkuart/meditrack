@@ -55,6 +55,7 @@ export const CreateProvenanceSchema = z.object({
 
 export const ListReviewItemsSchema = z.object({
   status: ClinicalReviewStatus.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
 })
 
 export const CreateReviewItemSchema = z.object({

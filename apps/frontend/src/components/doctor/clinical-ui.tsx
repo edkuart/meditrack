@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   FileText,
   Info,
@@ -244,6 +245,8 @@ export function MTPanel({
   actions,
   children,
   padBody = false,
+  collapsible = false,
+  defaultOpen = true,
   style,
 }: {
   title: string
@@ -252,8 +255,11 @@ export function MTPanel({
   actions?: ReactNode
   children: ReactNode
   padBody?: boolean
+  collapsible?: boolean
+  defaultOpen?: boolean
   style?: React.CSSProperties
 }) {
+  const [open, setOpen] = useState(defaultOpen)
   const t = TONES[accent]
   return (
     <section style={{
@@ -265,10 +271,16 @@ export function MTPanel({
       borderTop: `3px solid ${t.fg}`,
       ...style,
     }}>
-      <header style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '14px 20px', borderBottom: '1px solid var(--mt-border)',
-      }}>
+      <header
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 20px',
+          borderBottom: (!collapsible || open) ? '1px solid var(--mt-border)' : 'none',
+          cursor: collapsible ? 'pointer' : 'default',
+          userSelect: collapsible ? 'none' : 'auto',
+        }}
+        onClick={collapsible ? () => setOpen(v => !v) : undefined}
+      >
         {Icon && (
           <div style={{
             width: 32, height: 32, borderRadius: 8,
@@ -278,10 +290,30 @@ export function MTPanel({
             <Icon size={16} />
           </div>
         )}
-        <h3 className="mt-subheading" style={{ flex: 1 }}>{title}</h3>
-        {actions}
+        <h3 className="mt-subheading" style={{ flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{title}</h3>
+        {actions && (
+          <div
+            style={{ flexShrink: 0 }}
+            onClick={collapsible ? (e) => e.stopPropagation() : undefined}
+          >
+            {actions}
+          </div>
+        )}
+        {collapsible && (
+          <ChevronDown
+            size={15}
+            style={{
+              flexShrink: 0,
+              color: 'var(--mt-text-2)',
+              transform: open ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.2s',
+            }}
+          />
+        )}
       </header>
-      <div style={padBody ? { padding: 20 } : undefined}>{children}</div>
+      {(!collapsible || open) && (
+        <div style={padBody ? { padding: 20 } : undefined}>{children}</div>
+      )}
     </section>
   )
 }
@@ -471,19 +503,23 @@ export function PriorityRow({
         )}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)' }}>{title}</span>
-          {badge && <MTPill tone={badgeTone}>{badge}</MTPill>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{title}</span>
+          {badge && <MTPill tone={badgeTone} style={{ flexShrink: 0 }}>{badge}</MTPill>}
         </div>
-        {subtitle && <div className="mt-small" style={{ marginTop: 2 }}>{subtitle}</div>}
+        {subtitle && (
+          <div className="mt-small" style={{ marginTop: 2, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+            {subtitle}
+          </div>
+        )}
       </div>
       {value && (
         <div style={{
-          fontSize: 18, fontWeight: 600, color: TONES[valueTone].fg,
-          fontVariantNumeric: 'tabular-nums',
+          fontSize: 16, fontWeight: 600, color: TONES[valueTone].fg,
+          fontVariantNumeric: 'tabular-nums', flexShrink: 0,
         }}>{value}</div>
       )}
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
         stroke={hover ? 'var(--mt-text)' : 'var(--mt-muted)'} strokeWidth="2"
         style={{ transition: 'transform .2s, stroke .2s', transform: hover ? 'translateX(2px)' : 'none', flexShrink: 0 }}>
         <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />

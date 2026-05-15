@@ -9,7 +9,7 @@ export const vitalSigns = pgTable('vital_signs', {
   id: uuid('id').defaultRandom().primaryKey(),
   tenant_id: uuid('tenant_id').references(() => tenants.id, { onDelete: 'restrict' }).notNull(),
   patient_id: uuid('patient_id').references(() => patients.id, { onDelete: 'restrict' }).notNull(),
-  encounter_id: uuid('encounter_id').references(() => encounters.id, { onDelete: 'restrict' }).notNull(),
+  encounter_id: uuid('encounter_id').references(() => encounters.id, { onDelete: 'restrict' }),
   // Presión arterial (mmHg)
   blood_pressure_systolic: integer('blood_pressure_systolic'),
   blood_pressure_diastolic: integer('blood_pressure_diastolic'),

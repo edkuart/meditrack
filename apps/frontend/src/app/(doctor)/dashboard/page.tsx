@@ -32,7 +32,6 @@ import {
   CountUp,
   EmptyClinicalState,
   LoadingState,
-  MetricCard,
   MTAvatar,
   MTPill,
   MTPanel,
@@ -116,8 +115,8 @@ function QuickAction({
         <Icon size={16} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)' }}>{label}</div>
-        <div style={{ marginTop: 2, fontSize: 13, color: 'var(--mt-text-2)' }}>{sub}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{label}</div>
+        <div style={{ marginTop: 2, fontSize: 12, color: 'var(--mt-text-2)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{sub}</div>
       </div>
     </a>
   )
@@ -144,19 +143,21 @@ function RecentPatientRow({ patient }: { patient: Patient }) {
     >
       <MTAvatar name={`${patient.first_name} ${patient.last_name}`} size={36} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {patient.first_name} {patient.last_name}
-          {patient.sex && <MTPill tone="slate" style={{ fontSize: 11, padding: '1px 6px' }}>{SEX_LABELS[patient.sex]}</MTPill>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+            {patient.first_name} {patient.last_name}
+          </span>
+          {patient.sex && <MTPill tone="slate" style={{ fontSize: 11, padding: '1px 6px', flexShrink: 0 }}>{SEX_LABELS[patient.sex]}</MTPill>}
         </div>
-        <div style={{ marginTop: 2, display: 'flex', gap: 12, fontSize: 13, color: 'var(--mt-text-2)' }}>
-          {age && <span>{age}</span>}
+        <div style={{ marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: '2px 10px', fontSize: 13, color: 'var(--mt-text-2)', overflow: 'hidden' }}>
+          {age && <span style={{ whiteSpace: 'nowrap' }}>{age}</span>}
           {patient.phone && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
               <Phone size={12} />{patient.phone}
             </span>
           )}
           {patient.email && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               <Mail size={12} />{patient.email}
             </span>
           )}
@@ -297,37 +298,34 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <OnboardingBanner />
 
-          {/* Metric grid */}
-          <div className="mt-grid-metrics">
-            <MetricCard
-              icon={Users}
-              label="Pacientes activos"
-              value={summary.active_patients}
-              helper={`${summary.total_patients} totales`}
-              tone="blue"
-              trend={{ dir: 'up', value: `${summary.total_patients}` }}
-            />
-            <MetricCard
-              icon={Stethoscope}
-              label="Tratamientos activos"
-              value={summary.active_treatments}
-              helper="bajo seguimiento"
-              tone="green"
-            />
-            <MetricCard
-              icon={UserPlus}
-              label="Nuevos este mes"
-              value={summary.monthly_new_patients}
-              helper="pacientes registrados"
-              tone="amber"
-            />
-            <MetricCard
-              icon={Pill}
-              label="Dosis confirmadas hoy"
-              value={summary.today_doses_confirmed}
-              helper={`de ${summary.today_doses_total} programadas`}
-              tone={adherenceTone}
-            />
+          {/* Compact 2×2 stat strip */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr',
+            border: '1px solid var(--mt-border)', borderRadius: 12,
+            background: 'var(--mt-surface)', overflow: 'hidden',
+            boxShadow: 'var(--mt-shadow-sm)',
+          }}>
+            {[
+              { Icon: Users,       value: summary.active_patients,       label: 'Pacientes activos',    sub: `${summary.total_patients} totales`,           color: '#1e40af' },
+              { Icon: Stethoscope, value: summary.active_treatments,     label: 'Tratamientos activos', sub: 'bajo seguimiento',                            color: '#047857' },
+              { Icon: UserPlus,    value: summary.monthly_new_patients,  label: 'Nuevos este mes',      sub: 'registrados este mes',                        color: '#b45309' },
+              { Icon: Pill,        value: summary.today_doses_confirmed, label: 'Dosis confirmadas',    sub: `de ${summary.today_doses_total} programadas`,  color: adherenceTone === 'red' ? '#b91c1c' : adherenceTone === 'green' ? '#047857' : '#b45309' },
+            ].map(({ Icon, value, label, sub, color }, i) => (
+              <div key={label} style={{
+                padding: '12px 14px',
+                borderLeft: i % 2 === 1 ? '1px solid var(--mt-border)' : 'none',
+                borderTop: i >= 2 ? '1px solid var(--mt-border)' : 'none',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <Icon size={13} color={color} style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: 'var(--mt-text-2)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{label}</span>
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--mt-text)', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                  <CountUp value={value} />
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--mt-text-2)', marginTop: 2, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{sub}</p>
+              </div>
+            ))}
           </div>
 
           {/* Two-column body */}
@@ -339,6 +337,7 @@ export default function DashboardPage() {
                 title="Prioridades clínicas"
                 icon={ClipboardList}
                 accent="red"
+                collapsible
                 actions={
                   <ClinicalButton href="/patients" variant="ghost" size="sm" iconRight={ArrowRight}>
                     Ver bandeja
@@ -412,6 +411,8 @@ export default function DashboardPage() {
                   icon={CheckCircle2}
                   accent="green"
                   padBody
+                  collapsible
+                  defaultOpen={false}
                   actions={
                     <ClinicalButton href="/analytics" variant="ghost" size="sm" iconRight={ArrowRight}>
                       Detalle
@@ -435,6 +436,7 @@ export default function DashboardPage() {
                 title="Pacientes recientes"
                 icon={Users}
                 accent="blue"
+                collapsible
                 actions={
                   <ClinicalButton href="/patients" variant="ghost" size="sm" iconRight={ArrowRight}>
                     Ver todos
@@ -459,7 +461,7 @@ export default function DashboardPage() {
               </MTPanel>
 
               {/* Acciones rápidas */}
-              <MTPanel title="Acciones rápidas" icon={Sparkles} accent="purple" padBody>
+              <MTPanel title="Acciones rápidas" icon={Sparkles} accent="purple" padBody collapsible defaultOpen={false}>
                 <div className="mt-grid-actions">
                   <QuickAction
                     icon={UserPlus} label="Registrar paciente" sub="Nueva ficha clínica"

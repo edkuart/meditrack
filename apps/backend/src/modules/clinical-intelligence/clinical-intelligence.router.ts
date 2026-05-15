@@ -115,6 +115,20 @@ router.post(
   },
 )
 
+// GET /clinical/review-items?status=PENDING&limit=50
+router.get(
+  '/clinical/review-items',
+  zValidator('query', ListReviewItemsSchema),
+  async (c) => {
+    const auth = c.get('auth')
+    const rows = await clinicalIntelligenceService.listTenantReviewItems(
+      auth.tenant_id,
+      c.req.valid('query'),
+    )
+    return c.json({ success: true, data: rows })
+  },
+)
+
 // PATCH /clinical/review-items/:id
 router.patch('/clinical/review-items/:id', zValidator('json', ResolveReviewItemSchema), async (c) => {
   const auth = c.get('auth')

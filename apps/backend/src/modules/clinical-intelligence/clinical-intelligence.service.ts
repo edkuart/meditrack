@@ -683,7 +683,38 @@ export async function listReviewItems(
       )
       : and(eq(clinicalReviewItems.tenant_id, tenantId), eq(clinicalReviewItems.patient_id, patientId)),
     orderBy: [desc(clinicalReviewItems.created_at)],
+    limit: input.limit,
     with: {
+      document: { columns: { id: true, file_name: true, type: true, mime_type: true, created_at: true } },
+      encounter: { columns: { id: true, encounter_type: true, opened_at: true } },
+      provenance: {
+        columns: {
+          id: true,
+          source_type: true,
+          source_label: true,
+          source_excerpt: true,
+          confidence: true,
+          created_at: true,
+        },
+      },
+      creator: { columns: { id: true, first_name: true, last_name: true } },
+      reviewer: { columns: { id: true, first_name: true, last_name: true } },
+    },
+  })
+}
+
+export async function listTenantReviewItems(
+  tenantId: string,
+  input: ListReviewItemsInput,
+) {
+  return db.query.clinicalReviewItems.findMany({
+    where: input.status
+      ? and(eq(clinicalReviewItems.tenant_id, tenantId), eq(clinicalReviewItems.status, input.status))
+      : eq(clinicalReviewItems.tenant_id, tenantId),
+    orderBy: [desc(clinicalReviewItems.created_at)],
+    limit: input.limit,
+    with: {
+      patient: { columns: { id: true, first_name: true, last_name: true, date_of_birth: true, sex: true } },
       document: { columns: { id: true, file_name: true, type: true, mime_type: true, created_at: true } },
       encounter: { columns: { id: true, encounter_type: true, opened_at: true } },
       provenance: {
