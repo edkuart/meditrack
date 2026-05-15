@@ -148,6 +148,13 @@
       "when": 1778774813000,
       "tag": "0019_lab_compatibility_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1778774814000,
+      "tag": "0020_treatment_interventions_compatibility",
+      "breakpoints": true
     }
   ]
 }
