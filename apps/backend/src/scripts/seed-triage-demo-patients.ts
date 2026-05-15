@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import {
   aiUsageEvents,
@@ -12,13 +13,17 @@ import {
   patientBackground,
   patientProblems,
   patients,
+  tenants,
   treatmentInterventions,
   treatmentPlans,
   users,
   vitalSigns,
 } from '../shared/db/index.ts'
 
-const DOCTOR_EMAIL = process.env.DEMO_DOCTOR_EMAIL?.trim() || 'doctor@demo.com'
+const DOCTOR_EMAIL = process.env.DEMO_DOCTOR_EMAIL?.trim() || 'demo.ai@meditrack.app'
+const DOCTOR_PASSWORD = process.env.DEMO_DOCTOR_PASSWORD?.trim() || 'DemoIA2026!'
+const DEMO_CLINIC_NAME = process.env.DEMO_CLINIC_NAME?.trim() || 'Clinica Demo IA'
+const DEMO_CLINIC_SLUG = process.env.DEMO_CLINIC_SLUG?.trim() || 'clinica-demo-ia'
 const SEED = 'triage-demo-patients-v1'
 const DEMO = 'DEMO TRIAGE IA'
 
@@ -588,11 +593,7 @@ const demoPatients: DemoPatient[] = [
 ]
 
 async function main() {
-  const doctor = await db.query.users.findFirst({
-    where: eq(users.email, DOCTOR_EMAIL),
-    columns: { id: true, tenant_id: true, email: true },
-  })
-  if (!doctor) throw new Error(`Doctor account not found: ${DOCTOR_EMAIL}. Run npm run db:seed first.`)
+  const doctor = await ensureDemoDoctor()
 
   const ids = demoPatients.map(patient => patient.idNumber)
   const existing = await db.query.patients.findMany({
@@ -614,6 +615,51 @@ async function main() {
     doctor: DOCTOR_EMAIL,
     patients: created,
   }, null, 2))
+}
+
+async function ensureDemoDoctor() {
+  const existingDoctor = await db.query.users.findFirst({
+    where: eq(users.email, DOCTOR_EMAIL),
+    columns: { id: true, tenant_id: true, email: true },
+  })
+
+  if (existingDoctor) return existingDoctor
+
+  let tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.slug, DEMO_CLINIC_SLUG),
+    columns: { id: true },
+  })
+
+  if (!tenant) {
+    ;[tenant] = await db.insert(tenants).values({
+      name: DEMO_CLINIC_NAME,
+      slug: DEMO_CLINIC_SLUG,
+      plan_type: 'pro',
+      status: 'active',
+      settings: {
+        demo: true,
+        seed: SEED,
+      },
+    }).returning({ id: tenants.id })
+  }
+
+  const now = new Date()
+  const [doctor] = await db.insert(users).values({
+    tenant_id: tenant.id,
+    email: DOCTOR_EMAIL,
+    password_hash: await bcrypt.hash(DOCTOR_PASSWORD, 12),
+    role: 'DOCTOR',
+    first_name: 'Demo',
+    last_name: 'IA Clinica',
+    professional_id: 'DEMO-IA-2026',
+    specialty: 'Medicina interna',
+    is_verified: true,
+    is_active: true,
+    tos_accepted_at: now,
+    privacy_policy_accepted_at: now,
+  }).returning({ id: users.id, tenant_id: users.tenant_id, email: users.email })
+
+  return doctor
 }
 
 async function seedPatient(tenantId: string, doctorId: string, doctorEmail: string, demo: DemoPatient) {
