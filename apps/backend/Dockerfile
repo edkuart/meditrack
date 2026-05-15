@@ -25,6 +25,6 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-# Run database migrations, optionally seed demo data, then start the server
+# Run migrations, optionally seed demo data in the background, then start the server
 # tsx is in devDependencies — kept intentionally since noEmit: true prevents tsc build
-CMD ["sh", "-c", "npx tsx src/shared/db/migrate.ts && if [ \"$DEMO_SEED_TRIAGE_PATIENTS\" = \"true\" ]; then npx tsx src/scripts/seed-triage-demo-patients.ts; fi && npx tsx src/index.ts"]
+CMD ["sh", "-c", "npx tsx src/shared/db/migrate.ts && if [ \"$DEMO_SEED_TRIAGE_PATIENTS\" = \"true\" ]; then npx tsx src/scripts/seed-triage-demo-patients.ts & fi && npx tsx src/index.ts"]
