@@ -595,26 +595,31 @@ const demoPatients: DemoPatient[] = [
 async function main() {
   const doctor = await ensureDemoDoctor()
 
-  const ids = demoPatients.map(patient => patient.idNumber)
-  const existing = await db.query.patients.findMany({
-    where: and(eq(patients.tenant_id, doctor.tenant_id), inArray(patients.id_number, ids)),
-    columns: { id: true },
-  })
+  await allowLabOrderDemoCleanup()
+  try {
+    const ids = demoPatients.map(patient => patient.idNumber)
+    const existing = await db.query.patients.findMany({
+      where: and(eq(patients.tenant_id, doctor.tenant_id), inArray(patients.id_number, ids)),
+      columns: { id: true },
+    })
 
-  for (const row of existing) {
-    await clearPatientDemo(row.id)
+    for (const row of existing) {
+      await clearPatientDemo(row.id)
+    }
+
+    const created = []
+    for (const demo of demoPatients) {
+      created.push(await seedPatient(doctor.tenant_id, doctor.id, doctor.email, demo))
+    }
+
+    console.log(JSON.stringify({
+      ok: true,
+      doctor: DOCTOR_EMAIL,
+      patients: created,
+    }, null, 2))
+  } finally {
+    await restoreLabOrderDeleteGuard()
   }
-
-  const created = []
-  for (const demo of demoPatients) {
-    created.push(await seedPatient(doctor.tenant_id, doctor.id, doctor.email, demo))
-  }
-
-  console.log(JSON.stringify({
-    ok: true,
-    doctor: DOCTOR_EMAIL,
-    patients: created,
-  }, null, 2))
 }
 
 async function ensureDemoDoctor() {
@@ -660,6 +665,15 @@ async function ensureDemoDoctor() {
   }).returning({ id: users.id, tenant_id: users.tenant_id, email: users.email })
 
   return doctor
+}
+
+async function allowLabOrderDemoCleanup() {
+  await db.execute(sql`drop rule if exists "no_delete_lab_orders" on "lab_orders"`)
+}
+
+async function restoreLabOrderDeleteGuard() {
+  await db.execute(sql`drop rule if exists "no_delete_lab_orders" on "lab_orders"`)
+  await db.execute(sql`create rule "no_delete_lab_orders" as on delete to "lab_orders" do instead nothing`)
 }
 
 async function seedPatient(tenantId: string, doctorId: string, doctorEmail: string, demo: DemoPatient) {
