@@ -190,4 +190,20 @@ describe('clinical copilot local engine', () => {
       'SpO2 93-95% con disnea y edema: confirmar deterioro respiratorio/cardiopulmonar.',
     ])
   })
+
+  it('removes reassuring stability statements from soft alerts', () => {
+    const draft = buildClinicalCopilotDraft('ASK_CLINICAL_QUESTION', baseSummary, undefined, '¿Hospitalización o manejo ambulatorio?')
+    const cleaned = cleanClinicalCopilotDraft({
+      ...draft,
+      soft_alerts: [
+        'SpO2 99% estable — no indica hipoxemia; monitorear si baja.',
+        'Tendencias de signos estables (PA, FC, FR) — baja probabilidad de descompensación aguda en ausencia de nuevos síntomas.',
+        'Dolor torácico sugestivo de isquemia, síncope o hipotensión sostenida.',
+      ],
+    })
+
+    expect(cleaned.soft_alerts).toEqual([
+      'Dolor torácico sugestivo de isquemia, síncope o hipotensión sostenida.',
+    ])
+  })
 })

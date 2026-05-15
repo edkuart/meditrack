@@ -34,6 +34,7 @@ const CLINICAL_SYSTEM_INSTRUCTIONS = [
   'Si la pregunta pide decidir urgencia, evaluacion presencial o seguimiento ambulatorio, no clasifiques por un dato aislado; compara estabilidad actual, sintomas de alarma, tendencia, comorbilidades y disponibilidad de seguimiento.',
   'Para decisiones de triage, usa lenguaje condicional: "requiere valorar presencial si..." o "seguimiento ambulatorio podria ser razonable si...", sin afirmar disposicion definitiva.',
   'soft_alerts debe contener solo riesgos clinicos especificos que puedan cambiar prioridad, seguridad o necesidad de evaluacion presencial.',
+  'soft_alerts nunca debe contener hallazgos tranquilizadores, estables, normales o frases de baja probabilidad; esos datos deben omitirse o ir en Datos a confirmar.',
   'No conviertas valores limitrofes o levemente anormales en soft_alerts salvo que tengan tendencia, sintomas, condicion de alto riesgo o combinacion peligrosa documentada.',
   'No incluyas en soft_alerts problemas cronicos/importantes que no cambien prioridad inmediata; colocalos en Datos a confirmar o clinical_gaps.',
   'Hipotiroidismo, TSH elevada, dislipidemia, HbA1c o hallazgos metabolicos no son soft_alerts salvo crisis/sintomas severos o combinacion de seguridad inmediata documentada.',
@@ -480,7 +481,11 @@ function sanitizeAnswer(value: string | undefined) {
 }
 
 function sanitizeSoftAlerts(values: string[]) {
-  const clinical = values.filter(value => !isGenericSafetyText(value) && !isNonPriorityClinicalFact(value))
+  const clinical = values.filter(value =>
+    !isGenericSafetyText(value)
+    && !isReassuringNonAlert(value)
+    && !isNonPriorityClinicalFact(value),
+  )
   return sanitizeList(clinical, { limit: 4 })
 }
 
@@ -506,6 +511,16 @@ function sanitizeList(
 
 function isGenericSafetyText(value: string) {
   return /validaci[oó]n m[eé]dica|juicio cl[ií]nico|recomendaciones requieren|m[eé]dico debe|no sustituye|borrador asistivo|responsabilidad/i.test(value)
+}
+
+function isReassuringNonAlert(value: string) {
+  const normalized = normalizeComparable(value)
+  const hasReassuringQualifier = /estable|estables|normal|normales|dentro de rango|sin hipoxemia|no indica|baja probabilidad|ausencia de|sin datos de|sin signos de|no sugiere|monitorear si baja|controlado|conservad/i.test(normalized)
+  const hasConcreteDanger = /<\s*94|menor que 94|spo2\s*(?:[0-8]\d|9[0-3])|saturacion\s*(?:[0-8]\d|9[0-3])|inestable|inestabilidad|deterior|empeora|descenso|caida|hipotension sostenida|hipertension severa|crisis hipertensiva|taquicardia persistente|bradicardia|fiebre alta|sangrado activo|dolor torac|disnea en reposo|sincope/i.test(normalized)
+  if (hasReassuringQualifier && !hasConcreteDanger) return true
+  if (hasConcreteDanger) return false
+
+  return hasReassuringQualifier
 }
 
 function isNonPriorityClinicalFact(value: string) {
