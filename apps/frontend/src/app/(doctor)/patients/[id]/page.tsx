@@ -95,6 +95,18 @@ const BG_LABELS: Record<BackgroundCategory, { label: string; tone: Tone }> = {
   PERINATAL:   { label: 'Perinatales',                         tone: 'slate'  },
 }
 
+const BG_HELP_TEXT: Record<BackgroundCategory, string> = {
+  ALERGIAS: 'Medicamentos, alimentos, ambiente, reacción y severidad. Ej.: penicilina: urticaria; niega anafilaxia.',
+  APP: 'Enfermedades previas o crónicas relevantes, año aproximado, control actual y complicaciones conocidas.',
+  AHF: 'Padres, hermanos e hijos: HTA, diabetes, cáncer, cardiopatía prematura, enfermedad renal u otros riesgos familiares.',
+  MEDICAMENTOS: 'Medicamentos actuales, dosis, frecuencia, automedicación, suplementos y adherencia referida.',
+  APNP: 'Tabaco, alcohol, drogas, actividad física, sueño, alimentación, ocupación y contexto social relevante.',
+  AQ: 'Cirugías, año aproximado, complicaciones, anestesia y hospitalizaciones quirúrgicas relevantes.',
+  ATRAUMA: 'Fracturas, accidentes, lesiones previas, secuelas funcionales o neurológicas.',
+  GINECO_OBS: 'FUM, gestas/partos/abortos, anticoncepción, menopausia, citología, sangrados o embarazo actual.',
+  PERINATAL: 'Datos de nacimiento, prematurez, complicaciones neonatales, vacunas o desarrollo cuando aplique.',
+}
+
 const ENC_TYPES = [
   { value: 'CONSULTATION',        label: 'Consulta'            },
   { value: 'FOLLOW_UP',           label: 'Seguimiento'         },
@@ -819,14 +831,24 @@ export default function PatientProfilePage() {
     setBgError('')
   }
 
+  function startBackgroundCapture() {
+    const firstEmpty = BG_CATEGORY_ORDER.find(category => !background.some(item => item.category === category && item.content.trim()))
+    startEditBg(firstEmpty ?? 'ALERGIAS')
+  }
+
   async function handleSaveBackground() {
     if (!token || !editingCategory) return
+    const content = editContent.trim()
+    if (!content) {
+      setBgError('Escribe al menos un dato clínico para guardar este antecedente.')
+      return
+    }
     setSavingBg(true)
     setBgError('')
     try {
       const saved = await upsertPatientBackground(token, patientId, {
         category: editingCategory,
-        content: editContent.trim(),
+        content,
       })
       setBackground(prev => {
         const filtered = prev.filter(b => b.category !== editingCategory)
@@ -1316,7 +1338,19 @@ export default function PatientProfilePage() {
           </ClinicalPanel>
 
           {/* ── Antecedentes ── */}
-          <ClinicalPanel title="Antecedentes" icon={BookOpen} accent="purple">
+          <ClinicalPanel
+            title="Antecedentes"
+            icon={BookOpen}
+            accent="purple"
+            actions={
+              <button
+                onClick={startBackgroundCapture}
+                className={panelToggleClass}
+              >
+                <Plus size={15} /> Agregar antecedente
+              </button>
+            }
+          >
             <div className="divide-y divide-slate-50">
               {BG_CATEGORY_ORDER.map(category => {
                 const cfg = BG_LABELS[category]
@@ -1335,7 +1369,8 @@ export default function PatientProfilePage() {
                           onClick={() => startEditBg(category)}
                           className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
                         >
-                          <Pencil size={12} /> Editar
+                          {record?.content ? <Pencil size={12} /> : <Plus size={12} />}
+                          {record?.content ? 'Editar' : 'Agregar'}
                         </button>
                       )}
                     </div>
@@ -1345,15 +1380,16 @@ export default function PatientProfilePage() {
                         <textarea
                           value={editContent}
                           onChange={e => setEditContent(e.target.value)}
-                          rows={3}
-                          placeholder="Registra los antecedentes en esta categoría..."
+                          rows={4}
+                          placeholder={BG_HELP_TEXT[category]}
                           className="w-full resize-none rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
                         />
+                        <p className="text-xs leading-relaxed text-slate-400">{BG_HELP_TEXT[category]}</p>
                         {bgError && <p className="text-xs text-red-500">{bgError}</p>}
                         <div className="flex gap-2">
                           <button
                             onClick={handleSaveBackground}
-                            disabled={savingBg}
+                            disabled={savingBg || !editContent.trim()}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-60 transition-colors"
                           >
                             {savingBg ? <Loader2 size={11} className="animate-spin" /> : null}
