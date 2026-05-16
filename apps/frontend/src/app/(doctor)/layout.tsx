@@ -67,7 +67,8 @@ function NavItem({
       style={{
         position: 'relative',
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 10px 8px 13px', borderRadius: 8,
+        minHeight: 38,
+        padding: '9px 10px 9px 13px', borderRadius: 8,
         background: active ? 'var(--mt-primary-subtle)' : hover ? 'var(--mt-elevated)' : 'transparent',
         color: active ? 'var(--mt-primary)' : hover ? 'var(--mt-text)' : 'var(--mt-text-2)',
         fontSize: 13, fontWeight: active ? 500 : 400,
@@ -82,7 +83,13 @@ function NavItem({
           animation: 'mt-slide-in-l .2s ease-out',
         }} />
       )}
-      <Icon size={16} color={active ? 'var(--mt-primary)' : 'var(--mt-muted)'} />
+      <span style={{
+        width: 22, height: 22, borderRadius: 6,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: active ? 'rgba(26,86,219,.10)' : 'transparent',
+      }}>
+        <Icon size={16} color={active ? 'var(--mt-primary)' : 'var(--mt-muted)'} />
+      </span>
       <span style={{ flex: 1 }}>{label}</span>
       {badge && (
         <span style={{
@@ -135,10 +142,12 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         'transition-transform duration-300 ease-in-out',
         open ? 'translate-x-0' : '-translate-x-full',
         // Desktop: static, always visible, reset transform
-        'md:static md:translate-x-0 md:z-auto',
+        'md:sticky md:top-0 md:translate-x-0 md:z-auto',
       ].join(' ')}
       style={{
-        width: 224, flexShrink: 0,
+        width: 232, flexShrink: 0,
+        height: '100dvh',
+        maxHeight: '100dvh',
         background: 'var(--mt-surface)',
         borderRight: '1px solid var(--mt-border)',
         boxShadow: open ? '8px 0 32px rgba(15,23,42,.18)' : '2px 0 8px rgba(15,23,42,.04)',
@@ -146,9 +155,10 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     >
       {/* Logo + mobile close */}
       <div style={{
-        padding: '18px 18px 16px',
+        padding: '18px 16px 14px',
         borderBottom: '1px solid var(--mt-border)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexShrink: 0,
       }}>
         <MTLogo size={16} />
         <button
@@ -167,10 +177,16 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
       {/* Nav */}
       <nav style={{
-        padding: '14px 10px 6px', flex: 1,
+        padding: '14px 10px 10px', flex: 1, minHeight: 0,
         display: 'flex', flexDirection: 'column', gap: 2,
         overflowY: 'auto',
       }} className="mt-scroll">
+        <div style={{
+          margin: '0 10px 7px',
+          fontSize: 10, fontWeight: 700,
+          color: 'var(--mt-muted)',
+          letterSpacing: '0.1em', textTransform: 'uppercase',
+        }}>Clínica</div>
         {main
           .filter(item => !item.adminOnly || isAdmin)
           .map(item => (
@@ -187,8 +203,8 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         {isAdmin && (
           <>
             <div style={{
-              margin: '16px 10px 6px',
-              fontSize: 10, fontWeight: 600,
+              margin: '18px 10px 7px',
+              fontSize: 10, fontWeight: 700,
               color: 'var(--mt-muted)',
               letterSpacing: '0.1em', textTransform: 'uppercase',
             }}>Configuración</div>
@@ -206,58 +222,73 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         )}
       </nav>
 
-      {/* Doctor info card */}
+      {/* Doctor account */}
       <div style={{
-        margin: 10, padding: 12,
+        padding: 10,
         borderTop: '1px solid var(--mt-border)',
-        background: 'var(--mt-bg)', borderRadius: 10,
-        display: 'flex', alignItems: 'center', gap: 10,
+        flexShrink: 0,
       }}>
-        <MTAvatar
-          name={doctorName || 'Dr'}
-          size={36}
-          tone={{ bg: '#dbeafe', fg: '#1a56db' }}
-        />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 13, fontWeight: 600, color: 'var(--mt-text)',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>
-            {user ? `Dr. ${user.last_name}` : '—'}
+        <div style={{
+          padding: 10,
+          border: '1px solid var(--mt-border)',
+          background: 'var(--mt-bg)',
+          borderRadius: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <MTAvatar
+              name={doctorName || 'Dr'}
+              size={34}
+              tone={{ bg: '#dbeafe', fg: '#1a56db' }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 13, fontWeight: 600, color: 'var(--mt-text)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {user ? `Dr. ${user.last_name}` : '—'}
+              </div>
+              <div style={{
+                fontSize: 11, color: 'var(--mt-muted)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {user?.specialty || user?.role || 'Cuenta clínica'}
+              </div>
+            </div>
           </div>
-          {user?.specialty && (
+          <button
+            onClick={() => { logout(); router.replace('/login') }}
+            style={{
+              marginTop: 10,
+              width: '100%',
+              minHeight: 34,
+              border: '1px solid var(--mt-border)',
+              borderRadius: 8,
+              background: 'var(--mt-surface)',
+              color: 'var(--mt-text-2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            <LogOut size={14} />
+            Cerrar sesión
+          </button>
+          {user?.email && (
             <div style={{
-              fontSize: 11, color: 'var(--mt-muted)',
+              marginTop: 8,
+              fontSize: 10, color: 'var(--mt-muted)',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
-              {user.specialty}
+              {user.email}
             </div>
           )}
         </div>
-        <LogoutBtn onLogout={() => { logout(); router.replace('/login') }} />
       </div>
     </aside>
-  )
-}
-
-function LogoutBtn({ onLogout }: { onLogout: () => void }) {
-  const [hover, setHover] = useState(false)
-  return (
-    <button
-      title="Cerrar sesión"
-      onClick={onLogout}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        width: 28, height: 28, borderRadius: 6, border: 'none',
-        background: hover ? 'var(--mt-danger-subtle, #fee2e2)' : 'transparent',
-        color: hover ? 'var(--mt-danger)' : 'var(--mt-muted)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer', transition: 'all .2s', flexShrink: 0,
-      }}
-    >
-      <LogOut size={14} />
-    </button>
   )
 }
 
@@ -538,7 +569,7 @@ function DoctorGuard({ children }: { children: React.ReactNode }) {
   if (!token) return null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--mt-bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', minHeight: '100dvh', background: 'var(--mt-bg)', overflow: 'hidden' }}>
       <LegalAcceptanceBanner />
 
       {/* Mobile backdrop — shown when sidebar is open */}
@@ -550,11 +581,11 @@ function DoctorGuard({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           <Topbar onMenu={() => setSidebarOpen(v => !v)} />
-          <main style={{ flex: 1, overflowY: 'auto', paddingBottom: '96px' }} className="md:pb-0 mt-scroll">
+          <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 'calc(96px + env(safe-area-inset-bottom))' }} className="md:pb-0 mt-scroll">
             {children}
           </main>
         </div>

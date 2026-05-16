@@ -8,7 +8,7 @@ import {
   QrCode, Link2, Loader2, ExternalLink, Download, MessageCircle,
   Activity, CalendarClock, ClipboardList, Pill, Stethoscope, UserRound,
   ShieldCheck, Trash2, AlertTriangle, Copy, FlaskConical, BookOpen, Pencil,
-  Ruler, Scale,
+  Ruler, Scale, X,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
@@ -1459,37 +1459,56 @@ export default function PatientProfilePage() {
                 )
               })}
             </div>
-            {showBackgroundHistory && (
-              <div className="border-t border-slate-100 bg-slate-50 px-5 py-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Historial de cambios</p>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-400">{backgroundHistory.length}</span>
-                </div>
-                {backgroundHistory.length === 0 ? (
-                  <p className="text-xs italic text-slate-400">Sin cambios registrados todavía.</p>
-                ) : (
-                  <div className="flex max-h-80 flex-col gap-2 overflow-y-auto pr-1">
-                    {backgroundHistory.map(item => {
-                      const cfg = BG_LABELS[item.category]
-                      return (
-                        <div key={item.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
-                          <div className="mb-1 flex flex-wrap items-center gap-2">
-                            <StatusPill tone={cfg.tone}>{item.category}</StatusPill>
-                            <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
-                            <span className={item.is_current ? 'rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700' : 'rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500'}>
-                              {item.is_current ? 'Vigente' : 'Retirado'}
-                            </span>
-                            <span className="text-xs text-slate-400">{formatVitalDate(item.recorded_at ?? item.created_at)}</span>
-                          </div>
-                          <p className="text-xs leading-relaxed text-slate-600">{item.content}</p>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
           </ClinicalPanel>
+        </div>
+      )}
+
+      {showBackgroundHistory && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/35 px-3 py-4 backdrop-blur-sm sm:items-center">
+          <div className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+                  <ClipboardList size={17} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">Historial de antecedentes</p>
+                  <p className="text-xs text-slate-400">{backgroundHistory.length} cambios registrados</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBackgroundHistory(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Cerrar historial"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4">
+              {backgroundHistory.length === 0 ? (
+                <p className="rounded-lg border border-slate-100 bg-white p-4 text-sm text-slate-400">Sin cambios registrados todavía.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {backgroundHistory.map(item => {
+                    const cfg = BG_LABELS[item.category]
+                    return (
+                      <div key={item.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2.5 shadow-sm">
+                        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                          <StatusPill tone={cfg.tone}>{item.category}</StatusPill>
+                          <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
+                          <span className={item.is_current ? 'rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700' : 'rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500'}>
+                            {item.is_current ? 'Vigente' : 'Retirado'}
+                          </span>
+                          <span className="ml-auto text-xs text-slate-400">{formatVitalDate(item.recorded_at ?? item.created_at)}</span>
+                        </div>
+                        <p className="text-xs leading-relaxed text-slate-600">{item.content}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
