@@ -716,12 +716,19 @@ export interface PatientBackground {
   id: string
   category: BackgroundCategory
   content: string
+  is_current: boolean
   recorded_at: string | null
+  retired_at: string | null
+  retired_reason: string | null
   created_at: string
 }
 
 export async function listPatientBackground(token: string, patientId: string): Promise<PatientBackground[]> {
   return doctorFetch(`/patients/${patientId}/background`, token)
+}
+
+export async function listPatientBackgroundHistory(token: string, patientId: string): Promise<PatientBackground[]> {
+  return doctorFetch(`/patients/${patientId}/background/history`, token)
 }
 
 export async function upsertPatientBackground(token: string, patientId: string, data: {
@@ -732,5 +739,11 @@ export async function upsertPatientBackground(token: string, patientId: string, 
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+  })
+}
+
+export async function retirePatientBackground(token: string, patientId: string, category: BackgroundCategory): Promise<PatientBackground> {
+  return doctorFetch(`/patients/${patientId}/background/${category}`, token, {
+    method: 'DELETE',
   })
 }

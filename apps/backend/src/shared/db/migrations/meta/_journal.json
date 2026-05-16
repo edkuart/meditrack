@@ -155,6 +155,13 @@
       "when": 1778774814000,
       "tag": "0020_treatment_interventions_compatibility",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1778774815000,
+      "tag": "0021_patient_background_lifecycle",
+      "breakpoints": true
     }
   ]
 }

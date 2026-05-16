@@ -15,7 +15,7 @@ import {
   getPatient, listEncounters, createEncounter, listDocuments,
   generatePortalAccess, getPatientFhirBundle, listPatientTreatments,
   listPatientCheckIns, listPatientProblems, createPatientProblem,
-  listPatientBackground, upsertPatientBackground,
+  listPatientBackground, listPatientBackgroundHistory, retirePatientBackground, upsertPatientBackground,
   listPatientVitalSigns, createPatientVitalSigns,
   type Patient, type Encounter, type Document, type AccessResult,
   type TreatmentPlan, type PatientCheckIn,
@@ -587,10 +587,10 @@ function PatientBiometricsSection({
         </ClinicalPanel>
       </div>
 
-      <ClinicalPanel title="Registrar datos opcionales" icon={Plus} accent="green">
+      <ClinicalPanel title="Registrar datos físicos y signos" icon={Plus} accent="green">
         <form onSubmit={submit} className="flex flex-col gap-4 p-4">
           <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
-            Registra solo los datos disponibles. Cada observación queda ligada al paciente y puede asociarse a una consulta si aplica.
+            Registra solo los datos disponibles. Cada observación conserva fecha/hora, no reemplaza mediciones previas y puede asociarse a una consulta si aplica.
           </div>
           <div className="flex flex-col gap-1">
             <label className={labelClass}>Consulta asociada</label>
@@ -690,6 +690,7 @@ export default function PatientProfilePage() {
   const [labOrders, setLabOrders] = useState<LabOrder[]>([])
   const [problems, setProblems] = useState<PatientProblem[]>([])
   const [background, setBackground] = useState<PatientBackground[]>([])
+  const [backgroundHistory, setBackgroundHistory] = useState<PatientBackground[]>([])
   const [vitalSigns, setVitalSigns] = useState<VitalSignsRecord[]>([])
   const [loadingPage, setLoadingPage] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -715,6 +716,8 @@ export default function PatientProfilePage() {
   const [editingCategory, setEditingCategory] = useState<BackgroundCategory | null>(null)
   const [editContent, setEditContent] = useState('')
   const [savingBg, setSavingBg] = useState(false)
+  const [retiringBg, setRetiringBg] = useState<BackgroundCategory | null>(null)
+  const [showBackgroundHistory, setShowBackgroundHistory] = useState(false)
   const [bgError, setBgError] = useState('')
 
   // Compliance form
@@ -741,7 +744,7 @@ export default function PatientProfilePage() {
     setLoadingPage(true)
     setLoadError(null)
     try {
-      const [p, encs, plans, docs, adh, checks, cons, orders, probs, bg, vitals] = await Promise.all([
+      const [p, encs, plans, docs, adh, checks, cons, orders, probs, bg, bgHistory, vitals] = await Promise.all([
         getPatient(token, patientId),
         listEncounters(token, patientId),
         listPatientTreatments(token, patientId).catch(() => []),
@@ -752,6 +755,7 @@ export default function PatientProfilePage() {
         listLabOrders(token, patientId).catch(() => []),
         listPatientProblems(token, patientId).catch(() => []),
         listPatientBackground(token, patientId).catch(() => []),
+        listPatientBackgroundHistory(token, patientId).catch(() => []),
         listPatientVitalSigns(token, patientId).catch(() => []),
       ])
       setPatient(p)
@@ -764,6 +768,7 @@ export default function PatientProfilePage() {
       setLabOrders(orders)
       setProblems(probs)
       setBackground(bg)
+      setBackgroundHistory(bgHistory)
       setVitalSigns(vitals)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor')
@@ -854,11 +859,33 @@ export default function PatientProfilePage() {
         const filtered = prev.filter(b => b.category !== editingCategory)
         return [...filtered, saved]
       })
+      const history = await listPatientBackgroundHistory(token, patientId).catch(() => null)
+      if (history) setBackgroundHistory(history)
       setEditingCategory(null)
     } catch (err) {
       setBgError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
       setSavingBg(false)
+    }
+  }
+
+  async function handleRetireBackground(category: BackgroundCategory) {
+    if (!token) return
+    const cfg = BG_LABELS[category]
+    const confirmed = window.confirm(`Retirar "${cfg.label}" del historial activo? Se conservará en el historial de cambios.`)
+    if (!confirmed) return
+
+    setRetiringBg(category)
+    setBgError('')
+    try {
+      const retired = await retirePatientBackground(token, patientId, category)
+      setBackground(prev => prev.filter(item => item.category !== category))
+      setBackgroundHistory(prev => [retired, ...prev.filter(item => item.id !== retired.id)])
+      if (editingCategory === category) setEditingCategory(null)
+    } catch (err) {
+      setBgError(err instanceof Error ? err.message : 'Error al retirar antecedente')
+    } finally {
+      setRetiringBg(null)
     }
   }
 
@@ -1343,12 +1370,20 @@ export default function PatientProfilePage() {
             icon={BookOpen}
             accent="purple"
             actions={
-              <button
-                onClick={startBackgroundCapture}
-                className={panelToggleClass}
-              >
-                <Plus size={15} /> Agregar antecedente
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => setShowBackgroundHistory(value => !value)}
+                  className={panelToggleClass}
+                >
+                  <ClipboardList size={15} /> {showBackgroundHistory ? 'Ocultar historial' : 'Ver historial'}
+                </button>
+                <button
+                  onClick={startBackgroundCapture}
+                  className={panelToggleClass}
+                >
+                  <Plus size={15} /> Agregar antecedente
+                </button>
+              </div>
             }
           >
             <div className="divide-y divide-slate-50">
@@ -1365,13 +1400,25 @@ export default function PatientProfilePage() {
                         <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
                       </div>
                       {!isEditing && (
-                        <button
-                          onClick={() => startEditBg(category)}
-                          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
-                        >
-                          {record?.content ? <Pencil size={12} /> : <Plus size={12} />}
-                          {record?.content ? 'Editar' : 'Agregar'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => startEditBg(category)}
+                            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+                          >
+                            {record?.content ? <Pencil size={12} /> : <Plus size={12} />}
+                            {record?.content ? 'Editar' : 'Agregar'}
+                          </button>
+                          {record?.content && (
+                            <button
+                              onClick={() => handleRetireBackground(category)}
+                              disabled={retiringBg === category}
+                              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600 disabled:opacity-60 transition-colors"
+                            >
+                              {retiringBg === category ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                              Retirar
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -1412,6 +1459,36 @@ export default function PatientProfilePage() {
                 )
               })}
             </div>
+            {showBackgroundHistory && (
+              <div className="border-t border-slate-100 bg-slate-50 px-5 py-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Historial de cambios</p>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-400">{backgroundHistory.length}</span>
+                </div>
+                {backgroundHistory.length === 0 ? (
+                  <p className="text-xs italic text-slate-400">Sin cambios registrados todavía.</p>
+                ) : (
+                  <div className="flex max-h-80 flex-col gap-2 overflow-y-auto pr-1">
+                    {backgroundHistory.map(item => {
+                      const cfg = BG_LABELS[item.category]
+                      return (
+                        <div key={item.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+                          <div className="mb-1 flex flex-wrap items-center gap-2">
+                            <StatusPill tone={cfg.tone}>{item.category}</StatusPill>
+                            <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
+                            <span className={item.is_current ? 'rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700' : 'rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500'}>
+                              {item.is_current ? 'Vigente' : 'Retirado'}
+                            </span>
+                            <span className="text-xs text-slate-400">{formatVitalDate(item.recorded_at ?? item.created_at)}</span>
+                          </div>
+                          <p className="text-xs leading-relaxed text-slate-600">{item.content}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </ClinicalPanel>
         </div>
       )}
