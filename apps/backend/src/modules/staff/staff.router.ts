@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 import { ForbiddenError } from '../../shared/errors.ts'
-import { InviteStaffSchema, AcceptInviteSchema } from './staff.schema.ts'
+import { InviteStaffSchema, AcceptInviteSchema, PromoteStaffSchema } from './staff.schema.ts'
 import * as staffService from './staff.service.ts'
 
 const router = new Hono()
@@ -35,6 +35,26 @@ router.post(
       c.req.valid('json'),
     )
     return c.json({ success: true, data }, 201)
+  },
+)
+
+// ── Promote / change role (admin only) ───────────────────────────────────────
+router.patch(
+  '/staff/:userId/role',
+  requireAuth,
+  zValidator('json', PromoteStaffSchema),
+  async (c) => {
+    const auth = c.get('auth')
+    if (auth.role !== 'ADMIN_CLINIC' && auth.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenError('Only clinic admins can change roles')
+    }
+    const data = await staffService.promoteStaff(
+      auth.tenant_id,
+      auth.sub,
+      c.req.param('userId')!,
+      c.req.valid('json'),
+    )
+    return c.json({ success: true, data })
   },
 )
 

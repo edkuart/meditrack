@@ -129,6 +129,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const config = [
     { href: '/settings/clinic',    icon: Building2,   label: 'Clínica' },
     { href: '/settings/hospital',  icon: Building2,   label: 'Hospital' },
+    { href: '/settings/staff',     icon: UserCog,     label: 'Personal' },
     { href: '/settings/billing',   icon: CreditCard,  label: 'Plan y pagos' },
     { href: '/settings/audit',     icon: ShieldCheck, label: 'Auditoría' },
     { href: '/settings/sessions',  icon: Monitor,     label: 'Sesiones' },

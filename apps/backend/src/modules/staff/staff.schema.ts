@@ -22,5 +22,10 @@ export const AcceptInviteSchema = z.object({
   professional_id: z.string().max(50).trim().optional(),
 })
 
+export const PromoteStaffSchema = z.object({
+  role: InviteableRole,
+})
+
 export type InviteStaffInput = z.infer<typeof InviteStaffSchema>
 export type AcceptInviteInput = z.infer<typeof AcceptInviteSchema>
+export type PromoteStaffInput = z.infer<typeof PromoteStaffSchema>

@@ -7,7 +7,7 @@ import { sendEmail } from '../../shared/services/email.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { assertStaffLimit } from '../../shared/services/limits.service.ts'
 import { ConflictError, NotFoundError, UnauthorizedError, ForbiddenError } from '../../shared/errors.ts'
-import type { InviteStaffInput, AcceptInviteInput } from './staff.schema.ts'
+import type { InviteStaffInput, AcceptInviteInput, PromoteStaffInput } from './staff.schema.ts'
 import { refreshTokens } from '../../shared/db/index.ts'
 
 const INVITE_EXPIRES_DAYS = 7
@@ -203,6 +203,32 @@ export async function acceptInvitation(input: AcceptInviteInput) {
     access_token,
     refresh_token: rawRefresh,
   }
+}
+
+// ─── Promote / change role ────────────────────────────────────────────────────
+
+export async function promoteStaff(
+  tenantId: string,
+  requesterId: string,
+  targetId: string,
+  input: PromoteStaffInput,
+) {
+  if (requesterId === targetId) throw new ForbiddenError('Cannot change your own role')
+
+  const target = await db.query.users.findFirst({
+    where: and(eq(users.id, targetId), eq(users.tenant_id, tenantId)),
+    columns: { id: true, email: true, role: true },
+  })
+  if (!target) throw new NotFoundError('Staff member')
+  if (target.role === 'SUPER_ADMIN') throw new ForbiddenError('Cannot modify a super admin account')
+
+  const [updated] = await db
+    .update(users)
+    .set({ role: input.role, updated_at: new Date() })
+    .where(eq(users.id, targetId))
+    .returning({ id: users.id, email: users.email, role: users.role })
+
+  return updated
 }
 
 // ─── Deactivate staff ─────────────────────────────────────────────────────────
