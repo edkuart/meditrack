@@ -33,6 +33,7 @@ import {
   BedDouble,
   MapPin,
   BookOpen,
+  UserCircle,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
@@ -245,7 +246,13 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           background: 'var(--mt-bg)',
           borderRadius: 10,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link
+            href="/settings/profile"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              textDecoration: 'none', color: 'inherit',
+            }}
+          >
             <MTAvatar
               name={doctorName || 'Dr'}
               size={34}
@@ -265,7 +272,8 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                 {user?.specialty || user?.role || 'Cuenta clínica'}
               </div>
             </div>
-          </div>
+            <UserCircle size={14} color="var(--mt-muted)" style={{ flexShrink: 0 }} />
+          </Link>
           <button
             onClick={() => { logout(); router.replace('/login') }}
             style={{

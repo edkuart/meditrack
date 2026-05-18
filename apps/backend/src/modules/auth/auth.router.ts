@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { LoginSchema, RegisterSchema, RefreshSchema } from './auth.schema.ts'
+import { LoginSchema, RegisterSchema, RefreshSchema, ForgotPasswordSchema, ResetPasswordSchema, UpdateProfileSchema, ChangePasswordSchema } from './auth.schema.ts'
 import * as authService from './auth.service.ts'
 import { getFullUser } from '../staff/staff.service.ts'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
@@ -10,6 +10,7 @@ const router = new Hono()
 
 const authLimiter = rateLimit({ keyPrefix: 'auth', windowMs: 15 * 60 * 1000, max: 20 })
 const loginLimiter = rateLimit({ keyPrefix: 'auth-login', windowMs: 15 * 60 * 1000, max: 8 })
+const resetLimiter = rateLimit({ keyPrefix: 'auth-reset', windowMs: 15 * 60 * 1000, max: 5 })
 
 router.post('/register', authLimiter, zValidator('json', RegisterSchema), async (c) => {
   const body = c.req.valid('json')
@@ -45,6 +46,29 @@ router.get('/me', requireAuth, async (c) => {
   const auth = c.get('auth')
   const user = await getFullUser(auth.sub)
   return c.json({ success: true, data: user })
+})
+
+router.patch('/me', requireAuth, zValidator('json', UpdateProfileSchema), async (c) => {
+  const { sub } = c.get('auth')
+  const data = await authService.updateProfile(sub, c.req.valid('json'))
+  return c.json({ success: true, data })
+})
+
+router.patch('/me/password', requireAuth, zValidator('json', ChangePasswordSchema), async (c) => {
+  const { sub } = c.get('auth')
+  await authService.changePassword(sub, c.req.valid('json'))
+  return c.json({ success: true, data: null })
+})
+
+router.post('/forgot-password', resetLimiter, zValidator('json', ForgotPasswordSchema), async (c) => {
+  await authService.forgotPassword(c.req.valid('json'))
+  // Always 200 regardless of whether email exists (prevents enumeration)
+  return c.json({ success: true, data: { message: 'If that email is registered, you will receive a reset link shortly.' } })
+})
+
+router.post('/reset-password', resetLimiter, zValidator('json', ResetPasswordSchema), async (c) => {
+  await authService.resetPassword(c.req.valid('json'))
+  return c.json({ success: true, data: null })
 })
 
 export { router as authRouter }

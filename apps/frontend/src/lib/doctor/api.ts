@@ -33,6 +33,7 @@ export interface DoctorUser {
   role: string
   specialty: string | null
   colegiado_number: string | null
+  professional_id: string | null
   tenant_id: string
   is_verified: boolean
   verification_rejected_at: string | null

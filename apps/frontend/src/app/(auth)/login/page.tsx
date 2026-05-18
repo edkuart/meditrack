@@ -182,9 +182,9 @@ function LoginForm({
           </span>
           Mantener sesión
         </label>
-        <a href="#" style={{ color: 'var(--mt-primary)', fontWeight: 500 }}>
+        <Link href="/forgot-password" style={{ color: 'var(--mt-primary)', fontWeight: 500 }}>
           ¿Olvidaste tu contraseña?
-        </a>
+        </Link>
       </div>
 
       {error && (
