@@ -1,7 +1,11 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
-import { ListClinicalProtocolsQuerySchema } from './clinical-protocols.schema.ts'
+import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import {
+  ListClinicalProtocolsQuerySchema,
+  CreateProtocolSchema,
+  UpdateProtocolSchema,
+} from './clinical-protocols.schema.ts'
 import * as clinicalProtocolsService from './clinical-protocols.service.ts'
 
 const router = new Hono()
@@ -12,6 +16,38 @@ router.get('/clinical-protocols', zValidator('query', ListClinicalProtocolsQuery
   const auth = c.get('auth')
   const protocols = await clinicalProtocolsService.listClinicalProtocols(auth.tenant_id, c.req.valid('query'))
   return c.json({ success: true, data: protocols })
+})
+
+router.post(
+  '/clinical-protocols',
+  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  zValidator('json', CreateProtocolSchema),
+  async (c) => {
+    const { tenant_id } = c.get('auth')
+    const protocol = await clinicalProtocolsService.createProtocol(tenant_id, c.req.valid('json'))
+    return c.json({ success: true, data: protocol }, 201)
+  },
+)
+
+router.patch(
+  '/clinical-protocols/:id',
+  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  zValidator('json', UpdateProtocolSchema),
+  async (c) => {
+    const { tenant_id } = c.get('auth')
+    const protocol = await clinicalProtocolsService.updateProtocol(
+      tenant_id,
+      c.req.param('id')!,
+      c.req.valid('json'),
+    )
+    return c.json({ success: true, data: protocol })
+  },
+)
+
+router.delete('/clinical-protocols/:id', requireRole('ADMIN_CLINIC', 'DOCTOR'), async (c) => {
+  const { tenant_id } = c.get('auth')
+  await clinicalProtocolsService.deleteProtocol(tenant_id, c.req.param('id')!)
+  return c.json({ success: true, data: null })
 })
 
 export { router as clinicalProtocolsRouter }

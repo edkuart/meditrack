@@ -10,12 +10,14 @@ export const CreateDepartmentSchema = z.object({
   name: z.string().min(1).max(200),
   type: z.enum(DEPARTMENT_TYPES).default('GENERAL'),
   head_doctor_id: z.string().uuid().optional(),
+  location_id: z.string().uuid().optional(),
 })
 
 export const UpdateDepartmentSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   type: z.enum(DEPARTMENT_TYPES).optional(),
   head_doctor_id: z.string().uuid().nullable().optional(),
+  location_id: z.string().uuid().nullable().optional(),
   is_active: z.boolean().optional(),
 })
 

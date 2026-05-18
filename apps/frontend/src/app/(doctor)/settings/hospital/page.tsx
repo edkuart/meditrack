@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Building2, Plus, Users, Trash2, Loader2, ChevronRight, X, Pencil } from 'lucide-react'
+import { Building2, Plus, Users, Trash2, Loader2, ChevronRight, X, Pencil, MapPin } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   listDepartments, createDepartment, updateDepartment, deleteDepartment,
@@ -9,6 +9,7 @@ import {
   DEPARTMENT_TYPE_LABELS, ROLE_LABELS,
   type Department,
 } from '@/lib/doctor/departments-api'
+import { listLocations, type Location } from '@/lib/doctor/locations-api'
 
 const DEPT_TYPES = Object.entries(DEPARTMENT_TYPE_LABELS)
 
@@ -86,10 +87,10 @@ function UpgradeBanner({ token, onUpgraded }: { token: string; onUpgraded: () =>
 // ─── Department card ────────────────────────────────────────────────────────────
 
 function DepartmentCard({
-  dept, token,
+  dept, token, locations,
   onUpdated, onDeleted,
 }: {
-  dept: Department; token: string
+  dept: Department; token: string; locations: Location[]
   onUpdated: (d: Department) => void
   onDeleted: (id: string) => void
 }) {
@@ -98,11 +99,16 @@ function DepartmentCard({
   const [busy, setBusy] = useState(false)
   const [editName, setEditName] = useState(dept.name)
   const [editType, setEditType] = useState(dept.type)
+  const [editLocationId, setEditLocationId] = useState(dept.location_id ?? '')
 
   async function handleSave() {
     setBusy(true)
     try {
-      const updated = await updateDepartment(token, dept.id, { name: editName, type: editType })
+      const updated = await updateDepartment(token, dept.id, {
+        name: editName,
+        type: editType,
+        location_id: editLocationId || null,
+      })
       onUpdated(updated)
       setEditing(false)
     } finally { setBusy(false) }
@@ -142,12 +148,12 @@ function DepartmentCard({
         </div>
 
         {editing ? (
-          <div style={{ flex: 1, display: 'flex', gap: 8 }} onClick={e => e.stopPropagation()}>
+          <div style={{ flex: 1, display: 'flex', gap: 8, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
             <input
               value={editName}
               onChange={e => setEditName(e.target.value)}
               style={{
-                flex: 1, height: 34, borderRadius: 7,
+                flex: 1, minWidth: 120, height: 34, borderRadius: 7,
                 border: '1px solid var(--mt-border)', padding: '0 10px',
                 fontSize: 13, color: 'var(--mt-text)', background: 'var(--mt-bg)',
               }}
@@ -162,6 +168,19 @@ function DepartmentCard({
             >
               {DEPT_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
+            {locations.length > 0 && (
+              <select
+                value={editLocationId}
+                onChange={e => setEditLocationId(e.target.value)}
+                style={{
+                  height: 34, borderRadius: 7, border: '1px solid var(--mt-border)',
+                  padding: '0 8px', fontSize: 12, color: 'var(--mt-text)', background: 'var(--mt-bg)',
+                }}
+              >
+                <option value="">Sin sede</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            )}
             <button onClick={handleSave} disabled={busy} style={{ height: 34, padding: '0 12px', borderRadius: 7, border: 'none', background: 'var(--mt-primary)', color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
               {busy ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Guardar'}
             </button>
@@ -174,6 +193,9 @@ function DepartmentCard({
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--mt-text)' }}>{dept.name}</div>
             <div style={{ fontSize: 12, color: 'var(--mt-muted)', marginTop: 1 }}>
               {DEPARTMENT_TYPE_LABELS[dept.type] ?? dept.type} · {dept.members.length} miembro{dept.members.length !== 1 ? 's' : ''}
+              {dept.location_id && locations.find(l => l.id === dept.location_id) && (
+                <span> · <MapPin size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {locations.find(l => l.id === dept.location_id)!.name}</span>
+              )}
             </div>
           </div>
         )}
@@ -234,10 +256,15 @@ function DepartmentCard({
 
 // ─── New department form ────────────────────────────────────────────────────────
 
-function NewDepartmentForm({ token, onCreated }: { token: string; onCreated: (d: Department) => void }) {
+function NewDepartmentForm({
+  token, locations, onCreated,
+}: {
+  token: string; locations: Location[]; onCreated: (d: Department) => void
+}) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [type, setType] = useState('GENERAL')
+  const [locationId, setLocationId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -247,9 +274,13 @@ function NewDepartmentForm({ token, onCreated }: { token: string; onCreated: (d:
     setLoading(true)
     setError('')
     try {
-      const dept = await createDepartment(token, { name: name.trim(), type })
+      const dept = await createDepartment(token, {
+        name: name.trim(),
+        type,
+        location_id: locationId || undefined,
+      })
       onCreated(dept)
-      setName(''); setType('GENERAL'); setOpen(false)
+      setName(''); setType('GENERAL'); setLocationId(''); setOpen(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear departamento')
     } finally { setLoading(false) }
@@ -302,6 +333,25 @@ function NewDepartmentForm({ token, onCreated }: { token: string; onCreated: (d:
           {DEPT_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </div>
+      {locations.length > 0 && (
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-text-2)', display: 'block', marginBottom: 4 }}>
+            <MapPin size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+            Sede
+          </label>
+          <select
+            value={locationId}
+            onChange={e => setLocationId(e.target.value)}
+            style={{
+              width: '100%', height: 38, borderRadius: 8, border: '1px solid var(--mt-border)',
+              padding: '0 10px', fontSize: 13, color: 'var(--mt-text)', background: 'var(--mt-bg)',
+            }}
+          >
+            <option value="">Sin sede</option>
+            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+      )}
       {error && <p style={{ fontSize: 12, color: 'var(--mt-danger)', margin: 0 }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="submit" disabled={loading} style={{ height: 36, padding: '0 18px', borderRadius: 8, border: 'none', background: 'var(--mt-primary)', color: '#fff', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -322,6 +372,7 @@ export default function HospitalSettingsPage() {
   const { token, user } = useAuth()
   const [isHospital, setIsHospital] = useState(false)
   const [depts, setDepts] = useState<Department[]>([])
+  const [locs, setLocs] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
 
   const isAdmin = user?.role === 'ADMIN_CLINIC' || user?.role === 'SUPER_ADMIN'
@@ -330,8 +381,12 @@ export default function HospitalSettingsPage() {
     if (!token) return
     setLoading(true)
     try {
-      const data = await listDepartments(token)
+      const [data, locData] = await Promise.all([
+        listDepartments(token),
+        listLocations(token).catch(() => [] as Location[]),
+      ])
       setDepts(data)
+      setLocs(locData)
       setIsHospital(true)
     } catch (e) {
       // 403 NOT_HOSPITAL means we're still a clinic
@@ -391,6 +446,7 @@ export default function HospitalSettingsPage() {
               key={dept.id}
               dept={dept}
               token={token!}
+              locations={locs}
               onUpdated={updated => setDepts(prev => prev.map(d => d.id === updated.id ? updated : d))}
               onDeleted={id => setDepts(prev => prev.map(d => d.id === id ? { ...d, is_active: false } : d))}
             />
@@ -399,6 +455,7 @@ export default function HospitalSettingsPage() {
           {isAdmin && (
             <NewDepartmentForm
               token={token!}
+              locations={locs}
               onCreated={dept => setDepts(prev => [...prev, dept])}
             />
           )}

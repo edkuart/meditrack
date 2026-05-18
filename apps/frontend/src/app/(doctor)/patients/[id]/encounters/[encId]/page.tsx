@@ -1375,39 +1375,6 @@ export default function EncounterPage() {
           </div>
         ) : (
           <>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {WORKFLOW_STAGES.map(stage => (
-                  <button
-                    key={stage}
-                    type="button"
-                    onClick={() => setWorkflowStage(stage)}
-                    className={`inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold transition-colors ${
-                      workflowStage === stage
-                        ? 'border-blue-200 bg-blue-50 text-blue-700'
-                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                    }`}
-                  >
-                    {WORKFLOW_STAGE_LABELS[stage]}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {soapChecks.map(item => (
-                  <span
-                    key={item.key}
-                    className={`inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium ${
-                      item.done
-                        ? 'border-green-200 bg-green-50 text-green-700'
-                        : 'border-slate-200 bg-white text-slate-500'
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-
             <div className="grid gap-3 xl:grid-cols-2">
               <ClinicalNoteSection
                 title="Lo que cuenta el paciente"

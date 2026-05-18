@@ -58,6 +58,7 @@ export interface Department {
   name: string
   type: string
   is_active: boolean
+  location_id: string | null
   head_doctor: DepartmentMemberUser | null
   members: { user: DepartmentMemberUser; joined_at: string }[]
 }
@@ -70,6 +71,7 @@ export async function createDepartment(token: string, data: {
   name: string
   type: string
   head_doctor_id?: string
+  location_id?: string
 }): Promise<Department> {
   return apiFetch('/departments', token, {
     method: 'POST',
@@ -81,6 +83,7 @@ export async function updateDepartment(token: string, id: string, data: {
   name?: string
   type?: string
   head_doctor_id?: string | null
+  location_id?: string | null
   is_active?: boolean
 }): Promise<Department> {
   return apiFetch(`/departments/${id}`, token, {

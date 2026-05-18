@@ -197,6 +197,13 @@
       "when": 1747440004000,
       "tag": "0026_hospital_admissions",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1747440005000,
+      "tag": "0027_locations",
+      "breakpoints": true
     }
   ]
 }

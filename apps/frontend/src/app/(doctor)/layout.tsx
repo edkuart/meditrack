@@ -31,6 +31,8 @@ import {
   BrainCircuit,
   ArrowUpDown,
   BedDouble,
+  MapPin,
+  BookOpen,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
@@ -130,6 +132,8 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     { href: '/settings/clinic',    icon: Building2,   label: 'Clínica' },
     { href: '/settings/hospital',  icon: Building2,   label: 'Hospital' },
     { href: '/settings/staff',     icon: UserCog,     label: 'Personal' },
+    { href: '/settings/locations', icon: MapPin,      label: 'Sedes' },
+    { href: '/settings/protocols', icon: BookOpen,   label: 'Protocolos' },
     { href: '/settings/billing',   icon: CreditCard,  label: 'Plan y pagos' },
     { href: '/settings/audit',     icon: ShieldCheck, label: 'Auditoría' },
     { href: '/settings/sessions',  icon: Monitor,     label: 'Sesiones' },

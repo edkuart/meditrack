@@ -74,6 +74,7 @@ export async function createDepartment(
     name: input.name,
     type: input.type,
     head_doctor_id: input.head_doctor_id,
+    location_id: input.location_id,
   }).returning()
 
   await createAuditLog({

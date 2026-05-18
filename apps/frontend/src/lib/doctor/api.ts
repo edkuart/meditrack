@@ -587,6 +587,45 @@ export async function listClinicalProtocols(token: string): Promise<ClinicalProt
   return doctorFetch('/clinical-protocols', token)
 }
 
+export interface CreateProtocolData {
+  name: string
+  category?: string
+  description?: string
+  encounter_type?: EncounterType
+  note_template?: string
+  summary_template?: string
+  treatment_name?: string
+  treatment_instructions?: string
+  medications?: ClinicalProtocolMedication[]
+  follow_up_days?: number
+  tags?: string[]
+}
+
+export async function createProtocol(
+  token: string,
+  data: CreateProtocolData,
+): Promise<ClinicalProtocol> {
+  return doctorFetch('/clinical-protocols', token, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateProtocol(
+  token: string,
+  id: string,
+  data: Partial<CreateProtocolData>,
+): Promise<ClinicalProtocol> {
+  return doctorFetch(`/clinical-protocols/${id}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteProtocol(token: string, id: string): Promise<null> {
+  return doctorFetch(`/clinical-protocols/${id}`, token, { method: 'DELETE' })
+}
+
 // ─── Portal access ────────────────────────────────────────────────────────────
 
 export type AccessChannel = 'magic_link' | 'qr' | 'whatsapp'

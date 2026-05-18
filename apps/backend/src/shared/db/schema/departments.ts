@@ -2,6 +2,7 @@ import { pgTable, uuid, varchar, boolean, timestamp, pgEnum, primaryKey, index }
 import { relations } from 'drizzle-orm'
 import { tenants } from './tenants.ts'
 import { users } from './users.ts'
+import { locations } from './locations.ts'
 
 export const departmentTypeEnum = pgEnum('department_type', [
   'GENERAL',
@@ -29,6 +30,7 @@ export const departments = pgTable('departments', {
   name: varchar('name', { length: 200 }).notNull(),
   type: departmentTypeEnum('type').default('GENERAL').notNull(),
   head_doctor_id: uuid('head_doctor_id').references(() => users.id, { onDelete: 'set null' }),
+  location_id: uuid('location_id').references(() => locations.id, { onDelete: 'set null' }),
   is_active: boolean('is_active').default(true).notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -39,6 +41,7 @@ export const departments = pgTable('departments', {
 export const departmentsRelations = relations(departments, ({ one, many }) => ({
   tenant: one(tenants, { fields: [departments.tenant_id], references: [tenants.id] }),
   head_doctor: one(users, { fields: [departments.head_doctor_id], references: [users.id] }),
+  location: one(locations, { fields: [departments.location_id], references: [locations.id] }),
   members: many(departmentMembers),
 }))
 
