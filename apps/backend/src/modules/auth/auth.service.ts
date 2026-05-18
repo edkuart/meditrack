@@ -50,7 +50,7 @@ export async function register(input: RegisterInput) {
     colegiado_number: input.colegiado_number,
     specialty: input.specialty,
     dpi_document_key: input.dpi_document_key,
-    role: 'DOCTOR',
+    role: 'ADMIN_CLINIC',
     is_verified: false,
   }).returning()
 
