@@ -369,7 +369,7 @@ function NewDepartmentForm({
 // ─── Page ───────────────────────────────────────────────────────────────────────
 
 export default function HospitalSettingsPage() {
-  const { token, user } = useAuth()
+  const { token, user, refreshUser } = useAuth()
   const [isHospital, setIsHospital] = useState(false)
   const [depts, setDepts] = useState<Department[]>([])
   const [locs, setLocs] = useState<Location[]>([])
@@ -417,7 +417,7 @@ export default function HospitalSettingsPage() {
 
       {!isHospital ? (
         isAdmin
-          ? <UpgradeBanner token={token!} onUpgraded={() => { setIsHospital(true); load() }} />
+          ? <UpgradeBanner token={token!} onUpgraded={() => { setIsHospital(true); load(); refreshUser().catch(() => {}) }} />
           : (
             <div style={{
               background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
