@@ -35,6 +35,7 @@ export interface DoctorUser {
   colegiado_number: string | null
   professional_id: string | null
   tenant_id: string
+  tenant_type: 'CLINIC' | 'HOSPITAL'
   is_verified: boolean
   verification_rejected_at: string | null
   verification_rejected_reason: string | null

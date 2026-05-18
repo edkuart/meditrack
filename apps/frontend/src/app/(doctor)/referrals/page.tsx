@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import {
-  ArrowRight, CheckCircle, XCircle, Clock, Loader2,
-  Send, Inbox, RefreshCw, AlertTriangle, Zap, ArrowUpDown,
+  CheckCircle, XCircle, Loader2,
+  Send, Inbox, RefreshCw, AlertTriangle, ArrowUpDown, BedDouble,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
@@ -45,7 +45,8 @@ function ReferralCard({
   onAction: () => void
 }) {
   const [loading, setLoading] = useState(false)
-  const { token } = useAuth()
+  const { token, user } = useAuth()
+  const isHospital = user?.tenant_type === 'HOSPITAL'
   const cfg = STATUS_CONFIG[referral.status]
   const prio = PRIORITY_CONFIG[referral.priority]
 
@@ -115,7 +116,7 @@ function ReferralCard({
         {loading ? (
           <Loader2 size={16} className="animate-spin text-slate-400" />
         ) : (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             {isIncoming && referral.status === 'PENDING' && (
               <>
                 <button
@@ -133,12 +134,22 @@ function ReferralCard({
               </>
             )}
             {isIncoming && referral.status === 'ACCEPTED' && (
-              <button
-                onClick={() => act('complete')}
-                className="flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-800 transition-colors"
-              >
-                <CheckCircle size={13} /> Completar
-              </button>
+              <>
+                <button
+                  onClick={() => act('complete')}
+                  className="flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-800 transition-colors"
+                >
+                  <CheckCircle size={13} /> Completar
+                </button>
+                {isHospital && referral.patient_id && (
+                  <Link
+                    href={`/patients/${referral.patient_id}?openTab=admissions&referralId=${referral.id}`}
+                    className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                  >
+                    <BedDouble size={13} /> Internar
+                  </Link>
+                )}
+              </>
             )}
             {!isIncoming && ['PENDING', 'ACCEPTED'].includes(referral.status) && (
               <button

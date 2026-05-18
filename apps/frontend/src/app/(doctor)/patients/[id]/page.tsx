@@ -686,9 +686,10 @@ export default function PatientProfilePage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const patientId = params.id as string
   const isNewPatientFlow = searchParams.get('flow') === 'new'
+  const isHospital = user?.tenant_type === 'HOSPITAL'
 
   function dismissNewPatientFlow() {
     if (!isNewPatientFlow) return
@@ -763,6 +764,7 @@ export default function PatientProfilePage() {
   const [admDepartmentId, setAdmDepartmentId] = useState('')
   const [admBedCode, setAdmBedCode] = useState('')
   const [admNotes, setAdmNotes] = useState('')
+  const [admReferralId, setAdmReferralId] = useState('')
   const [admDischargeNotes, setAdmDischargeNotes] = useState('')
   const [dischargingId, setDischargingId] = useState<string | null>(null)
   const [creatingAdm, setCreatingAdm] = useState(false)
@@ -831,6 +833,18 @@ export default function PatientProfilePage() {
   useEffect(() => {
     void Promise.resolve().then(() => load())
   }, [load])
+
+  // Handle deep-link URL params: ?openTab=admissions&referralId=xxx
+  useEffect(() => {
+    const openTab = searchParams.get('openTab') as PatientTab | null
+    const referralId = searchParams.get('referralId')
+    if (!openTab || loadingPage) return
+    if (openTab) setActiveTab(openTab)
+    if (referralId) {
+      setAdmReferralId(referralId)
+      setShowNewAdmission(true)
+    }
+  }, [searchParams, loadingPage])
 
   function handleVitalSaved(record: VitalSignsRecord) {
     setVitalSigns(current => [record, ...current].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime()))
@@ -1041,6 +1055,7 @@ export default function PatientProfilePage() {
     try {
       const adm = await admitPatient(token, patientId, {
         department_id: admDepartmentId || undefined,
+        referral_id: admReferralId || undefined,
         bed_code: admBedCode.trim() || undefined,
         admission_notes: admNotes.trim() || undefined,
       })
@@ -1049,6 +1064,7 @@ export default function PatientProfilePage() {
       setAdmDepartmentId('')
       setAdmBedCode('')
       setAdmNotes('')
+      setAdmReferralId('')
     } catch (err) {
       setAdmError(err instanceof Error ? err.message : 'Error al internar al paciente')
     } finally {
@@ -1156,6 +1172,7 @@ export default function PatientProfilePage() {
   }
 
   const age = calcAge(patient.date_of_birth)
+  const activeAdmission = admissions.find(a => a.status === 'ACTIVE') ?? null
   const activeTreatments = treatments.filter(t => t.status === 'ACTIVE')
   const draftTreatments = treatments.filter(t => t.status === 'DRAFT')
   const adherenceTone: Tone = adherence && adherence.overall_score >= 80
@@ -1284,6 +1301,45 @@ export default function PatientProfilePage() {
           tone={latestCheckIn ? latestCheckInTone : 'slate'}
         />
       </div>
+
+      {/* ── Active admission banner ── */}
+      {activeAdmission && isHospital && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+              <BedDouble size={17} color="#fff" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-blue-900">Paciente internado</span>
+                {activeAdmission.bed_code && (
+                  <span className="font-mono text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                    {activeAdmission.bed_code}
+                  </span>
+                )}
+                {activeAdmission.department && (
+                  <span className="text-xs text-blue-700">{activeAdmission.department.name}</span>
+                )}
+                <span className="text-xs text-blue-600">
+                  · {Math.ceil((Date.now() - new Date(activeAdmission.admitted_at).getTime()) / 86_400_000)} día(s)
+                </span>
+              </div>
+              <p className="text-xs text-blue-700 mt-0.5">
+                Desde {new Date(activeAdmission.admitted_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                {activeAdmission.referral ? ' · Por derivación' : ''}
+              </p>
+            </div>
+          </div>
+          <ClinicalButton
+            icon={LogOut}
+            variant="outline"
+            tone="blue"
+            onClick={() => { setActiveTab('admissions'); setDischargingId(activeAdmission.id) }}
+          >
+            Gestionar alta
+          </ClinicalButton>
+        </div>
+      )}
 
       {showNewPatientHandoff && (
         <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
@@ -1418,6 +1474,16 @@ export default function PatientProfilePage() {
             >
               Copiloto
             </ClinicalButton>
+            {isHospital && !activeAdmission && (
+              <ClinicalButton
+                icon={BedDouble}
+                variant="outline"
+                tone="slate"
+                onClick={() => { setActiveTab('admissions'); setShowNewAdmission(true) }}
+              >
+                Internar
+              </ClinicalButton>
+            )}
           </div>
         </div>
       </section>
@@ -2248,10 +2314,24 @@ export default function PatientProfilePage() {
                         <StatusPill tone={cfg.tone}>{cfg.label}</StatusPill>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-400">
-                      {new Date(ref.created_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      {ref.responded_at && ` · Respondida: ${new Date(ref.responded_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })}`}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-slate-400">
+                        {new Date(ref.created_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {ref.responded_at && ` · Respondida: ${new Date(ref.responded_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })}`}
+                      </p>
+                      {isHospital && ref.status === 'ACCEPTED' && !activeAdmission && (
+                        <button
+                          onClick={() => {
+                            setAdmReferralId(ref.id)
+                            setShowNewAdmission(true)
+                            setActiveTab('admissions')
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                        >
+                          <BedDouble size={12} /> Internar desde derivación
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -2283,6 +2363,24 @@ export default function PatientProfilePage() {
         >
           {showNewAdmission && (
             <form onSubmit={handleAdmitPatient} className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
+              {/* Referral quick-link */}
+              {referrals.filter(r => r.status === 'ACCEPTED').length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <label className={labelClass}>Derivación asociada (opcional)</label>
+                  <select
+                    value={admReferralId}
+                    onChange={e => setAdmReferralId(e.target.value)}
+                    className={fieldClass}
+                  >
+                    <option value="">Sin derivación</option>
+                    {referrals.filter(r => r.status === 'ACCEPTED').map(r => (
+                      <option key={r.id} value={r.id}>
+                        Derivación aceptada — {r.reason.slice(0, 60)}{r.reason.length > 60 ? '…' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1">
                   <label className={labelClass}>Departamento (opcional)</label>

@@ -259,13 +259,17 @@ export async function getFullUser(userId: string) {
     where: eq(users.id, userId),
     columns: {
       id: true, email: true, first_name: true, last_name: true,
-      role: true, specialty: true, colegiado_number: true,
+      role: true, specialty: true, colegiado_number: true, professional_id: true,
       tenant_id: true, is_active: true, is_verified: true,
       verification_rejected_at: true, verification_rejected_reason: true,
     },
+    with: {
+      tenant: { columns: { type: true } },
+    },
   })
   if (!user || !user.is_active) throw new NotFoundError('User')
-  return user
+  const { tenant, ...rest } = user
+  return { ...rest, tenant_type: tenant?.type ?? 'CLINIC' }
 }
 
 // ─── Invite email template ────────────────────────────────────────────────────
