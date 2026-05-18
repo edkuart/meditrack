@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   Activity, AlertTriangle, ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
@@ -20,7 +20,9 @@ import {
   type TreatmentPlan,
 } from '@/lib/doctor/api'
 import {
+  listAiUsageEvents,
   runPatientClinicalCopilot,
+  type AiUsageEvent,
   type ClinicalCopilotMode,
   type ClinicalCopilotResponse,
 } from '@/lib/doctor/clinical-intelligence-api'
@@ -112,11 +114,181 @@ const COPILOT_MODES: Array<{
   label: string
   tone: 'blue' | 'amber' | 'green'
 }> = [
-  { mode: 'PREPARE_CONSULTATION', label: 'Preparar', tone: 'blue' },
-  { mode: 'SUGGEST_PATIENT_QUESTIONS', label: 'Preguntas', tone: 'amber' },
-  { mode: 'REVIEW_CLINICAL_GAPS', label: 'Brechas', tone: 'amber' },
-  { mode: 'DRAFT_SOAP', label: 'Borrador SOAP', tone: 'green' },
+  { mode: 'PREPARE_CONSULTATION', label: 'Preparar consulta', tone: 'blue' },
+  { mode: 'SUGGEST_PATIENT_QUESTIONS', label: 'Preguntas al paciente', tone: 'amber' },
+  { mode: 'REVIEW_CLINICAL_GAPS', label: 'Revisar faltantes', tone: 'amber' },
+  { mode: 'DRAFT_SOAP', label: 'Redactar nota', tone: 'green' },
 ]
+
+const COPILOT_MODE_LABELS: Record<ClinicalCopilotMode, string> = {
+  ASK_CLINICAL_QUESTION: 'Respuesta a una pregunta',
+  PREPARE_CONSULTATION: 'Preparación de consulta',
+  SUGGEST_PATIENT_QUESTIONS: 'Preguntas para el paciente',
+  REVIEW_CLINICAL_GAPS: 'Revisión de datos faltantes',
+  DRAFT_SOAP: 'Borrador para la nota clínica',
+}
+
+const SOAP_SECTION_LABELS: Record<string, string> = {
+  subjective: 'Lo que cuenta el paciente',
+  objective: 'Hallazgos y datos objetivos',
+  assessment: 'Impresión médica',
+  plan: 'Plan de manejo',
+}
+
+const COPILOT_SECTION_TONES = {
+  slate: {
+    shell: 'border-slate-200 bg-white',
+    header: 'bg-slate-50 text-slate-900',
+    meta: 'text-slate-500',
+    body: 'text-slate-700',
+  },
+  blue: {
+    shell: 'border-blue-100 bg-blue-50',
+    header: 'bg-blue-100/60 text-blue-950',
+    meta: 'text-blue-700',
+    body: 'text-blue-950',
+  },
+  amber: {
+    shell: 'border-amber-100 bg-amber-50',
+    header: 'bg-amber-100/70 text-amber-950',
+    meta: 'text-amber-700',
+    body: 'text-amber-950',
+  },
+  red: {
+    shell: 'border-red-100 bg-red-50',
+    header: 'bg-red-100/70 text-red-950',
+    meta: 'text-red-700',
+    body: 'text-red-950',
+  },
+  green: {
+    shell: 'border-green-100 bg-green-50',
+    header: 'bg-green-100/70 text-green-950',
+    meta: 'text-green-700',
+    body: 'text-green-950',
+  },
+} as const
+
+function CopilotDisclosure({
+  title,
+  meta,
+  tone = 'slate',
+  children,
+}: {
+  title: string
+  meta?: string
+  tone?: keyof typeof COPILOT_SECTION_TONES
+  children: ReactNode
+}) {
+  const styles = COPILOT_SECTION_TONES[tone]
+
+  return (
+    <details open className={`group overflow-hidden rounded-lg border ${styles.shell}`}>
+      <summary className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 ${styles.header}`}>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{title}</p>
+          {meta && <p className={`mt-0.5 truncate text-xs ${styles.meta}`}>{meta}</p>}
+        </div>
+        <ChevronDown size={16} className="shrink-0 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className={`border-t border-white/70 p-4 ${styles.body}`}>
+        {children}
+      </div>
+    </details>
+  )
+}
+
+function ClinicalNoteSection({
+  title,
+  helper,
+  done,
+  children,
+}: {
+  title: string
+  helper: string
+  done?: boolean
+  children: ReactNode
+}) {
+  return (
+    <details open className="group overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-50 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-slate-900">{title}</p>
+            <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+              done ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {done ? 'Con información' : 'Pendiente'}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs leading-5 text-slate-500">{helper}</p>
+        </div>
+        <ChevronDown size={16} className="shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-slate-100 p-3">
+        {children}
+      </div>
+    </details>
+  )
+}
+
+function metadataStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+}
+
+function getCopilotEventQuestion(event: AiUsageEvent) {
+  const question = event.metadata?.question
+  return typeof question === 'string' && question.trim().length > 0 ? question.trim() : null
+}
+
+function getCopilotEventMode(event: AiUsageEvent) {
+  const mode = event.metadata?.mode
+  if (typeof mode !== 'string') return 'Copiloto clínico'
+  return COPILOT_MODE_LABELS[mode as ClinicalCopilotMode] ?? 'Copiloto clínico'
+}
+
+function getCopilotEventAction(event: AiUsageEvent) {
+  const mode = event.metadata?.mode
+  if (mode === 'DRAFT_SOAP') return 'Ver borrador'
+  if (mode === 'SUGGEST_PATIENT_QUESTIONS') return 'Ver preguntas'
+  if (mode === 'REVIEW_CLINICAL_GAPS') return 'Ver faltantes'
+  if (mode === 'PREPARE_CONSULTATION') return 'Ver preparación'
+  return 'Abrir respuesta'
+}
+
+function getModelLabel(event: Pick<AiUsageEvent, 'provider' | 'model'>) {
+  return `Generado con ${event.provider} · ${event.model}`
+}
+
+function getCopilotEventSnapshot(event: AiUsageEvent): ClinicalCopilotResponse | null {
+  const raw = event.metadata?.response_snapshot
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+
+  const snapshot = raw as Record<string, unknown>
+  const summary = typeof snapshot.summary === 'string' ? snapshot.summary : undefined
+  const answer = typeof snapshot.answer === 'string' ? snapshot.answer : undefined
+  if (!summary && !answer) return null
+
+  const mode = typeof event.metadata?.mode === 'string'
+    ? event.metadata.mode as ClinicalCopilotMode
+    : 'ASK_CLINICAL_QUESTION'
+  const tier = event.metadata?.model_tier === 'premium' ? 'premium' : 'standard'
+
+  return {
+    mode,
+    model: event.model,
+    provider: event.provider,
+    model_tier: tier,
+    safety_notice: typeof snapshot.safety_notice === 'string' ? snapshot.safety_notice : '',
+    summary: summary ?? 'Respuesta previa del copiloto clínico',
+    answer,
+    suggested_questions: metadataStringArray(snapshot.suggested_questions),
+    clinical_gaps: metadataStringArray(snapshot.clinical_gaps),
+    soft_alerts: metadataStringArray(snapshot.soft_alerts),
+    evidence: [],
+  }
+}
 
 const PLAN_PRESETS = [
   { label: 'Control 30 días', name: 'Plan de control 30 días', duration: '30', times: ['08:00'], count: '1' },
@@ -602,6 +774,9 @@ export default function EncounterPage() {
   const [copilotLoading, setCopilotLoading] = useState<ClinicalCopilotMode | null>(null)
   const [copilotQuestion, setCopilotQuestion] = useState('')
   const [copilotResult, setCopilotResult] = useState<ClinicalCopilotResponse | null>(null)
+  const [copilotHistory, setCopilotHistory] = useState<AiUsageEvent[]>([])
+  const [copilotHistoryLoading, setCopilotHistoryLoading] = useState(false)
+  const [copilotHistoryError, setCopilotHistoryError] = useState('')
 
   // Treatment builder
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
@@ -647,10 +822,32 @@ export default function EncounterPage() {
     }
   }, [token, encId])
 
+  const loadCopilotHistory = useCallback(async () => {
+    if (!token || !patientId || !encId) return
+    setCopilotHistoryLoading(true)
+    setCopilotHistoryError('')
+    try {
+      const events = await listAiUsageEvents(token, 50, patientId)
+      setCopilotHistory(events.filter(event =>
+        event.feature === 'CLINICAL_COPILOT' &&
+        (event.encounter_id === encId || event.resource_id === encId),
+      ))
+    } catch (err) {
+      setCopilotHistoryError(err instanceof Error ? err.message : 'No se pudo cargar el historial del copiloto')
+    } finally {
+      setCopilotHistoryLoading(false)
+    }
+  }, [token, patientId, encId])
+
   useEffect(() => {
     const id = window.setTimeout(() => { void load() }, 0)
     return () => window.clearTimeout(id)
   }, [load])
+
+  useEffect(() => {
+    const id = window.setTimeout(() => { void loadCopilotHistory() }, 0)
+    return () => window.clearTimeout(id)
+  }, [loadCopilotHistory])
 
   useEffect(() => {
     try {
@@ -895,6 +1092,7 @@ export default function EncounterPage() {
       })
       setCopilotResult(result)
       setAiNotice(result.safety_notice)
+      void loadCopilotHistory()
 
       if (result.soap_draft && mode === 'DRAFT_SOAP') {
         setSubjective(prev => prev.trim() ? prev : result.soap_draft?.subjective ?? '')
@@ -1210,50 +1408,62 @@ export default function EncounterPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Subjetivo</label>
+            <div className="grid gap-3 xl:grid-cols-2">
+              <ClinicalNoteSection
+                title="Lo que cuenta el paciente"
+                helper="Síntomas, evolución, dolor, adherencia, antecedentes relevantes y preocupaciones actuales."
+                done={Boolean(subjective.trim() || encounter.chief_complaint?.trim())}
+              >
                 <textarea
                   value={subjective}
                   onChange={e => { setSubjective(e.target.value); setWorkflowStage('SUBJECTIVE') }}
                   rows={5}
                   placeholder="Historia del padecimiento actual, síntomas, revisión por sistemas..."
-                  className="min-h-32 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
-              </div>
+              </ClinicalNoteSection>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Objetivo</label>
+              <ClinicalNoteSection
+                title="Hallazgos y datos objetivos"
+                helper="Signos vitales, exploración física, laboratorios, estudios y observaciones verificables."
+                done={Boolean(objective.trim())}
+              >
                 <textarea
                   value={objective}
                   onChange={e => { setObjective(e.target.value); setWorkflowStage('OBJECTIVE') }}
                   rows={5}
                   placeholder="Signos vitales, examen físico, hallazgos, laboratorios relevantes..."
-                  className="min-h-32 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
-              </div>
+              </ClinicalNoteSection>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Evaluación</label>
+              <ClinicalNoteSection
+                title="Impresión médica"
+                helper="Diagnóstico probable, diferenciales, riesgos, evolución y razonamiento clínico."
+                done={Boolean(assessment.trim())}
+              >
                 <textarea
                   value={assessment}
                   onChange={e => { setAssessment(e.target.value); setWorkflowStage('ASSESSMENT') }}
                   rows={5}
                   placeholder="Impresión diagnóstica, CIE-10, diferenciales, riesgos..."
-                  className="min-h-32 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
-              </div>
+              </ClinicalNoteSection>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Plan</label>
+              <ClinicalNoteSection
+                title="Plan de manejo"
+                helper="Tratamiento, medicamentos, indicaciones, educación, estudios, seguimiento y signos de alarma."
+                done={Boolean(plan.trim() || summary.trim() || treatment)}
+              >
                 <textarea
                   value={plan}
                   onChange={e => { setPlan(e.target.value); setWorkflowStage('PLAN') }}
                   rows={5}
                   placeholder="Plan diagnóstico, tratamiento, educación, seguimiento..."
-                  className="min-h-32 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
-              </div>
+              </ClinicalNoteSection>
             </div>
 
             <details className="rounded-lg border border-slate-200 bg-white">
@@ -1330,7 +1540,7 @@ export default function EncounterPage() {
                     handleAskCopilot()
                   }
                 }}
-                placeholder="Preguntar al historial del paciente..."
+                placeholder="Escribe una pregunta sobre este paciente o esta consulta..."
                 className="min-h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
               <ClinicalButton
@@ -1342,41 +1552,122 @@ export default function EncounterPage() {
               </ClinicalButton>
             </div>
 
-            {copilotResult && (
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
-                  <p className="text-sm font-semibold text-blue-800">{copilotResult.summary}</p>
-                  {copilotResult.answer && (
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-blue-900">{copilotResult.answer}</p>
-                  )}
-                  {copilotResult.soap_draft && (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {Object.entries(copilotResult.soap_draft).map(([key, value]) => (
-                        <div key={key} className="rounded-md bg-white p-2 text-xs leading-5 text-slate-700">
-                          <span className="font-semibold uppercase text-slate-500">{key}</span>
-                          <p className="mt-1 whitespace-pre-wrap">{value}</p>
+            <CopilotDisclosure
+              title="Respuestas guardadas de esta consulta"
+              meta={copilotHistoryLoading ? 'Cargando...' : `${copilotHistory.length} respuesta${copilotHistory.length === 1 ? '' : 's'} disponible${copilotHistory.length === 1 ? '' : 's'}`}
+              tone="slate"
+            >
+              {copilotHistoryError && (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{copilotHistoryError}</p>
+              )}
+              {!copilotHistoryError && copilotHistory.length === 0 && (
+                <p className="rounded-md bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                  Todavía no hay respuestas guardadas para esta consulta. Las próximas preguntas aparecerán aquí aunque recargues la página.
+                </p>
+              )}
+              {copilotHistory.length > 0 && (
+                <div className="grid gap-2">
+                  {copilotHistory.slice(0, 8).map(event => {
+                    const snapshot = getCopilotEventSnapshot(event)
+                    const question = getCopilotEventQuestion(event)
+                    return (
+                      <button
+                        key={event.id}
+                        type="button"
+                        disabled={!snapshot}
+                        onClick={() => {
+                          if (!snapshot) return
+                          setCopilotResult(snapshot)
+                          setAiNotice(snapshot.safety_notice)
+                        }}
+                        className="w-full rounded-lg border border-slate-100 bg-white px-3 py-2 text-left transition hover:border-blue-100 hover:bg-blue-50/50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="block text-sm font-semibold text-slate-900">{getCopilotEventMode(event)}</span>
+                            <span className="mt-0.5 block text-xs text-slate-400">
+                              {new Date(event.created_at).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })}
+                            </span>
+                          </div>
+                          <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                            {getCopilotEventAction(event)}
+                          </span>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-slate-500">
+                          {question ?? snapshot?.summary ?? 'Respuesta previa del copiloto'}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">{getModelLabel(event)}</p>
+                      </button>
+                    )
+                  })}
                 </div>
+              )}
+            </CopilotDisclosure>
 
-                <div className="flex flex-col gap-2">
+            {copilotResult && (
+              <div className="flex flex-col gap-4">
+                <CopilotDisclosure
+                  title="Respuesta"
+                  meta={`Generado con ${copilotResult.provider ? `${copilotResult.provider} · ` : ''}${copilotResult.model}`}
+                  tone="blue"
+                >
+                  <p className="text-base font-semibold leading-7">{copilotResult.summary}</p>
+                </CopilotDisclosure>
+
+                <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_380px]">
+                  <div className="flex min-w-0 flex-col gap-4">
+                    {copilotResult.answer && (
+                      <CopilotDisclosure title="Análisis y recomendación" tone="slate">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-7">{copilotResult.answer}</p>
+                      </CopilotDisclosure>
+                    )}
+
+                    {copilotResult.soap_draft && (
+                      <CopilotDisclosure
+                        title="Borrador para la nota clínica"
+                        meta="Texto sugerido por IA para que el médico lo revise antes de guardar."
+                        tone="green"
+                      >
+                        <div className="grid gap-3">
+                          {Object.entries(copilotResult.soap_draft).map(([key, value]) => (
+                            <CopilotDisclosure key={key} title={SOAP_SECTION_LABELS[key] ?? key} tone="slate">
+                              <p className="whitespace-pre-wrap break-words text-sm leading-7">{value}</p>
+                            </CopilotDisclosure>
+                          ))}
+                        </div>
+                      </CopilotDisclosure>
+                    )}
+                  </div>
+
+                  <aside className="flex min-w-0 flex-col gap-3">
                   {copilotResult.suggested_questions.length > 0 && (
-                    <ClinicalInsight tone="blue" title="Preguntas sugeridas">
-                      {copilotResult.suggested_questions.slice(0, 4).join(' · ')}
-                    </ClinicalInsight>
+                    <CopilotDisclosure title="Preguntas sugeridas" tone="blue">
+                      <ul className="space-y-2 text-sm leading-6">
+                        {copilotResult.suggested_questions.slice(0, 4).map((item, index) => (
+                          <li key={index} className="rounded-md bg-white/75 px-3 py-2">{item}</li>
+                        ))}
+                      </ul>
+                    </CopilotDisclosure>
                   )}
                   {copilotResult.clinical_gaps.length > 0 && (
-                    <ClinicalInsight tone="amber" title="Datos faltantes">
-                      {copilotResult.clinical_gaps.slice(0, 4).join(' · ')}
-                    </ClinicalInsight>
+                    <CopilotDisclosure title="Datos faltantes" tone="amber">
+                      <ul className="space-y-2 text-sm leading-6">
+                        {copilotResult.clinical_gaps.slice(0, 4).map((item, index) => (
+                          <li key={index} className="rounded-md bg-white/75 px-3 py-2">{item}</li>
+                        ))}
+                      </ul>
+                    </CopilotDisclosure>
                   )}
                   {copilotResult.soft_alerts.length > 0 && (
-                    <ClinicalInsight tone="red" title="Alertas suaves">
-                      {copilotResult.soft_alerts.slice(0, 3).join(' · ')}
-                    </ClinicalInsight>
+                    <CopilotDisclosure title="Alertas suaves" tone="red">
+                      <ul className="space-y-2 text-sm leading-6">
+                        {copilotResult.soft_alerts.slice(0, 3).map((item, index) => (
+                          <li key={index} className="rounded-md bg-white/75 px-3 py-2">{item}</li>
+                        ))}
+                      </ul>
+                    </CopilotDisclosure>
                   )}
+                  </aside>
                 </div>
               </div>
             )}

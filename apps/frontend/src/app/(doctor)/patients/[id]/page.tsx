@@ -390,6 +390,11 @@ function formatVitalDate(value: string) {
   })
 }
 
+function formatLocalDateTimeInput(date = new Date()) {
+  const offsetMs = date.getTimezoneOffset() * 60_000
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
 
 function PatientBiometricsSection({
   token,
@@ -421,7 +426,7 @@ function PatientBiometricsSection({
     height_cm: '',
     oxygen_saturation: '',
     glucose_mg_dl: '',
-    recorded_at: new Date().toISOString().slice(0, 16),
+    recorded_at: formatLocalDateTimeInput(),
   })
 
   useEffect(() => {
@@ -464,7 +469,7 @@ function PatientBiometricsSection({
         height_cm: '',
         oxygen_saturation: '',
         glucose_mg_dl: '',
-        recorded_at: new Date().toISOString().slice(0, 16),
+        recorded_at: formatLocalDateTimeInput(),
       }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la biometría clínica')
@@ -1825,7 +1830,7 @@ export default function PatientProfilePage() {
           title={`Consultas${encounters.length > 0 ? ` (${encounters.length})` : ''}`}
           icon={Stethoscope}
           collapsible
-          defaultOpen={false}
+          defaultOpen
           actions={
             <button
               onClick={() => { setShowNewEnc(v => !v); setEncError('') }}
