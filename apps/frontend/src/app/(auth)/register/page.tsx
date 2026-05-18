@@ -19,6 +19,7 @@ export default function RegisterPage() {
     password: '',
     specialty: '',
     professional_id: '',
+    colegiado_number: '',
   })
 
   function set(field: string) {
@@ -38,7 +39,8 @@ export default function RegisterPage() {
       })
       localStorage.setItem('meditrack_doctor_token', result.access_token)
       localStorage.setItem('meditrack_doctor_refresh_token', result.refresh_token)
-      router.replace('/patients')
+      // New accounts land on the pending-verification screen until an admin approves
+      router.replace('/pending-verification')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrarse')
     } finally {
@@ -46,12 +48,16 @@ export default function RegisterPage() {
     }
   }
 
+  const optional = new Set(['specialty', 'professional_id'])
+
   const field = (label: string, name: string, type = 'text', placeholder = '') => (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-600 font-medium">{label}</label>
+      <label className="text-sm text-slate-600 font-medium">
+        {label}{optional.has(name) && <span className="text-slate-400 font-normal"> (opcional)</span>}
+      </label>
       <input
         type={type}
-        required={type !== 'text' || !['specialty', 'professional_id'].includes(name)}
+        required={!optional.has(name)}
         value={form[name as keyof typeof form]}
         onChange={set(name)}
         placeholder={placeholder}
@@ -87,8 +93,16 @@ export default function RegisterPage() {
           </div>
           {field('Correo electrónico', 'email', 'email', 'doctor@ejemplo.com')}
           {field('Contraseña', 'password', 'password', '••••••••')}
-          {field('Especialidad (opcional)', 'specialty', 'text', 'Cardiología')}
-          {field('Cédula profesional (opcional)', 'professional_id', 'text', '12345678')}
+
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-2">Credenciales profesionales</p>
+          {field('Número de colegiado', 'colegiado_number', 'text', 'CMCGT-12345')}
+          {field('Especialidad', 'specialty', 'text', 'Cardiología')}
+          {field('Cédula / matrícula profesional', 'professional_id', 'text', '12345678')}
+
+          <p className="text-xs text-slate-400 bg-slate-50 rounded-lg px-3 py-2 leading-relaxed">
+            Tu cuenta será revisada por el equipo de Meditrack antes de activarse.
+            Recibirás un correo cuando sea aprobada (generalmente en menos de 24 h).
+          </p>
 
           {error && (
             <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{error}</p>
@@ -99,7 +113,7 @@ export default function RegisterPage() {
             disabled={loading}
             className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-500 text-white font-medium text-sm disabled:opacity-60 hover:bg-blue-600 transition-colors"
           >
-            {loading ? <><Loader2 size={16} className="animate-spin" /> Registrando...</> : 'Crear cuenta'}
+            {loading ? <><Loader2 size={16} className="animate-spin" /> Registrando...</> : 'Solicitar acceso'}
           </button>
 
           <p className="text-center text-sm text-slate-500">

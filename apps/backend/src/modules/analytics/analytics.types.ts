@@ -3,10 +3,13 @@ export interface ClinicSummary {
   active_patients: number
   active_treatments: number
   monthly_new_patients: number
+  new_patients_no_encounter: number
   today_doses_total: number
   today_doses_confirmed: number
   today_doses_missed: number
   today_doses_pending: number
+  active_admissions: number
+  pending_incoming_referrals: number
 }
 
 export interface DayAdherence {
@@ -40,6 +43,32 @@ export interface WeeklyTrend {
 
 export interface ClinicTrends {
   weeks: WeeklyTrend[]
+}
+
+// ─── Priority alerts (drill-down patient lists) ───────────────────────────────
+
+export interface AlertPatient {
+  id: string
+  first_name: string
+  last_name: string
+  dose_count?: number
+  active_treatments?: number
+  created_at?: string
+}
+
+export interface DoseAlertData {
+  status: 'PENDING' | 'MISSED'
+  date: string
+  patients: AlertPatient[]
+}
+
+export interface NewPatientsAlertData {
+  month: string
+  patients: AlertPatient[]
+}
+
+export interface ActiveTreatmentsAlertData {
+  patients: AlertPatient[]
 }
 
 // ─── Adherence cohorts ────────────────────────────────────────────────────────

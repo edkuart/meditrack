@@ -8,6 +8,12 @@ export const userRoleEnum = pgEnum('user_role', [
   'DOCTOR',
   'NURSE',
   'ASSISTANT',
+  // Hospital-specific roles
+  'LAB_TECHNICIAN',
+  'RADIOLOGIST',
+  'PHARMACIST',
+  'RECEPTIONIST',
+  'WARD_NURSE',
 ])
 
 export const users = pgTable('users', {
@@ -19,9 +25,16 @@ export const users = pgTable('users', {
   first_name: varchar('first_name', { length: 100 }).notNull(),
   last_name: varchar('last_name', { length: 100 }).notNull(),
   professional_id: varchar('professional_id', { length: 50 }),
+  // Número de colegiado médico (Guatemala: Colegio de Médicos y Cirujanos)
+  colegiado_number: varchar('colegiado_number', { length: 50 }),
   specialty: varchar('specialty', { length: 100 }),
+  // Storage key of the uploaded DPI/ID document image (never expose URL directly)
+  dpi_document_key: text('dpi_document_key'),
   is_verified: boolean('is_verified').default(false).notNull(),
   is_active: boolean('is_active').default(true).notNull(),
+  // Populated when admin rejects a verification request
+  verification_rejected_at: timestamp('verification_rejected_at', { withTimezone: true }),
+  verification_rejected_reason: text('verification_rejected_reason'),
   two_fa_enabled: boolean('two_fa_enabled').default(false).notNull(),
   last_login_at: timestamp('last_login_at', { withTimezone: true }),
   // Legal acceptance tracking — gated at login if null or before policy update date

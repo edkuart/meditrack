@@ -9,6 +9,9 @@ import {
   getClinicTrends,
   getAdherenceCohorts,
   buildPatientsCsv,
+  getDoseAlert,
+  getNewPatientsAlert,
+  getActiveTreatmentsAlert,
 } from './analytics.service.ts'
 
 const router = new Hono()
@@ -16,8 +19,8 @@ const router = new Hono()
 // ─── Clinic summary ───────────────────────────────────────────────────────────
 
 router.get('/analytics/clinic', requireAuth, async (c) => {
-  const { tenant_id } = c.get('auth')
-  const data = await getClinicSummary(tenant_id)
+  const { tenant_id, sub } = c.get('auth')
+  const data = await getClinicSummary(tenant_id, sub)
   return c.json({ success: true, data })
 })
 
@@ -49,6 +52,32 @@ router.get('/analytics/export/patients', requireAuth, requireRole('ADMIN_CLINIC'
   c.header('Content-Type', 'text/csv; charset=utf-8')
   c.header('Content-Disposition', `attachment; filename="patients-${date}.csv"`)
   return c.text(csv)
+})
+
+// ─── Priority alert drill-downs (doctor + admin) ─────────────────────────────
+
+router.get('/analytics/clinic/alerts/pending-doses', requireAuth, async (c) => {
+  const { tenant_id } = c.get('auth')
+  const data = await getDoseAlert(tenant_id, 'PENDING')
+  return c.json({ success: true, data })
+})
+
+router.get('/analytics/clinic/alerts/missed-doses', requireAuth, async (c) => {
+  const { tenant_id } = c.get('auth')
+  const data = await getDoseAlert(tenant_id, 'MISSED')
+  return c.json({ success: true, data })
+})
+
+router.get('/analytics/clinic/alerts/new-patients', requireAuth, async (c) => {
+  const { tenant_id } = c.get('auth')
+  const data = await getNewPatientsAlert(tenant_id)
+  return c.json({ success: true, data })
+})
+
+router.get('/analytics/clinic/alerts/active-treatments', requireAuth, async (c) => {
+  const { tenant_id } = c.get('auth')
+  const data = await getActiveTreatmentsAlert(tenant_id)
+  return c.json({ success: true, data })
 })
 
 // ─── Per-patient adherence ────────────────────────────────────────────────────

@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, FileText, Plus, ChevronUp,
+  ArrowLeft, ChevronDown, FileText, Plus, ChevronUp,
   QrCode, Link2, Loader2, ExternalLink, Download, MessageCircle,
   Activity, CalendarClock, ClipboardList, Pill, Stethoscope, UserRound,
   ShieldCheck, Trash2, AlertTriangle, Copy, FlaskConical, BookOpen, Pencil,
-  Ruler, Scale, X,
+  Ruler, Scale, X, ArrowUpDown, CheckCircle, XCircle, Send, BedDouble, LogOut,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
@@ -16,17 +16,21 @@ import {
   generatePortalAccess, getPatientFhirBundle, listPatientTreatments,
   listPatientCheckIns, listPatientProblems, createPatientProblem,
   listPatientBackground, listPatientBackgroundHistory, retirePatientBackground, upsertPatientBackground,
-  listPatientVitalSigns, createPatientVitalSigns,
+  listPatientVitalSigns, createPatientVitalSigns, getPatientClinicalWorkspace,
+  listPatientReferrals, createReferral, listStaff,
+  listPatientAdmissions, admitPatient, dischargePatient,
   type Patient, type Encounter, type Document, type AccessResult,
   type TreatmentPlan, type PatientCheckIn,
   type PatientProblem, type PatientBackground, type BackgroundCategory, type ProblemStatus,
-  type VitalSignsRecord, type VitalSignsInput,
+  type VitalSignsRecord, type VitalSignsInput, type PatientClinicalWorkspace,
+  type Referral, type ReferralPriority, type StaffMember, type Admission,
 } from '@/lib/doctor/api'
 import {
   getPatientConsents, recordConsent, withdrawConsent, exportPatientData, anonymizePatient,
   type PatientConsent, type ConsentType,
 } from '@/lib/doctor/compliance-api'
 import { listLabOrders, ORDER_STATUS_CONFIG, type LabOrder } from '@/lib/doctor/lab-api'
+import { listDepartments, type Department } from '@/lib/doctor/departments-api'
 import { DocumentUploader } from '@/components/doctor/DocumentUploader'
 import { DocumentList } from '@/components/doctor/DocumentList'
 import { AdherenceCalendar } from '@/components/doctor/AdherenceCalendar'
@@ -40,6 +44,8 @@ import {
   ClinicalTimeline,
   EmptyClinicalState,
   LoadingState,
+  MTStatBox,
+  MTStatChip,
   StatusPill,
   type TimelineItem,
   type Tone,
@@ -268,7 +274,7 @@ function PortalAccessSection({
   }
 
   return (
-    <ClinicalPanel title="Acceso al portal del paciente" icon={Link2} accent="green">
+    <ClinicalPanel title="Acceso al portal del paciente" icon={Link2} accent="green" collapsible defaultOpen={false}>
       <div className="flex flex-col gap-4 p-5">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
@@ -384,40 +390,20 @@ function formatVitalDate(value: string) {
   })
 }
 
-function BiometricMetric({
-  label,
-  value,
-  helper,
-  icon: Icon,
-}: {
-  label: string
-  value: string
-  helper?: string
-  icon: typeof Activity
-}) {
-  return (
-    <div className="rounded-xl border border-slate-100 bg-white px-4 py-3">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-        <Icon size={16} className="text-blue-500" />
-      </div>
-      <p className="text-xl font-semibold tabular-nums text-slate-900">{value}</p>
-      {helper && <p className="mt-1 text-xs text-slate-400">{helper}</p>}
-    </div>
-  )
-}
 
 function PatientBiometricsSection({
   token,
   patientId,
   encounters,
   records,
+  preferredEncounterId,
   onSaved,
 }: {
   token: string
   patientId: string
   encounters: Encounter[]
   records: VitalSignsRecord[]
+  preferredEncounterId?: string
   onSaved: (record: VitalSignsRecord) => void
 }) {
   const latest = records[0]
@@ -425,7 +411,7 @@ function PatientBiometricsSection({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState<Record<string, string>>({
-    encounter_id: '',
+    encounter_id: preferredEncounterId ?? '',
     blood_pressure_systolic: '',
     blood_pressure_diastolic: '',
     heart_rate: '',
@@ -437,6 +423,11 @@ function PatientBiometricsSection({
     glucose_mg_dl: '',
     recorded_at: new Date().toISOString().slice(0, 16),
   })
+
+  useEffect(() => {
+    if (!preferredEncounterId) return
+    setForm(current => current.encounter_id ? current : { ...current, encounter_id: preferredEncounterId })
+  }, [preferredEncounterId])
 
   function setField(field: string, value: string) {
     setForm(current => ({ ...current, [field]: value }))
@@ -485,9 +476,9 @@ function PatientBiometricsSection({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="flex flex-col gap-4">
-        <ClinicalPanel title="Perfil biométrico reciente" icon={Activity} accent="blue">
+        <ClinicalPanel title="Perfil biométrico reciente" icon={Activity} accent="blue" collapsible defaultOpen={false}>
           <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
-            <BiometricMetric
+            <MTStatBox
               label="Presión arterial"
               icon={Activity}
               value={latest?.blood_pressure_systolic && latest.blood_pressure_diastolic
@@ -495,42 +486,42 @@ function PatientBiometricsSection({
                 : 'Sin dato'}
               helper="mmHg"
             />
-            <BiometricMetric
+            <MTStatBox
               label="Peso / IMC"
               icon={Scale}
               value={latest?.weight_kg ? `${latest.weight_kg} kg` : 'Sin dato'}
               helper={bmi ? `IMC ${bmi} kg/m²` : 'IMC calculado con peso y talla'}
             />
-            <BiometricMetric
+            <MTStatBox
               label="Talla"
               icon={Ruler}
               value={latest?.height_cm ? `${latest.height_cm} cm` : 'Sin dato'}
               helper="Dato longitudinal"
             />
-            <BiometricMetric
+            <MTStatBox
               label="Glucosa capilar"
               icon={FlaskConical}
               value={latest?.glucose_mg_dl ? `${latest.glucose_mg_dl}` : 'Sin dato'}
               helper="mg/dL"
             />
-            <BiometricMetric
+            <MTStatBox
               label="Frecuencia cardíaca"
               icon={Activity}
               value={latest?.heart_rate ? `${latest.heart_rate}` : 'Sin dato'}
               helper="lpm"
             />
-            <BiometricMetric
+            <MTStatBox
               label="Frecuencia respiratoria"
               icon={Activity}
               value={latest?.respiratory_rate ? `${latest.respiratory_rate}` : 'Sin dato'}
               helper="rpm"
             />
-            <BiometricMetric
+            <MTStatBox
               label="Temperatura"
               icon={Activity}
               value={latest?.temperature_celsius ? `${latest.temperature_celsius} °C` : 'Sin dato'}
             />
-            <BiometricMetric
+            <MTStatBox
               label="SpO₂"
               icon={Activity}
               value={latest?.oxygen_saturation ? `${latest.oxygen_saturation}%` : 'Sin dato'}
@@ -539,7 +530,7 @@ function PatientBiometricsSection({
           </div>
         </ClinicalPanel>
 
-        <ClinicalPanel title="Historial de observaciones" icon={ClipboardList} accent="sky">
+        <ClinicalPanel title="Historial de observaciones" icon={ClipboardList} accent="sky" collapsible defaultOpen={false}>
           {records.length === 0 ? (
             <EmptyClinicalState
               icon={Activity}
@@ -587,7 +578,7 @@ function PatientBiometricsSection({
         </ClinicalPanel>
       </div>
 
-      <ClinicalPanel title="Registrar datos físicos y signos" icon={Plus} accent="green">
+      <ClinicalPanel title="Registrar datos físicos y signos" icon={Plus} accent="green" collapsible defaultOpen={false}>
         <form onSubmit={submit} className="flex flex-col gap-4 p-4">
           <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
             Registra solo los datos disponibles. Cada observación conserva fecha/hora, no reemplaza mediciones previas y puede asociarse a una consulta si aplica.
@@ -598,7 +589,7 @@ function PatientBiometricsSection({
               <option value="">Sin consulta específica</option>
               {encounters.slice(0, 12).map(encounter => (
                 <option key={encounter.id} value={encounter.id}>
-                  {ENC_LABELS[encounter.encounter_type]} · {new Date(encounter.opened_at).toLocaleDateString('es-GT')}
+                  {ENC_LABELS[encounter.encounter_type]} · {encounter.status === 'OPEN' ? 'Abierta · ' : ''}{new Date(encounter.opened_at).toLocaleDateString('es-GT')}
                 </option>
               ))}
             </select>
@@ -657,27 +648,47 @@ function PatientBiometricsSection({
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
-type PatientTab = 'summary' | 'historia' | 'biometrics' | 'encounters' | 'treatments' | 'adherence' | 'documents' | 'lab' | 'access' | 'compliance'
+type PatientTab = 'summary' | 'historia' | 'biometrics' | 'encounters' | 'treatments' | 'adherence' | 'documents' | 'lab' | 'referrals' | 'admissions' | 'access' | 'compliance'
 
 const TABS: Array<{ id: PatientTab; label: string; icon: typeof FileText }> = [
-  { id: 'summary',     label: 'Resumen',      icon: Activity      },
-  { id: 'historia',    label: 'Historia',     icon: BookOpen      },
-  { id: 'biometrics',  label: 'Biometría',    icon: Scale         },
-  { id: 'encounters',  label: 'Consultas',    icon: Stethoscope   },
-  { id: 'treatments',  label: 'Tratamientos', icon: Pill          },
-  { id: 'adherence',   label: 'Adherencia',   icon: CalendarClock },
-  { id: 'documents',   label: 'Documentos',   icon: FileText      },
-  { id: 'lab',         label: 'Laboratorio',  icon: FlaskConical  },
-  { id: 'access',      label: 'Portal',       icon: Link2         },
-  { id: 'compliance',  label: 'Cumplimiento', icon: ShieldCheck   },
+  { id: 'summary',      label: 'Resumen',        icon: Activity      },
+  { id: 'historia',     label: 'Historia',        icon: BookOpen      },
+  { id: 'biometrics',   label: 'Biometría',       icon: Scale         },
+  { id: 'encounters',   label: 'Consultas',       icon: Stethoscope   },
+  { id: 'treatments',   label: 'Tratamientos',    icon: Pill          },
+  { id: 'adherence',    label: 'Adherencia',      icon: CalendarClock },
+  { id: 'documents',    label: 'Documentos',      icon: FileText      },
+  { id: 'lab',          label: 'Laboratorio',     icon: FlaskConical  },
+  { id: 'referrals',    label: 'Derivaciones',    icon: ArrowUpDown   },
+  { id: 'admissions',   label: 'Internamiento',   icon: BedDouble     },
+  { id: 'access',       label: 'Portal',          icon: Link2         },
+  { id: 'compliance',   label: 'Cumplimiento',    icon: ShieldCheck   },
 ]
+
+const WORKFLOW_STAGE_LABELS: Record<PatientClinicalWorkspace['workflow']['stage'], string> = {
+  INTAKE: 'Entrada',
+  ROOMING: 'Triage',
+  SUBJECTIVE: 'Historia actual',
+  OBJECTIVE: 'Objetivo',
+  ASSESSMENT: 'Evaluación',
+  PLAN: 'Plan',
+  ORDERS: 'Órdenes',
+  READY_TO_CLOSE: 'Listo para cierre',
+}
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function PatientProfilePage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { token } = useAuth()
   const patientId = params.id as string
+  const isNewPatientFlow = searchParams.get('flow') === 'new'
+
+  function dismissNewPatientFlow() {
+    if (!isNewPatientFlow) return
+    router.replace(`/patients/${patientId}`)
+  }
 
   // Clinical data
   const [patient, setPatient] = useState<Patient | null>(null)
@@ -692,6 +703,11 @@ export default function PatientProfilePage() {
   const [background, setBackground] = useState<PatientBackground[]>([])
   const [backgroundHistory, setBackgroundHistory] = useState<PatientBackground[]>([])
   const [vitalSigns, setVitalSigns] = useState<VitalSignsRecord[]>([])
+  const [clinicalWorkspace, setClinicalWorkspace] = useState<PatientClinicalWorkspace | null>(null)
+  const [referrals, setReferrals] = useState<Referral[]>([])
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  const [admissions, setAdmissions] = useState<Admission[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [loadingPage, setLoadingPage] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<PatientTab>('summary')
@@ -713,6 +729,7 @@ export default function PatientProfilePage() {
   const [problemError, setProblemError] = useState('')
 
   // Background inline editing
+  const [expandedBgCategories, setExpandedBgCategories] = useState<Set<BackgroundCategory>>(new Set())
   const [editingCategory, setEditingCategory] = useState<BackgroundCategory | null>(null)
   const [editContent, setEditContent] = useState('')
   const [savingBg, setSavingBg] = useState(false)
@@ -736,6 +753,25 @@ export default function PatientProfilePage() {
   // Documents
   const [showUploader, setShowUploader] = useState(false)
 
+  // Admission form
+  const [showNewAdmission, setShowNewAdmission] = useState(false)
+  const [admDepartmentId, setAdmDepartmentId] = useState('')
+  const [admBedCode, setAdmBedCode] = useState('')
+  const [admNotes, setAdmNotes] = useState('')
+  const [admDischargeNotes, setAdmDischargeNotes] = useState('')
+  const [dischargingId, setDischargingId] = useState<string | null>(null)
+  const [creatingAdm, setCreatingAdm] = useState(false)
+  const [admError, setAdmError] = useState('')
+
+  // Referral form
+  const [showNewReferral, setShowNewReferral] = useState(false)
+  const [refToDoctorId, setRefToDoctorId] = useState('')
+  const [refReason, setRefReason] = useState('')
+  const [refNotes, setRefNotes] = useState('')
+  const [refPriority, setRefPriority] = useState<ReferralPriority>('ROUTINE')
+  const [creatingRef, setCreatingRef] = useState(false)
+  const [refError, setRefError] = useState('')
+
   // FHIR export
   const [exportingFhir, setExportingFhir] = useState(false)
 
@@ -744,7 +780,7 @@ export default function PatientProfilePage() {
     setLoadingPage(true)
     setLoadError(null)
     try {
-      const [p, encs, plans, docs, adh, checks, cons, orders, probs, bg, bgHistory, vitals] = await Promise.all([
+      const [p, encs, plans, docs, adh, checks, cons, orders, probs, bg, bgHistory, vitals, workspace, refs, staffList, adms, depts] = await Promise.all([
         getPatient(token, patientId),
         listEncounters(token, patientId),
         listPatientTreatments(token, patientId).catch(() => []),
@@ -757,6 +793,11 @@ export default function PatientProfilePage() {
         listPatientBackground(token, patientId).catch(() => []),
         listPatientBackgroundHistory(token, patientId).catch(() => []),
         listPatientVitalSigns(token, patientId).catch(() => []),
+        getPatientClinicalWorkspace(token, patientId).catch(() => null),
+        listPatientReferrals(token, patientId).catch(() => []),
+        listStaff(token).then(r => r.staff).catch(() => []),
+        listPatientAdmissions(token, patientId).catch(() => []),
+        listDepartments(token).catch(() => []),
       ])
       setPatient(p)
       setEncounters(encs)
@@ -770,6 +811,11 @@ export default function PatientProfilePage() {
       setBackground(bg)
       setBackgroundHistory(bgHistory)
       setVitalSigns(vitals)
+      setClinicalWorkspace(workspace)
+      setReferrals(refs)
+      setStaff(staffList)
+      setAdmissions(adms)
+      setDepartments(depts)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor')
     } finally {
@@ -783,6 +829,22 @@ export default function PatientProfilePage() {
 
   function handleVitalSaved(record: VitalSignsRecord) {
     setVitalSigns(current => [record, ...current].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime()))
+    setClinicalWorkspace(current => current ? {
+      ...current,
+      readiness: {
+        ...current.readiness,
+        has_vitals: true,
+        has_objective: true,
+        latest_encounter_vital_id: record.id,
+      },
+      context: {
+        ...current.context,
+        latest_vitals: [record, ...current.context.latest_vitals]
+          .sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime())
+          .slice(0, 5),
+      },
+      next_actions: current.next_actions.filter(action => action.key !== 'RECORD_VITALS'),
+    } : current)
   }
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -797,6 +859,7 @@ export default function PatientProfilePage() {
         encounter_type: encType as Encounter['encounter_type'],
         chief_complaint: chiefComplaint || undefined,
         notes: encNotes || undefined,
+        workflow_stage: chiefComplaint.trim() ? 'SUBJECTIVE' : 'INTAKE',
       })
       router.push(`/patients/${patientId}/encounters/${enc.id}`)
     } catch (err) {
@@ -859,6 +922,23 @@ export default function PatientProfilePage() {
         const filtered = prev.filter(b => b.category !== editingCategory)
         return [...filtered, saved]
       })
+      setClinicalWorkspace(current => current ? {
+        ...current,
+        readiness: {
+          ...current.readiness,
+          missing_core_background: current.readiness.missing_core_background.filter(category => category !== editingCategory),
+        },
+        context: {
+          ...current.context,
+          background: [
+            ...current.context.background.filter(item => item.category !== editingCategory),
+            saved,
+          ],
+        },
+        next_actions: current.readiness.missing_core_background.filter(category => category !== editingCategory).length === 0
+          ? current.next_actions.filter(action => action.key !== 'COMPLETE_CORE_BACKGROUND')
+          : current.next_actions,
+      } : current)
       const history = await listPatientBackgroundHistory(token, patientId).catch(() => null)
       if (history) setBackgroundHistory(history)
       setEditingCategory(null)
@@ -945,6 +1025,71 @@ export default function PatientProfilePage() {
       await load()
     } finally {
       setAnonymizing(false)
+    }
+  }
+
+  async function handleAdmitPatient(e: React.FormEvent) {
+    e.preventDefault()
+    if (!token) return
+    setCreatingAdm(true)
+    setAdmError('')
+    try {
+      const adm = await admitPatient(token, patientId, {
+        department_id: admDepartmentId || undefined,
+        bed_code: admBedCode.trim() || undefined,
+        admission_notes: admNotes.trim() || undefined,
+      })
+      setAdmissions(prev => [adm, ...prev])
+      setShowNewAdmission(false)
+      setAdmDepartmentId('')
+      setAdmBedCode('')
+      setAdmNotes('')
+    } catch (err) {
+      setAdmError(err instanceof Error ? err.message : 'Error al internar al paciente')
+    } finally {
+      setCreatingAdm(false)
+    }
+  }
+
+  async function handleDischargePatient(admissionId: string) {
+    if (!token) return
+    setDischargingId(admissionId)
+    setAdmError('')
+    try {
+      const updated = await dischargePatient(token, admissionId, {
+        discharge_notes: admDischargeNotes.trim() || undefined,
+      })
+      setAdmissions(prev => prev.map(a => a.id === admissionId ? { ...a, ...updated } : a))
+      setAdmDischargeNotes('')
+    } catch (err) {
+      setAdmError(err instanceof Error ? err.message : 'Error al dar de alta')
+    } finally {
+      setDischargingId(null)
+    }
+  }
+
+  async function handleCreateReferral(e: React.FormEvent) {
+    e.preventDefault()
+    if (!token || !refToDoctorId || !refReason.trim()) return
+    setCreatingRef(true)
+    setRefError('')
+    try {
+      const ref = await createReferral(token, patientId, {
+        to_doctor_id: refToDoctorId,
+        reason: refReason.trim(),
+        notes: refNotes.trim() || undefined,
+        priority: refPriority,
+      })
+      setReferrals(prev => [ref, ...prev])
+      setShowNewReferral(false)
+      setRefToDoctorId('')
+      setRefReason('')
+      setRefNotes('')
+      setRefPriority('ROUTINE')
+    } catch (err) {
+      setRefError(err instanceof Error ? err.message : 'Error al crear derivación')
+    } finally {
+      setCreatingRef(false)
     }
   }
 
@@ -1062,6 +1207,18 @@ export default function PatientProfilePage() {
     research:          'Investigación',
     marketing:         'Marketing',
   }
+  const workspaceStage = clinicalWorkspace?.workflow.stage ?? 'INTAKE'
+  const activeWorkspaceEncounter = clinicalWorkspace?.active_encounter ?? null
+  const blockingWorkspaceActions = clinicalWorkspace?.next_actions.filter(action => action.priority !== 'LOW') ?? []
+  const visibleWorkspaceActions = clinicalWorkspace?.next_actions.slice(0, 3) ?? []
+  const showNewPatientHandoff = isNewPatientFlow && !activeWorkspaceEncounter
+  const workflowChecks = [
+    { label: 'Consulta', done: Boolean(activeWorkspaceEncounter) },
+    { label: 'Historia', done: Boolean(clinicalWorkspace?.readiness.has_subjective) },
+    { label: 'Signos', done: Boolean(clinicalWorkspace?.readiness.has_vitals) },
+    { label: 'Evaluación', done: Boolean(clinicalWorkspace?.readiness.has_assessment) },
+    { label: 'Plan', done: Boolean(clinicalWorkspace?.readiness.has_plan) },
+  ]
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -1075,6 +1232,7 @@ export default function PatientProfilePage() {
         icon={UserRound}
         meta={
           <>
+            {patient.mrn && <span className="font-mono font-semibold text-blue-700">{patient.mrn}</span>}
             {age !== null && <span>{age} años</span>}
             {patient.sex && <span>{{ male: 'Masculino', female: 'Femenino', other: 'Otro' }[patient.sex]}</span>}
             {patient.id_number && <span>CI: {patient.id_number}</span>}
@@ -1102,62 +1260,163 @@ export default function PatientProfilePage() {
 
       {/* ── Metric chips ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }} className="sm:grid-cols-4">
-        {[
-          {
-            icon: Stethoscope, label: 'Consultas',
-            value: encounters.length, helper: undefined, tone: 'blue' as Tone,
-          },
-          {
-            icon: Pill, label: 'Tratamientos',
-            value: activeTreatments.length,
-            helper: draftTreatments.length > 0 ? `${draftTreatments.length} borrador(es)` : `${treatments.length} totales`,
-            tone: (activeTreatments.length > 0 ? 'green' : 'slate') as Tone,
-          },
-          {
-            icon: CalendarClock, label: 'Adherencia',
-            value: adherence && adherence.total > 0 ? `${adherence.overall_score}%` : '—',
-            helper: adherence && adherence.total > 0 ? `${adherence.confirmed}/${adherence.total} dosis` : 'Sin datos',
-            tone: (adherence && adherence.total > 0 ? adherenceTone : 'slate') as Tone,
-          },
-          {
-            icon: Activity, label: 'Seguimiento',
-            value: checkIns.length > 0 ? `${checkIns.length}` : '—',
-            helper: alertCheckIns > 0 ? `${alertCheckIns} alerta(s)` : latestCheckIn ? 'Último reporte' : 'Sin check-ins',
-            tone: (latestCheckIn ? latestCheckInTone : 'slate') as Tone,
-          },
-        ].map(({ icon: Icon, label, value, helper, tone }) => {
-          const toneMap: Record<string, { bg: string; fg: string }> = { blue: { bg: '#eff6ff', fg: '#1d4ed8' }, green: { bg: '#f0fdf4', fg: '#15803d' }, amber: { bg: '#fffbeb', fg: '#b45309' }, red: { bg: '#fef2f2', fg: '#b91c1c' }, slate: { bg: '#f8fafc', fg: '#64748b' }, purple: { bg: '#f5f3ff', fg: '#7c3aed' }, sky: { bg: '#f0f9ff', fg: '#0369a1' } }
-          const t = toneMap[tone] ?? { bg: '#f8fafc', fg: '#64748b' }
-          return (
-            <div key={label} style={{
-              background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
-              borderRadius: 10, padding: '10px 12px',
-              display: 'flex', alignItems: 'center', gap: 10,
-            }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon size={14} color={t.fg} />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11, color: 'var(--mt-muted)', marginBottom: 1 }}>{label}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--mt-text)', lineHeight: 1.1 }}>{value}</div>
-                {helper && <div style={{ fontSize: 10, color: 'var(--mt-muted)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{helper}</div>}
-              </div>
-            </div>
-          )
-        })}
+        <MTStatChip icon={Stethoscope} label="Consultas" value={encounters.length} tone="blue" />
+        <MTStatChip
+          icon={Pill} label="Tratamientos" value={activeTreatments.length}
+          helper={draftTreatments.length > 0 ? `${draftTreatments.length} borrador(es)` : `${treatments.length} totales`}
+          tone={activeTreatments.length > 0 ? 'green' : 'slate'}
+        />
+        <MTStatChip
+          icon={CalendarClock} label="Adherencia"
+          value={adherence && adherence.total > 0 ? `${adherence.overall_score}%` : '—'}
+          helper={adherence && adherence.total > 0 ? `${adherence.confirmed}/${adherence.total} dosis` : 'Sin datos'}
+          tone={adherence && adherence.total > 0 ? adherenceTone : 'slate'}
+        />
+        <MTStatChip
+          icon={Activity} label="Seguimiento"
+          value={checkIns.length > 0 ? `${checkIns.length}` : '—'}
+          helper={alertCheckIns > 0 ? `${alertCheckIns} alerta(s)` : latestCheckIn ? 'Último reporte' : 'Sin check-ins'}
+          tone={latestCheckIn ? latestCheckInTone : 'slate'}
+        />
       </div>
 
-      {/* ── Active treatments quick view ── */}
-      {activeTreatments.length > 0 && (
-        <ClinicalPanel title="Tratamientos activos" icon={Pill} accent="green">
-          <div className="grid gap-3 p-4 lg:grid-cols-2">
-            {activeTreatments.map(t => <TreatmentCard key={t.id} treatment={t} />)}
+      {showNewPatientHandoff && (
+        <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-blue-900">Paciente creado. Elige cómo iniciar la atención.</p>
+              <p className="mt-1 text-sm leading-6 text-blue-800">
+                Puedes abrir consulta de una vez, tomar signos primero o completar antecedentes antes de pasar con el doctor.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:min-w-[620px] lg:grid-cols-4">
+              <ClinicalButton
+                icon={Stethoscope}
+                onClick={() => { dismissNewPatientFlow(); setActiveTab('encounters'); setShowNewEnc(true) }}
+              >
+                Iniciar consulta
+              </ClinicalButton>
+              <ClinicalButton
+                icon={Scale}
+                variant="outline"
+                tone="blue"
+                onClick={() => { dismissNewPatientFlow(); setActiveTab('biometrics') }}
+              >
+                Tomar signos
+              </ClinicalButton>
+              <ClinicalButton
+                icon={BookOpen}
+                variant="outline"
+                tone="blue"
+                onClick={() => { dismissNewPatientFlow(); setActiveTab('historia'); startBackgroundCapture() }}
+              >
+                Completar historia
+              </ClinicalButton>
+              <ClinicalButton
+                icon={X}
+                variant="ghost"
+                tone="slate"
+                onClick={dismissNewPatientFlow}
+              >
+                Después
+              </ClinicalButton>
+            </div>
           </div>
-        </ClinicalPanel>
+        </section>
       )}
+
+      {/* ── Clinical workflow ── */}
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-8 items-center gap-2 rounded-md bg-blue-50 px-3 text-sm font-semibold text-blue-700">
+                <Stethoscope size={15} />
+                {WORKFLOW_STAGE_LABELS[workspaceStage]}
+              </span>
+              <span className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-semibold ${
+                clinicalWorkspace?.workflow.ready_to_close
+                  ? 'bg-green-50 text-green-700'
+                  : 'bg-amber-50 text-amber-700'
+              }`}>
+                {clinicalWorkspace?.workflow.ready_to_close
+                  ? 'Lista para cierre'
+                  : `${blockingWorkspaceActions.length} pendiente(s)`}
+              </span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {workflowChecks.map(step => (
+                <span
+                  key={step.label}
+                  className={`inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium ${
+                    step.done
+                      ? 'border-green-200 bg-green-50 text-green-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-500'
+                  }`}
+                >
+                  {step.label}
+                </span>
+              ))}
+            </div>
+
+            {visibleWorkspaceActions.length > 0 && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                {visibleWorkspaceActions.map(action => (
+                  <p key={action.key} className="text-sm text-slate-600">
+                    {action.label}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+            {activeWorkspaceEncounter ? (
+              <ClinicalButton
+                href={`/patients/${patientId}/encounters/${activeWorkspaceEncounter.id}`}
+                icon={Stethoscope}
+                tone="blue"
+              >
+                Abrir consulta
+              </ClinicalButton>
+            ) : (
+              <ClinicalButton
+                icon={Plus}
+                tone="blue"
+                onClick={() => { setActiveTab('encounters'); setShowNewEnc(true) }}
+              >
+                Iniciar
+              </ClinicalButton>
+            )}
+            <ClinicalButton
+              icon={Scale}
+              variant="outline"
+              tone="slate"
+              onClick={() => setActiveTab('biometrics')}
+            >
+              Signos
+            </ClinicalButton>
+            <ClinicalButton
+              icon={BookOpen}
+              variant="outline"
+              tone="slate"
+              onClick={() => setActiveTab('historia')}
+            >
+              Historia
+            </ClinicalButton>
+            <ClinicalButton
+              href={`/clinical-intelligence?patientId=${patientId}`}
+              icon={Activity}
+              variant="outline"
+              tone="slate"
+            >
+              Copiloto
+            </ClinicalButton>
+          </div>
+        </div>
+      </section>
+
 
       {/* ── Tab bar ── */}
       <div className="sticky top-0 z-20 -mx-4 overflow-x-auto border-y border-slate-100 bg-white/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6">
@@ -1187,7 +1446,7 @@ export default function PatientProfilePage() {
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'summary' && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <ClinicalPanel title="Timeline clínico reciente" icon={CalendarClock}>
+          <ClinicalPanel title="Timeline clínico reciente" icon={CalendarClock} collapsible defaultOpen={false}>
             {timelineItems.length > 0 ? (
               <ClinicalTimeline items={timelineItems} />
             ) : (
@@ -1200,7 +1459,7 @@ export default function PatientProfilePage() {
           </ClinicalPanel>
 
           <div className="flex flex-col gap-4">
-            <ClinicalPanel title="Seguimiento diario" icon={Activity}>
+            <ClinicalPanel title="Seguimiento diario" icon={Activity} collapsible defaultOpen={false}>
               <div className="flex flex-col gap-3 p-4">
                 {latestCheckIn ? (
                   <>
@@ -1230,7 +1489,7 @@ export default function PatientProfilePage() {
               </div>
             </ClinicalPanel>
 
-            <ClinicalPanel title="Resumen de expediente" icon={ClipboardList}>
+            <ClinicalPanel title="Resumen de expediente" icon={ClipboardList} collapsible defaultOpen={false}>
               <div className="flex flex-col gap-3 p-4">
                 <ClinicalInsight tone={activeTreatments.length > 0 ? 'green' : 'blue'} title="Tratamientos">
                   {activeTreatments.length > 0
@@ -1273,6 +1532,8 @@ export default function PatientProfilePage() {
             title="Lista de problemas"
             icon={ClipboardList}
             accent="red"
+            collapsible
+            defaultOpen={false}
             actions={
               <button
                 onClick={() => { setShowNewProblem(v => !v); setProblemError('') }}
@@ -1369,6 +1630,8 @@ export default function PatientProfilePage() {
             title="Antecedentes"
             icon={BookOpen}
             accent="purple"
+            collapsible
+            defaultOpen={false}
             actions={
               <div className="flex flex-wrap items-center gap-3">
                 <button
@@ -1391,69 +1654,97 @@ export default function PatientProfilePage() {
                 const cfg = BG_LABELS[category]
                 const record = background.find(b => b.category === category)
                 const isEditing = editingCategory === category
+                const isExpanded = expandedBgCategories.has(category) || isEditing
+
+                function toggleCategory() {
+                  setExpandedBgCategories(prev => {
+                    const next = new Set(prev)
+                    next.has(category) ? next.delete(category) : next.add(category)
+                    return next
+                  })
+                }
 
                 return (
-                  <div key={category} className="px-5 py-3.5">
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div key={category}>
+                    <button
+                      type="button"
+                      onClick={toggleCategory}
+                      className="flex w-full items-center justify-between gap-2 px-5 py-3.5 text-left hover:bg-slate-50 transition-colors"
+                    >
                       <div className="flex items-center gap-2">
                         <StatusPill tone={cfg.tone}>{category}</StatusPill>
                         <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
+                        {record?.content && !isExpanded && (
+                          <span className="text-xs text-slate-400 italic truncate max-w-[140px]">
+                            {record.content.slice(0, 40)}{record.content.length > 40 ? '…' : ''}
+                          </span>
+                        )}
                       </div>
-                      {!isEditing && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => startEditBg(category)}
-                            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
-                          >
-                            {record?.content ? <Pencil size={12} /> : <Plus size={12} />}
-                            {record?.content ? 'Editar' : 'Agregar'}
-                          </button>
-                          {record?.content && (
-                            <button
-                              onClick={() => handleRetireBackground(category)}
-                              disabled={retiringBg === category}
-                              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600 disabled:opacity-60 transition-colors"
-                            >
-                              {retiringBg === category ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                              Retirar
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                      <ChevronDown
+                        size={14}
+                        className="shrink-0 text-slate-400 transition-transform"
+                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }}
+                      />
+                    </button>
 
-                    {isEditing ? (
-                      <div className="flex flex-col gap-2">
-                        <textarea
-                          value={editContent}
-                          onChange={e => setEditContent(e.target.value)}
-                          rows={4}
-                          placeholder={BG_HELP_TEXT[category]}
-                          className="w-full resize-none rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        />
-                        <p className="text-xs leading-relaxed text-slate-400">{BG_HELP_TEXT[category]}</p>
-                        {bgError && <p className="text-xs text-red-500">{bgError}</p>}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleSaveBackground}
-                            disabled={savingBg || !editContent.trim()}
-                            className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-60 transition-colors"
-                          >
-                            {savingBg ? <Loader2 size={11} className="animate-spin" /> : null}
-                            Guardar
-                          </button>
-                          <button
-                            onClick={() => setEditingCategory(null)}
-                            className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
+                    {isExpanded && (
+                      <div className="px-5 pb-4">
+                        {!isEditing && (
+                          <div className="mb-2 flex items-center gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); startEditBg(category) }}
+                              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+                            >
+                              {record?.content ? <Pencil size={12} /> : <Plus size={12} />}
+                              {record?.content ? 'Editar' : 'Agregar'}
+                            </button>
+                            {record?.content && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRetireBackground(category) }}
+                                disabled={retiringBg === category}
+                                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600 disabled:opacity-60 transition-colors"
+                              >
+                                {retiringBg === category ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                Retirar
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {isEditing ? (
+                          <div className="flex flex-col gap-2">
+                            <textarea
+                              value={editContent}
+                              onChange={e => setEditContent(e.target.value)}
+                              rows={4}
+                              placeholder={BG_HELP_TEXT[category]}
+                              className="w-full resize-none rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                            <p className="text-xs leading-relaxed text-slate-400">{BG_HELP_TEXT[category]}</p>
+                            {bgError && <p className="text-xs text-red-500">{bgError}</p>}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSaveBackground}
+                                disabled={savingBg || !editContent.trim()}
+                                className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-60 transition-colors"
+                              >
+                                {savingBg ? <Loader2 size={11} className="animate-spin" /> : null}
+                                Guardar
+                              </button>
+                              <button
+                                onClick={() => { setEditingCategory(null) }}
+                                className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 transition-colors"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : record?.content ? (
+                          <p className="text-sm text-slate-600 leading-relaxed">{record.content}</p>
+                        ) : (
+                          <p className="text-xs italic text-slate-300">Sin registro — toca Agregar para documentar.</p>
+                        )}
                       </div>
-                    ) : record?.content ? (
-                      <p className="text-sm text-slate-600 leading-relaxed">{record.content}</p>
-                    ) : (
-                      <p className="text-xs italic text-slate-300">Sin registro</p>
                     )}
                   </div>
                 )
@@ -1521,6 +1812,7 @@ export default function PatientProfilePage() {
           patientId={patientId}
           encounters={encounters}
           records={vitalSigns}
+          preferredEncounterId={activeWorkspaceEncounter?.id}
           onSaved={handleVitalSaved}
         />
       )}
@@ -1532,6 +1824,8 @@ export default function PatientProfilePage() {
         <ClinicalPanel
           title={`Consultas${encounters.length > 0 ? ` (${encounters.length})` : ''}`}
           icon={Stethoscope}
+          collapsible
+          defaultOpen={false}
           actions={
             <button
               onClick={() => { setShowNewEnc(v => !v); setEncError('') }}
@@ -1627,7 +1921,7 @@ export default function PatientProfilePage() {
       {/* TAB: TREATMENTS                                                        */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'treatments' && (
-        <ClinicalPanel title="Tratamientos del paciente" icon={Pill}>
+        <ClinicalPanel title="Tratamientos del paciente" icon={Pill} collapsible defaultOpen={false}>
           {treatments.length > 0 ? (
             <div className="grid gap-3 p-4 lg:grid-cols-2">
               {treatments.map(t => <TreatmentCard key={t.id} treatment={t} />)}
@@ -1659,6 +1953,8 @@ export default function PatientProfilePage() {
             title="Adherencia — últimos 30 días"
             icon={CalendarClock}
             accent={adherenceTone}
+            collapsible
+            defaultOpen={false}
             actions={<StatusPill tone={adherenceTone}>{adherence.overall_score}%</StatusPill>}
           >
             <div className="p-5">
@@ -1698,6 +1994,8 @@ export default function PatientProfilePage() {
           title={`Documentos${documents.length > 0 ? ` (${documents.length})` : ''}`}
           icon={FileText}
           accent="slate"
+          collapsible
+          defaultOpen={false}
           actions={
             <button
               onClick={() => setShowUploader(v => !v)}
@@ -1746,6 +2044,8 @@ export default function PatientProfilePage() {
           title={`Órdenes de laboratorio${labOrders.length > 0 ? ` (${labOrders.length})` : ''}`}
           icon={FlaskConical}
           accent="sky"
+          collapsible
+          defaultOpen={false}
           actions={
             <Link href={`/lab/new?patient=${patientId}`} className={panelToggleClass}>
               <Plus size={15} /> Nueva orden
@@ -1806,6 +2106,311 @@ export default function PatientProfilePage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB: REFERRALS                                                         */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'referrals' && (
+        <ClinicalPanel
+          title={`Derivaciones${referrals.length > 0 ? ` (${referrals.length})` : ''}`}
+          icon={ArrowUpDown}
+          accent="blue"
+          collapsible
+          defaultOpen={false}
+          actions={
+            <button
+              onClick={() => { setShowNewReferral(v => !v); setRefError('') }}
+              className={panelToggleClass}
+            >
+              {showNewReferral ? <><ChevronUp size={15} /> Cancelar</> : <><Plus size={15} /> Nueva</>}
+            </button>
+          }
+        >
+          {showNewReferral && (
+            <form onSubmit={handleCreateReferral} className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className={labelClass}>Médico receptor <span className="text-red-400">*</span></label>
+                  <select
+                    value={refToDoctorId}
+                    onChange={e => setRefToDoctorId(e.target.value)}
+                    required
+                    className={fieldClass}
+                  >
+                    <option value="">Seleccionar médico…</option>
+                    {staff.filter(s => s.role === 'DOCTOR' || s.role === 'ADMIN_CLINIC').map(s => (
+                      <option key={s.id} value={s.id}>
+                        Dr. {s.first_name} {s.last_name}{s.specialty ? ` — ${s.specialty}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className={labelClass}>Prioridad</label>
+                  <select
+                    value={refPriority}
+                    onChange={e => setRefPriority(e.target.value as ReferralPriority)}
+                    className={fieldClass}
+                  >
+                    <option value="ROUTINE">Rutina</option>
+                    <option value="URGENT">Urgente</option>
+                    <option value="EMERGENCY">Emergencia</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={labelClass}>Motivo de derivación <span className="text-red-400">*</span></label>
+                <textarea
+                  value={refReason}
+                  onChange={e => setRefReason(e.target.value)}
+                  rows={3}
+                  required
+                  placeholder="Describe el motivo clínico de la derivación…"
+                  className={`${fieldClass} resize-none`}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={labelClass}>Notas adicionales (opcional)</label>
+                <textarea
+                  value={refNotes}
+                  onChange={e => setRefNotes(e.target.value)}
+                  rows={2}
+                  className={`${fieldClass} resize-none`}
+                />
+              </div>
+              {refError && <p className="text-xs text-red-500">{refError}</p>}
+              <button
+                type="submit"
+                disabled={creatingRef || !refToDoctorId || !refReason.trim()}
+                className={submitBtnClass}
+              >
+                {creatingRef ? <Loader2 size={14} className="animate-spin" /> : null}
+                Enviar derivación
+              </button>
+            </form>
+          )}
+
+          {referrals.length === 0 && !showNewReferral ? (
+            <EmptyClinicalState
+              icon={ArrowUpDown}
+              title="Sin derivaciones"
+              description="Las derivaciones enviadas y recibidas para este paciente aparecerán aquí."
+            />
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {referrals.map(ref => {
+                const STATUS_LABEL: Record<string, { label: string; tone: Tone }> = {
+                  PENDING:   { label: 'Pendiente',  tone: 'amber' },
+                  ACCEPTED:  { label: 'Aceptada',   tone: 'blue'  },
+                  REJECTED:  { label: 'Rechazada',  tone: 'red'   },
+                  COMPLETED: { label: 'Completada', tone: 'green' },
+                  CANCELLED: { label: 'Cancelada',  tone: 'slate' },
+                }
+                const PRIO_LABEL: Record<string, string> = {
+                  ROUTINE: 'Rutina', URGENT: 'Urgente', EMERGENCY: 'Emergencia',
+                }
+                const PRIO_CLASS: Record<string, string> = {
+                  ROUTINE: 'bg-slate-100 text-slate-600',
+                  URGENT: 'bg-amber-100 text-amber-700',
+                  EMERGENCY: 'bg-red-100 text-red-700',
+                }
+                const cfg = STATUS_LABEL[ref.status] ?? { label: ref.status, tone: 'slate' as Tone }
+                return (
+                  <div key={ref.id} className="px-5 py-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {ref.from_doctor && (
+                            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                              <Send size={11} />
+                              Dr. {ref.from_doctor.first_name} {ref.from_doctor.last_name}
+                            </span>
+                          )}
+                          {ref.to_doctor && (
+                            <span className="text-xs text-slate-400">→ Dr. {ref.to_doctor.first_name} {ref.to_doctor.last_name}{ref.to_doctor.specialty ? ` (${ref.to_doctor.specialty})` : ''}</span>
+                          )}
+                          {ref.to_department && (
+                            <span className="text-xs text-slate-400">→ {ref.to_department.name}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-700 mt-1 leading-relaxed line-clamp-2">{ref.reason}</p>
+                        {ref.response_notes && (
+                          <p className="text-xs text-slate-500 italic border-l-2 border-slate-200 pl-2 mt-1">{ref.response_notes}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${PRIO_CLASS[ref.priority]}`}>
+                          {PRIO_LABEL[ref.priority]}
+                        </span>
+                        <StatusPill tone={cfg.tone}>{cfg.label}</StatusPill>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {new Date(ref.created_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {ref.responded_at && ` · Respondida: ${new Date(ref.responded_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })}`}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </ClinicalPanel>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB: ADMISSIONS                                                        */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'admissions' && (
+        <ClinicalPanel
+          title={`Internamientos${admissions.length > 0 ? ` (${admissions.length})` : ''}`}
+          icon={BedDouble}
+          accent="blue"
+          collapsible
+          defaultOpen={false}
+          actions={
+            admissions.every(a => a.status !== 'ACTIVE') ? (
+              <button
+                onClick={() => { setShowNewAdmission(v => !v); setAdmError('') }}
+                className={panelToggleClass}
+              >
+                {showNewAdmission ? <><ChevronUp size={15} /> Cancelar</> : <><Plus size={15} /> Internar</>}
+              </button>
+            ) : undefined
+          }
+        >
+          {showNewAdmission && (
+            <form onSubmit={handleAdmitPatient} className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label className={labelClass}>Departamento (opcional)</label>
+                  <select
+                    value={admDepartmentId}
+                    onChange={e => setAdmDepartmentId(e.target.value)}
+                    className={fieldClass}
+                  >
+                    <option value="">Sin asignar</option>
+                    {departments.filter(d => d.is_active).map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className={labelClass}>Cama / Sala (opcional)</label>
+                  <input
+                    value={admBedCode}
+                    onChange={e => setAdmBedCode(e.target.value)}
+                    placeholder="Ej: SALA-3-B2"
+                    className={fieldClass}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={labelClass}>Notas de ingreso (opcional)</label>
+                <textarea
+                  value={admNotes}
+                  onChange={e => setAdmNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Motivo clínico del internamiento, condición al ingreso…"
+                  className={`${fieldClass} resize-none`}
+                />
+              </div>
+              {admError && <p className="text-xs text-red-500">{admError}</p>}
+              <button type="submit" disabled={creatingAdm} className={submitBtnClass}>
+                {creatingAdm ? <Loader2 size={14} className="animate-spin" /> : null}
+                Confirmar internamiento
+              </button>
+            </form>
+          )}
+
+          {admissions.length === 0 && !showNewAdmission ? (
+            <EmptyClinicalState
+              icon={BedDouble}
+              title="Sin internamientos registrados"
+              description="Registra el internamiento cuando el paciente requiera hospitalización."
+            />
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {admissions.map(adm => {
+                const isActive = adm.status === 'ACTIVE'
+                const days = Math.ceil((Date.now() - new Date(adm.admitted_at).getTime()) / 86_400_000)
+                return (
+                  <div key={adm.id} className="px-5 py-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <StatusPill tone={isActive ? 'blue' : 'slate'}>
+                            {isActive ? 'Internado' : 'Alta'}
+                          </StatusPill>
+                          {adm.bed_code && (
+                            <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                              {adm.bed_code}
+                            </span>
+                          )}
+                          {adm.department && (
+                            <span className="text-xs text-slate-400">{adm.department.name}</span>
+                          )}
+                        </div>
+                        {adm.admission_notes && (
+                          <p className="text-sm text-slate-700 leading-relaxed line-clamp-2">{adm.admission_notes}</p>
+                        )}
+                        {adm.discharge_notes && (
+                          <p className="text-xs text-slate-500 italic border-l-2 border-green-200 pl-2">{adm.discharge_notes}</p>
+                        )}
+                        <p className="text-xs text-slate-400">
+                          Ingreso: {new Date(adm.admitted_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {isActive ? ` · ${days} día(s)` : ''}
+                          {adm.discharged_at ? ` · Alta: ${new Date(adm.discharged_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}
+                          {adm.admitted_by_doctor ? ` · Dr. ${adm.admitted_by_doctor.last_name}` : ''}
+                          {adm.referral ? ` · Por derivación` : ''}
+                        </p>
+                      </div>
+                      {isActive && (
+                        <div className="shrink-0">
+                          {dischargingId === adm.id ? (
+                            <div className="flex flex-col gap-2 w-48">
+                              <textarea
+                                value={admDischargeNotes}
+                                onChange={e => setAdmDischargeNotes(e.target.value)}
+                                rows={2}
+                                placeholder="Notas de alta (opcional)…"
+                                className={`${fieldClass} resize-none text-xs`}
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleDischargePatient(adm.id)}
+                                  className="flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-800 transition-colors"
+                                >
+                                  <CheckCircle size={13} /> Confirmar
+                                </button>
+                                <button
+                                  onClick={() => { setDischargingId(null); setAdmDischargeNotes('') }}
+                                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDischargingId(adm.id)}
+                              className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-blue-700 transition-colors"
+                            >
+                              <LogOut size={13} /> Alta
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {admError && dischargingId === adm.id && (
+                      <p className="text-xs text-red-500">{admError}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </ClinicalPanel>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* TAB: PORTAL ACCESS                                                     */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'access' && token && (
@@ -1822,6 +2427,8 @@ export default function PatientProfilePage() {
             title={`Consentimientos${consents.length > 0 ? ` (${consents.length})` : ''}`}
             icon={ShieldCheck}
             accent="green"
+            collapsible
+            defaultOpen={false}
             actions={
               <button
                 onClick={() => setShowConsentForm(v => !v)}
@@ -1924,7 +2531,7 @@ export default function PatientProfilePage() {
           </ClinicalPanel>
 
           {/* GDPR */}
-          <ClinicalPanel title="RGPD / GDPR" icon={Download} accent="red">
+          <ClinicalPanel title="RGPD / GDPR" icon={Download} accent="red" collapsible defaultOpen={false}>
             <div className="flex flex-col gap-6 px-5 py-5">
               <div>
                 <p className="text-sm font-medium text-slate-700 mb-1">Exportar datos del paciente</p>

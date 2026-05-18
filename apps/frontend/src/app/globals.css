@@ -190,46 +190,55 @@ body {
 /* 4-column metric grid → 2 cols on mobile */
 .mt-grid-metrics {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 
 /* Main body 1.4:1 split → single column on mobile */
 .mt-grid-body {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 16px;
 }
 
 /* 2-column halves → single column on mobile */
 .mt-grid-halves {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
 }
 
 /* 2-column form grid → single column on mobile */
 .mt-grid-form-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
 /* Quick action 2×2 grid → stacked on mobile */
 .mt-grid-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+/* Force all grid items to not bleed beyond their track */
+.mt-grid-body > *,
+.mt-grid-halves > *,
+.mt-grid-metrics > *,
+.mt-grid-form-2 > *,
+.mt-grid-actions > * {
+  min-width: 0;
 }
 
 @media (max-width: 767px) {
   .mt-page          { padding: 16px 16px 88px; }
   .mt-topbar-pad    { padding-left: 12px; padding-right: 12px; }
-  .mt-grid-metrics  { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .mt-grid-body     { grid-template-columns: 1fr; }
-  .mt-grid-halves   { grid-template-columns: 1fr; gap: 16px; }
-  .mt-grid-form-2   { grid-template-columns: 1fr; }
-  .mt-grid-actions  { grid-template-columns: 1fr 1fr; }
+  .mt-grid-metrics  { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .mt-grid-body     { grid-template-columns: minmax(0, 1fr); }
+  .mt-grid-halves   { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .mt-grid-form-2   { grid-template-columns: minmax(0, 1fr); }
+  .mt-grid-actions  { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mt-display       { font-size: 22px; }
 }
 

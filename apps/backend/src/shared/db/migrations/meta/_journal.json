@@ -162,6 +162,41 @@
       "when": 1778774815000,
       "tag": "0021_patient_background_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1747440000000,
+      "tag": "0022_doctor_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1747440001000,
+      "tag": "0023_hospital_environment",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1747440002000,
+      "tag": "0024_patient_mrn_department_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1747440003000,
+      "tag": "0025_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1747440004000,
+      "tag": "0026_hospital_admissions",
+      "breakpoints": true
     }
   ]
 }

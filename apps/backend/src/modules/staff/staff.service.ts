@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { db, users, tenants, staffInvitations } from '../../shared/db/index.ts'
+import { departmentMembers } from '../../shared/db/schema/departments.ts'
 import { generateOpaqueToken, hashToken, signAccessToken, generateRefreshToken, refreshTokenExpiresAt } from '../../shared/services/token.service.ts'
 import { sendEmail } from '../../shared/services/email.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
@@ -92,6 +93,7 @@ export async function inviteStaff(
     tenant_id: tenantId,
     email: input.email,
     role: input.role,
+    department_id: input.department_id,
     token_hash: tokenHash,
     invited_by: inviterId,
     expires_at: expiresAt,
@@ -159,6 +161,14 @@ export async function acceptInvitation(input: AcceptInviteInput) {
     .set({ accepted_at: new Date() })
     .where(eq(staffInvitations.token_hash, tokenHash))
 
+  // Auto-assign to department if the invitation included one
+  if (invite.department_id) {
+    await db.insert(departmentMembers).values({
+      user_id: user.id,
+      department_id: invite.department_id,
+    }).onConflictDoNothing()
+  }
+
   await createAuditLog({
     tenant_id: invite.tenant_id,
     actor_id: user.id,
@@ -223,7 +233,9 @@ export async function getFullUser(userId: string) {
     where: eq(users.id, userId),
     columns: {
       id: true, email: true, first_name: true, last_name: true,
-      role: true, specialty: true, tenant_id: true, is_active: true,
+      role: true, specialty: true, colegiado_number: true,
+      tenant_id: true, is_active: true, is_verified: true,
+      verification_rejected_at: true, verification_rejected_reason: true,
     },
   })
   if (!user || !user.is_active) throw new NotFoundError('User')
@@ -234,6 +246,8 @@ export async function getFullUser(userId: string) {
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN_CLINIC: 'Administrador', DOCTOR: 'Médico', NURSE: 'Enfermero/a', ASSISTANT: 'Asistente',
+  LAB_TECHNICIAN: 'Técnico de Laboratorio', RADIOLOGIST: 'Radiólogo/a',
+  PHARMACIST: 'Farmacéutico/a', RECEPTIONIST: 'Recepcionista', WARD_NURSE: 'Enfermero/a de Sala',
 }
 
 function inviteEmailHtml(

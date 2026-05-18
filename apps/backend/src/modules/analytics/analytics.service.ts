@@ -1,16 +1,18 @@
 import {
   fetchClinicSummary, fetchPatientDosesByDay,
   fetchWeeklyTrends, fetchAdherenceCohortData, fetchPatientsCsvData,
+  fetchPatientsWithDosesToday, fetchNewPatientsWithoutEncounter, fetchPatientsWithActiveTreatments,
 } from './analytics.repository.ts'
 import type {
   ClinicSummary, DayAdherence, PatientAdherenceReport,
   ClinicTrends, AdherenceCohorts, CohortPatient,
+  DoseAlertData, NewPatientsAlertData, ActiveTreatmentsAlertData,
 } from './analytics.types.ts'
 
 const SKIP_STATUSES = new Set(['CANCELLED', 'SUPERSEDED'])
 
-export async function getClinicSummary(tenantId: string): Promise<ClinicSummary> {
-  return fetchClinicSummary(tenantId)
+export async function getClinicSummary(tenantId: string, doctorId: string): Promise<ClinicSummary> {
+  return fetchClinicSummary(tenantId, doctorId)
 }
 
 export async function getPatientAdherenceReport(
@@ -131,6 +133,33 @@ export async function getAdherenceCohorts(tenantId: string, periodDays = 30): Pr
   no_data.sort((a, b) => a.last_name.localeCompare(b.last_name))
 
   return { period_days: periodDays, high, medium, low, no_data }
+}
+
+// ─── Priority alert drill-downs ───────────────────────────────────────────────
+
+export async function getDoseAlert(
+  tenantId: string,
+  status: 'PENDING' | 'MISSED',
+): Promise<DoseAlertData> {
+  const patients = await fetchPatientsWithDosesToday(tenantId, status)
+  return {
+    status,
+    date: new Date().toISOString().slice(0, 10),
+    patients,
+  }
+}
+
+export async function getNewPatientsAlert(tenantId: string): Promise<NewPatientsAlertData> {
+  const patients = await fetchNewPatientsWithoutEncounter(tenantId)
+  return {
+    month: new Date().toISOString().slice(0, 7),
+    patients,
+  }
+}
+
+export async function getActiveTreatmentsAlert(tenantId: string): Promise<ActiveTreatmentsAlertData> {
+  const patients = await fetchPatientsWithActiveTreatments(tenantId)
+  return { patients }
 }
 
 // ─── CSV export ───────────────────────────────────────────────────────────────

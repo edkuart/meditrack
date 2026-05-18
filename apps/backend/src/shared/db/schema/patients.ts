@@ -22,6 +22,7 @@ export const patients = pgTable('patients', {
   notes: text('notes'),
   is_active: boolean('is_active').default(true).notNull(),
   // Set when GDPR erasure is applied — PII columns become null/redacted, medical data stays
+  mrn: varchar('mrn', { length: 20 }).unique(),
   anonymized_at: timestamp('anonymized_at', { withTimezone: true }),
   created_by: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -31,6 +32,7 @@ export const patients = pgTable('patients', {
   index('patients_id_number_idx').on(table.tenant_id, table.id_number),
   index('patients_name_idx').on(table.tenant_id, table.last_name, table.first_name),
   index('patients_tenant_active_created_idx').on(table.tenant_id, table.is_active, table.created_at),
+  index('patients_mrn_idx').on(table.mrn),
 ])
 
 export const patientsRelations = relations(patients, ({ one }) => ({

@@ -6,6 +6,8 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowRight,
+  ArrowUpDown,
+  BedDouble,
   CalendarCheck,
   CheckCircle2,
   ClipboardList,
@@ -115,8 +117,8 @@ function QuickAction({
         <Icon size={16} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{label}</div>
-        <div style={{ marginTop: 2, fontSize: 12, color: 'var(--mt-text-2)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{sub}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)' }}>{label}</div>
+        <div style={{ marginTop: 2, fontSize: 12, color: 'var(--mt-text-2)' }}>{sub}</div>
       </div>
     </a>
   )
@@ -295,10 +297,10 @@ export default function DashboardPage() {
           fontSize: 14, borderRadius: 10, padding: 16,
         }}>{error}</div>
       ) : summary ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           <OnboardingBanner />
 
-          {/* Compact 2×2 stat strip */}
+          {/* 2×3 stat strip */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 1fr',
             border: '1px solid var(--mt-border)', borderRadius: 12,
@@ -306,10 +308,12 @@ export default function DashboardPage() {
             boxShadow: 'var(--mt-shadow-sm)',
           }}>
             {[
-              { Icon: Users,       value: summary.active_patients,       label: 'Pacientes activos',    sub: `${summary.total_patients} totales`,           color: '#1e40af' },
-              { Icon: Stethoscope, value: summary.active_treatments,     label: 'Tratamientos activos', sub: 'bajo seguimiento',                            color: '#047857' },
-              { Icon: UserPlus,    value: summary.monthly_new_patients,  label: 'Nuevos este mes',      sub: 'registrados este mes',                        color: '#b45309' },
-              { Icon: Pill,        value: summary.today_doses_confirmed, label: 'Dosis confirmadas',    sub: `de ${summary.today_doses_total} programadas`,  color: adherenceTone === 'red' ? '#b91c1c' : adherenceTone === 'green' ? '#047857' : '#b45309' },
+              { Icon: Users,       value: summary.active_patients,            label: 'Pacientes activos',     sub: `${summary.total_patients} totales`,           color: '#1e40af' },
+              { Icon: Stethoscope, value: summary.active_treatments,          label: 'Tratamientos activos',  sub: 'bajo seguimiento',                            color: '#047857' },
+              { Icon: UserPlus,    value: summary.monthly_new_patients,       label: 'Nuevos este mes',       sub: 'registrados este mes',                        color: '#b45309' },
+              { Icon: Pill,        value: summary.today_doses_confirmed,      label: 'Dosis confirmadas',     sub: `de ${summary.today_doses_total} programadas`,  color: adherenceTone === 'red' ? '#b91c1c' : adherenceTone === 'green' ? '#047857' : '#b45309' },
+              { Icon: BedDouble,   value: summary.active_admissions,          label: 'Pacientes internados',  sub: 'censo hospitalario activo',                   color: '#6b21a8' },
+              { Icon: ArrowUpDown, value: summary.pending_incoming_referrals, label: 'Derivaciones pendientes', sub: 'esperando tu respuesta',                   color: summary.pending_incoming_referrals > 0 ? '#b91c1c' : '#64748b' },
             ].map(({ Icon, value, label, sub, color }, i) => (
               <div key={label} style={{
                 padding: '12px 14px',
@@ -331,71 +335,73 @@ export default function DashboardPage() {
           {/* Two-column body */}
           <div className="mt-grid-body">
             {/* Left column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
               {/* Prioridades clínicas */}
               <MTPanel
                 title="Prioridades clínicas"
                 icon={ClipboardList}
                 accent="red"
                 collapsible
-                actions={
-                  <ClinicalButton href="/patients" variant="ghost" size="sm" iconRight={ArrowRight}>
-                    Ver bandeja
-                  </ClinicalButton>
-                }
+                defaultOpen={false}
               >
+                {summary.pending_incoming_referrals > 0 && (
+                  <PriorityRow
+                    icon={ArrowUpDown}
+                    title="Derivaciones sin responder"
+                    subtitle="Pacientes derivados hacia ti que esperan aceptación."
+                    badge={`${summary.pending_incoming_referrals} pendientes`}
+                    badgeTone="red"
+                    value={String(summary.pending_incoming_referrals)}
+                    valueTone="red"
+                    tone="red"
+                    critical
+                    href="/referrals"
+                  />
+                )}
                 {summary.today_doses_missed > 0 && (
                   <PriorityRow
                     icon={AlertCircle}
                     title="Dosis perdidas hoy"
-                    subtitle="Revisar barreras de adherencia y contactar a los pacientes."
+                    subtitle="Pacientes que no confirmaron sus dosis programadas."
                     badge={`${summary.today_doses_missed} dosis`}
                     badgeTone="red"
                     value={String(summary.today_doses_missed)}
                     valueTone="red"
                     tone="red"
                     critical
+                    href="/patients/alerts/missed-doses"
                   />
                 )}
                 {summary.today_doses_pending > 0 && (
                   <PriorityRow
                     icon={Clock3}
                     title="Dosis pendientes hoy"
-                    subtitle="Seguimiento de confirmaciones antes del cierre del día."
+                    subtitle="Pacientes con dosis aún no confirmadas hoy."
                     badge={`${summary.today_doses_pending} pendientes`}
                     badgeTone="amber"
                     value={String(summary.today_doses_pending)}
                     valueTone="amber"
                     tone="amber"
+                    href="/patients/alerts/pending-doses"
                   />
                 )}
                 {summary.active_treatments > 0 && (
                   <PriorityRow
                     icon={ClipboardList}
                     title="Tratamientos activos"
-                    subtitle="Pacientes actualmente bajo seguimiento terapéutico."
+                    subtitle="Pacientes bajo seguimiento terapéutico activo."
                     badge={`${summary.active_treatments} activos`}
                     badgeTone="blue"
                     value={String(summary.active_treatments)}
                     valueTone="blue"
                     tone="blue"
+                    href="/patients/alerts/active-treatments"
                   />
                 )}
-                {summary.monthly_new_patients > 0 && (
-                  <PriorityRow
-                    icon={TrendingUp}
-                    title="Pacientes nuevos este mes"
-                    subtitle="Completar primera consulta y plan si corresponde."
-                    value={String(summary.monthly_new_patients)}
-                    valueTone="green"
-                    tone="green"
-                    last
-                  />
-                )}
-                {summary.today_doses_missed === 0 &&
+                {summary.pending_incoming_referrals === 0 &&
+                  summary.today_doses_missed === 0 &&
                   summary.today_doses_pending === 0 &&
-                  summary.active_treatments === 0 &&
-                  summary.monthly_new_patients === 0 && (
+                  summary.active_treatments === 0 && (
                     <EmptyClinicalState
                       icon={CheckCircle2}
                       title="Sin prioridades críticas"
@@ -414,9 +420,11 @@ export default function DashboardPage() {
                   collapsible
                   defaultOpen={false}
                   actions={
-                    <ClinicalButton href="/analytics" variant="ghost" size="sm" iconRight={ArrowRight}>
-                      Detalle
-                    </ClinicalButton>
+                    user && ADMIN_ROLES.has(user.role) ? (
+                      <ClinicalButton href="/analytics" variant="ghost" size="sm" iconRight={ArrowRight}>
+                        Detalle
+                      </ClinicalButton>
+                    ) : undefined
                   }
                 >
                   <DoseProgressSection
@@ -430,13 +438,14 @@ export default function DashboardPage() {
             </div>
 
             {/* Right column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
               {/* Pacientes recientes */}
               <MTPanel
                 title="Pacientes recientes"
                 icon={Users}
                 accent="blue"
                 collapsible
+                defaultOpen={false}
                 actions={
                   <ClinicalButton href="/patients" variant="ghost" size="sm" iconRight={ArrowRight}>
                     Ver todos
@@ -462,7 +471,7 @@ export default function DashboardPage() {
 
               {/* Acciones rápidas */}
               <MTPanel title="Acciones rápidas" icon={Sparkles} accent="purple" padBody collapsible defaultOpen={false}>
-                <div className="mt-grid-actions">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <QuickAction
                     icon={UserPlus} label="Registrar paciente" sub="Nueva ficha clínica"
                     bg="#eff6ff" fg="#1e40af" href="/patients/new"
@@ -471,15 +480,23 @@ export default function DashboardPage() {
                     icon={Stethoscope} label="Ver pacientes" sub="Lista completa"
                     bg="#ecfdf5" fg="#047857" href="/patients"
                   />
+                  <QuickAction
+                    icon={BedDouble} label="Censo hospitalario" sub="Pacientes internados"
+                    bg="#faf5ff" fg="#6b21a8" href="/hospital"
+                  />
+                  <QuickAction
+                    icon={ArrowUpDown} label="Derivaciones" sub="Bandeja de referidos"
+                    bg="#fff1f2" fg="#be123c" href="/referrals"
+                  />
                   {user && ADMIN_ROLES.has(user.role) && (
                     <>
                       <QuickAction
                         icon={TrendingUp} label="Analítica" sub="Reportes de adherencia"
-                        bg="#faf5ff" fg="#6b21a8" href="/analytics"
+                        bg="#fffbeb" fg="#b45309" href="/analytics"
                       />
                       <QuickAction
                         icon={FileText} label="Auditoría" sub="Registros de actividad"
-                        bg="#fffbeb" fg="#b45309" href="/settings/audit"
+                        bg="#f8fafc" fg="#475569" href="/settings/audit"
                       />
                     </>
                   )}
@@ -488,6 +505,12 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {summary.pending_incoming_referrals > 0 && (
+            <ClinicalInsight tone="red" title="Derivaciones sin responder">
+              Tienes {summary.pending_incoming_referrals} derivación{summary.pending_incoming_referrals > 1 ? 'es' : ''} entrante{summary.pending_incoming_referrals > 1 ? 's' : ''} pendiente{summary.pending_incoming_referrals > 1 ? 's' : ''} de respuesta.
+              Acepta o rechaza desde la bandeja de derivaciones.
+            </ClinicalInsight>
+          )}
           {summary.today_doses_missed > 0 && (
             <ClinicalInsight tone="amber" title="Seguimiento sugerido">
               Hay {summary.today_doses_missed} dosis marcadas como perdidas hoy. Prioriza contactar

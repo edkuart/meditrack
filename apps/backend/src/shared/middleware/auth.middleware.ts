@@ -14,6 +14,8 @@ export interface AuthContext {
 declare module 'hono' {
   interface ContextVariableMap {
     auth: AccessTokenPayload
+    userVerified: boolean
+    userRejected: boolean
   }
 }
 
@@ -30,14 +32,38 @@ export async function requireAuth(c: Context, next: Next) {
     const payload = await verifyAccessToken(token)
     const user = await db.query.users.findFirst({
       where: eq(users.id, payload.sub),
-      columns: { id: true, is_active: true },
+      columns: { id: true, is_active: true, is_verified: true, verification_rejected_at: true },
     })
     if (!user?.is_active) throw new UnauthorizedError('User is inactive')
     c.set('auth', payload)
+    c.set('userVerified', user.is_verified)
+    c.set('userRejected', user.verification_rejected_at !== null)
     await next()
   } catch {
     throw new UnauthorizedError('Invalid or expired token')
   }
+}
+
+// Blocks access for doctors whose account is pending admin verification.
+// Must run after requireAuth (which sets userVerified/userRejected on context).
+// SUPER_ADMIN and ADMIN_CLINIC bypass this check — they are pre-verified.
+export async function requireVerified(c: Context, next: Next) {
+  const auth = c.get('auth')
+  if (!auth) throw new UnauthorizedError()
+
+  if (auth.role === 'SUPER_ADMIN' || auth.role === 'ADMIN_CLINIC') {
+    return next()
+  }
+
+  if (c.get('userRejected')) {
+    throw new ForbiddenError('Your registration was rejected. Contact support.', 'VERIFICATION_REJECTED')
+  }
+
+  if (!c.get('userVerified')) {
+    throw new ForbiddenError('Your account is pending verification by an administrator.', 'PENDING_VERIFICATION')
+  }
+
+  await next()
 }
 
 export function requireRole(...roles: UserRole[]) {

@@ -29,11 +29,14 @@ import {
   X,
   FlaskConical,
   BrainCircuit,
+  ArrowUpDown,
+  BedDouble,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
 import { MTAvatar, MTLogo } from '@/components/doctor/clinical-ui'
 import { NotificationPanel } from '@/components/doctor/NotificationPanel'
+import { SearchModal } from '@/components/doctor/SearchModal'
 import { fetchClinicNotifications, type NotificationEntry } from '@/lib/doctor/notifications-api'
 
 const ADMIN_ROLES = new Set(['ADMIN_CLINIC', 'SUPER_ADMIN'])
@@ -116,17 +119,20 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     { href: '/dashboard',  icon: LayoutGrid,   label: 'Panel operativo', match: (p: string) => p === '/dashboard' },
     { href: '/patients',   icon: Users,         label: 'Pacientes',       match: (p: string) => p.startsWith('/patients') },
     { href: '/lab',        icon: FlaskConical,  label: 'Laboratorio',     match: (p: string) => p.startsWith('/lab') },
+    { href: '/referrals',  icon: ArrowUpDown,   label: 'Derivaciones',    match: (p: string) => p.startsWith('/referrals') },
+    { href: '/hospital',   icon: BedDouble,     label: 'Hospital',        match: (p: string) => p.startsWith('/hospital') },
     { href: '/clinical-intelligence', icon: BrainCircuit, label: 'Inteligencia clínica', match: (p: string) => p.startsWith('/clinical-intelligence') },
     { href: '/analytics',  icon: TrendingUp,    label: 'Analítica',       match: (p: string) => p.startsWith('/analytics'), adminOnly: true },
     { href: '/staff',      icon: UserCog,       label: 'Equipo clínico',  match: (p: string) => p === '/staff', adminOnly: true },
   ]
 
   const config = [
-    { href: '/settings/clinic',     icon: Building2,   label: 'Clínica' },
-    { href: '/settings/billing',    icon: CreditCard,  label: 'Plan y pagos' },
-    { href: '/settings/audit',      icon: ShieldCheck, label: 'Auditoría' },
-    { href: '/settings/sessions',   icon: Monitor,     label: 'Sesiones' },
-    { href: '/settings/compliance', icon: ShieldCheck, label: 'Cumplimiento' },
+    { href: '/settings/clinic',    icon: Building2,   label: 'Clínica' },
+    { href: '/settings/hospital',  icon: Building2,   label: 'Hospital' },
+    { href: '/settings/billing',   icon: CreditCard,  label: 'Plan y pagos' },
+    { href: '/settings/audit',     icon: ShieldCheck, label: 'Auditoría' },
+    { href: '/settings/sessions',  icon: Monitor,     label: 'Sesiones' },
+    { href: '/settings/compliance',icon: ShieldCheck, label: 'Cumplimiento' },
   ]
 
   const doctorName = user ? `${user.first_name} ${user.last_name}` : ''
@@ -299,10 +305,23 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   const { user, token } = useAuth()
   const clinicName = 'Clínica'
 
+  const [searchOpen, setSearchOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationEntry[]>([])
   const [loadingNotif, setLoadingNotif] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
+
+  // Global ⌘K / Ctrl+K shortcut
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(v => !v)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   const [, rerender] = useState(0)
 
@@ -373,12 +392,15 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 
       {/* Search bar — full bar on desktop only */}
       <div className="hidden md:block" style={{ flex: 1, maxWidth: 360 }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 12px',
-          border: '1px solid var(--mt-border)', borderRadius: 8,
-          background: 'var(--mt-bg)', fontSize: 13, color: 'var(--mt-muted)',
-          cursor: 'pointer',
-        }}>
+        <button
+          onClick={() => setSearchOpen(true)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 12px',
+            border: '1px solid var(--mt-border)', borderRadius: 8, width: '100%',
+            background: 'var(--mt-bg)', fontSize: 13, color: 'var(--mt-muted)',
+            cursor: 'pointer', textAlign: 'left',
+          }}
+        >
           <Search size={14} color="var(--mt-muted)" />
           <span style={{ flex: 1 }}>Buscar paciente…</span>
           <div style={{ display: 'flex', gap: 2 }}>
@@ -395,8 +417,10 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
               color: 'var(--mt-text-2)',
             }}>K</kbd>
           </div>
-        </div>
+        </button>
       </div>
+
+      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
 
       {/* Spacer — pushes right group to the edge on mobile */}
       <div className="flex-1 md:hidden" />
@@ -404,6 +428,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Search icon button — mobile only */}
         <button
+          onClick={() => setSearchOpen(true)}
           className="md:hidden"
           style={{
             width: 34, height: 34, borderRadius: 8, flexShrink: 0,
@@ -543,7 +568,7 @@ function MobileNav() {
 // DoctorGuard
 // ─────────────────────────────────────────────
 function DoctorGuard({ children }: { children: React.ReactNode }) {
-  const { token, isLoading } = useAuth()
+  const { token, user, isLoading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -552,8 +577,10 @@ function DoctorGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => { setSidebarOpen(false) }, [pathname])
 
   useEffect(() => {
-    if (!isLoading && !token) router.replace('/login')
-  }, [token, isLoading, router])
+    if (isLoading) return
+    if (!token) { router.replace('/login'); return }
+    if (user && !user.is_verified) { router.replace('/pending-verification'); return }
+  }, [token, user, isLoading, router])
 
   if (isLoading) {
     return (

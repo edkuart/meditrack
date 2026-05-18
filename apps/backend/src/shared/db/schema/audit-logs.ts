@@ -42,7 +42,10 @@ export const auditActionEnum = pgEnum('audit_action', [
   'TOKEN_REVOKED',
   // Admin
   'USER_INVITED',
+  'USER_VERIFIED',
+  'USER_REJECTED',
   'USER_DEACTIVATED',
+  'TENANT_UPDATED',
   'SETTINGS_CHANGED',
   'EXPORT_REQUESTED',
   // AI assist
@@ -74,6 +77,18 @@ export const auditActionEnum = pgEnum('audit_action', [
   'LAB_RESULTS_ENTERED',
   // Retention
   'DATA_RETENTION_PURGE',
+  // Patient department access (Phase 3)
+  'PATIENT_ACCESS_GRANTED',
+  'PATIENT_ACCESS_REVOKED',
+  // Referrals (Phase 4)
+  'REFERRAL_CREATED',
+  'REFERRAL_ACCEPTED',
+  'REFERRAL_REJECTED',
+  'REFERRAL_COMPLETED',
+  'REFERRAL_CANCELLED',
+  // Admissions (Phase 5)
+  'PATIENT_ADMITTED',
+  'PATIENT_DISCHARGED',
 ])
 
 // This table is APPEND-ONLY — no UPDATE or DELETE should ever run on it.

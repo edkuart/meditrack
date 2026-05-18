@@ -68,7 +68,7 @@ export default function NewPatientPage() {
         sex: data.sex || undefined,
         notes: data.notes || undefined,
       })
-      router.push(`/patients/${patient.id}`)
+      router.push(`/patients/${patient.id}?flow=new`)
     } catch (err) {
       setError('root', {
         message: err instanceof Error ? err.message : 'Error al crear el paciente',

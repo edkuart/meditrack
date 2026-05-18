@@ -46,6 +46,18 @@ router.get('/:id/check-ins', async (c) => {
   return c.json({ success: true, data: checkIns })
 })
 
+// GET /patients/:id/clinical-workspace
+router.get('/:id/clinical-workspace', async (c) => {
+  const auth = c.get('auth')
+  const workspace = await patientsService.getPatientClinicalWorkspace(
+    auth.tenant_id,
+    c.req.param('id'),
+    auth.sub,
+    auth.email,
+  )
+  return c.json({ success: true, data: workspace })
+})
+
 // GET /patients/:id
 router.get('/:id', async (c) => {
   const auth = c.get('auth')

@@ -1,4 +1,4 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001/api/v1'
 
 async function doctorFetch<T>(path: string, token: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
@@ -32,7 +32,11 @@ export interface DoctorUser {
   last_name: string
   role: string
   specialty: string | null
+  colegiado_number: string | null
   tenant_id: string
+  is_verified: boolean
+  verification_rejected_at: string | null
+  verification_rejected_reason: string | null
 }
 
 export interface AuthResult {
@@ -55,8 +59,10 @@ export async function register(data: {
   password: string
   first_name: string
   last_name: string
+  colegiado_number: string
   professional_id?: string
   specialty?: string
+  dpi_document_key?: string
 }): Promise<AuthResult> {
   return publicFetch('/auth/register', {
     method: 'POST',
@@ -90,6 +96,7 @@ export async function logoutSession(token: string, refreshToken?: string): Promi
 
 export interface Patient {
   id: string
+  mrn: string | null
   first_name: string
   last_name: string
   email: string | null
@@ -127,6 +134,83 @@ export async function listPatients(
 
 export async function getPatient(token: string, id: string): Promise<Patient> {
   return doctorFetch(`/patients/${id}`, token)
+}
+
+export type EncounterWorkflowStage =
+  | 'INTAKE'
+  | 'ROOMING'
+  | 'SUBJECTIVE'
+  | 'OBJECTIVE'
+  | 'ASSESSMENT'
+  | 'PLAN'
+  | 'ORDERS'
+  | 'READY_TO_CLOSE'
+
+export interface ClinicalWorkspaceAction {
+  key: string
+  label: string
+  priority: 'HIGH' | 'NORMAL' | 'LOW'
+  target: 'PATIENT' | 'ENCOUNTER' | 'AI'
+}
+
+export interface ClinicalWorkspaceEncounter {
+  id: string
+  encounter_type: EncounterType
+  status: 'DRAFT' | 'OPEN' | 'CLOSED' | 'ARCHIVED'
+  chief_complaint: string | null
+  subjective?: string | null
+  objective?: string | null
+  assessment?: string | null
+  plan?: string | null
+  notes?: string | null
+  summary: string | null
+  metadata?: Record<string, unknown>
+  opened_at: string
+  closed_at: string | null
+}
+
+export interface PatientClinicalWorkspace {
+  patient: Patient
+  workflow: {
+    stage: EncounterWorkflowStage
+    ready_to_close: boolean
+    open_encounter_count: number
+  }
+  active_encounter: (ClinicalWorkspaceEncounter & { treatment_plan: TreatmentPlan | null }) | null
+  readiness: {
+    has_active_encounter: boolean
+    has_subjective: boolean
+    has_vitals: boolean
+    has_objective: boolean
+    has_assessment: boolean
+    has_plan: boolean
+    missing_core_background: BackgroundCategory[]
+    latest_encounter_vital_id: string | null
+  }
+  context: {
+    background: PatientBackground[]
+    problems: PatientProblem[]
+    latest_vitals: VitalSignsRecord[]
+    latest_encounters: ClinicalWorkspaceEncounter[]
+    treatments: TreatmentPlan[]
+    pending_review_items: Array<{
+      id: string
+      item_type: string
+      status: string
+      priority: string
+      title: string
+      summary: string | null
+      created_at: string
+    }>
+  }
+  next_actions: ClinicalWorkspaceAction[]
+}
+
+export async function getPatientClinicalWorkspace(
+  token: string,
+  patientId: string,
+): Promise<PatientClinicalWorkspace> {
+  return doctorFetch(`/patients/${patientId}/clinical-workspace`, token)
 }
 
 export interface PatientCheckIn {
@@ -241,8 +325,13 @@ export interface Encounter {
   encounter_type: EncounterType
   status: 'DRAFT' | 'OPEN' | 'CLOSED' | 'ARCHIVED'
   chief_complaint: string | null
+  subjective: string | null
+  objective: string | null
+  assessment: string | null
+  plan: string | null
   notes: string | null
   summary: string | null
+  metadata?: Record<string, unknown>
   opened_at: string
   closed_at: string | null
   doctor: { first_name: string; last_name: string; specialty: string | null }
@@ -261,6 +350,11 @@ export async function createEncounter(token: string, patientId: string, data: {
   encounter_type?: EncounterType
   chief_complaint?: string
   notes?: string
+  workflow_stage?: EncounterWorkflowStage
+  subjective?: string
+  objective?: string
+  assessment?: string
+  plan?: string
 }): Promise<Encounter> {
   return doctorFetch(`/patients/${patientId}/encounters`, token, {
     method: 'POST',
@@ -273,6 +367,11 @@ export async function updateEncounter(token: string, id: string, data: {
   chief_complaint?: string
   notes?: string
   summary?: string
+  workflow_stage?: EncounterWorkflowStage
+  subjective?: string
+  objective?: string
+  assessment?: string
+  plan?: string
 }): Promise<Encounter> {
   return doctorFetch(`/encounters/${id}`, token, {
     method: 'PATCH',
@@ -284,6 +383,10 @@ export async function updateEncounter(token: string, id: string, data: {
 export async function closeEncounter(token: string, id: string, data?: {
   summary?: string
   notes?: string
+  subjective?: string
+  objective?: string
+  assessment?: string
+  plan?: string
 }): Promise<Encounter> {
   return doctorFetch(`/encounters/${id}/close`, token, {
     method: 'POST',
@@ -746,4 +849,142 @@ export async function retirePatientBackground(token: string, patientId: string, 
   return doctorFetch(`/patients/${patientId}/background/${category}`, token, {
     method: 'DELETE',
   })
+}
+
+// ─── Referrals ────────────────────────────────────────────────────────────────
+
+export type ReferralPriority = 'ROUTINE' | 'URGENT' | 'EMERGENCY'
+export type ReferralStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COMPLETED' | 'CANCELLED'
+
+export interface Referral {
+  id: string
+  tenant_id: string
+  patient_id: string
+  from_doctor_id: string
+  to_doctor_id: string | null
+  to_department_id: string | null
+  encounter_id: string | null
+  reason: string
+  notes: string | null
+  priority: ReferralPriority
+  status: ReferralStatus
+  response_notes: string | null
+  responded_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+  patient?: { id: string; first_name: string; last_name: string; mrn: string | null }
+  from_doctor?: { id: string; first_name: string; last_name: string; specialty: string | null }
+  to_doctor?: { id: string; first_name: string; last_name: string; specialty: string | null } | null
+  to_department?: { id: string; name: string; type: string } | null
+}
+
+export async function listDoctorReferrals(
+  token: string,
+  direction: 'incoming' | 'outgoing' | 'all' = 'all',
+): Promise<Referral[]> {
+  return doctorFetch(`/referrals?direction=${direction}`, token)
+}
+
+export async function listPatientReferrals(token: string, patientId: string): Promise<Referral[]> {
+  return doctorFetch(`/patients/${patientId}/referrals`, token)
+}
+
+export async function createReferral(token: string, patientId: string, data: {
+  to_doctor_id?: string
+  to_department_id?: string
+  encounter_id?: string
+  reason: string
+  notes?: string
+  priority?: ReferralPriority
+}): Promise<Referral> {
+  return doctorFetch(`/patients/${patientId}/referrals`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function acceptReferral(token: string, referralId: string, notes?: string): Promise<Referral> {
+  return doctorFetch(`/referrals/${referralId}/accept`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes }),
+  })
+}
+
+export async function rejectReferral(token: string, referralId: string, notes?: string): Promise<Referral> {
+  return doctorFetch(`/referrals/${referralId}/reject`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes }),
+  })
+}
+
+export async function completeReferral(token: string, referralId: string, notes?: string): Promise<Referral> {
+  return doctorFetch(`/referrals/${referralId}/complete`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes }),
+  })
+}
+
+export async function cancelReferral(token: string, referralId: string): Promise<Referral> {
+  return doctorFetch(`/referrals/${referralId}/cancel`, token, { method: 'POST' })
+}
+
+// ─── Admissions ───────────────────────────────────────────────────────────────
+
+export type AdmissionStatus = 'ACTIVE' | 'DISCHARGED'
+
+export interface Admission {
+  id: string
+  tenant_id: string
+  patient_id: string
+  admitted_by: string
+  department_id: string | null
+  referral_id: string | null
+  bed_code: string | null
+  status: AdmissionStatus
+  admission_notes: string | null
+  discharge_notes: string | null
+  admitted_at: string
+  discharged_at: string | null
+  created_at: string
+  updated_at: string
+  patient?: { id: string; first_name: string; last_name: string; mrn: string | null; date_of_birth: string | null }
+  admitted_by_doctor?: { id: string; first_name: string; last_name: string; specialty: string | null }
+  department?: { id: string; name: string; type: string } | null
+  referral?: { id: string; reason: string; priority: string } | null
+}
+
+export async function listPatientAdmissions(token: string, patientId: string): Promise<Admission[]> {
+  return doctorFetch(`/patients/${patientId}/admissions`, token)
+}
+
+export async function admitPatient(token: string, patientId: string, data: {
+  department_id?: string
+  referral_id?: string
+  bed_code?: string
+  admission_notes?: string
+}): Promise<Admission> {
+  return doctorFetch(`/patients/${patientId}/admissions`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function dischargePatient(token: string, admissionId: string, data: {
+  discharge_notes?: string
+}): Promise<Admission> {
+  return doctorFetch(`/admissions/${admissionId}/discharge`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function getHospitalCensus(token: string): Promise<Admission[]> {
+  return doctorFetch('/hospital/census', token)
 }

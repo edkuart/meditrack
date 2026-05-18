@@ -1,0 +1,51 @@
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import { AdmitPatientSchema, DischargePatientSchema } from './admissions.schema.ts'
+import * as svc from './admissions.service.ts'
+
+const router = new Hono()
+
+router.use('*', requireAuth)
+
+// ─── Census ───────────────────────────────────────────────────────────────────
+
+router.get('/hospital/census', async (c) => {
+  const { tenant_id } = c.get('auth')
+  const data = await svc.getHospitalCensus(tenant_id)
+  return c.json({ success: true, data })
+})
+
+// ─── Per-patient admissions ───────────────────────────────────────────────────
+
+router.get('/patients/:patientId/admissions', async (c) => {
+  const { tenant_id } = c.get('auth')
+  const data = await svc.listPatientAdmissions(tenant_id, c.req.param('patientId')!)
+  return c.json({ success: true, data })
+})
+
+router.post(
+  '/patients/:patientId/admissions',
+  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  zValidator('json', AdmitPatientSchema),
+  async (c) => {
+    const { tenant_id, sub, email } = c.get('auth')
+    const data = await svc.admitPatient(tenant_id, sub, email, c.req.param('patientId')!, c.req.valid('json'))
+    return c.json({ success: true, data }, 201)
+  },
+)
+
+// ─── Discharge ────────────────────────────────────────────────────────────────
+
+router.post(
+  '/admissions/:id/discharge',
+  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  zValidator('json', DischargePatientSchema),
+  async (c) => {
+    const { tenant_id, sub, email } = c.get('auth')
+    const data = await svc.dischargePatient(tenant_id, sub, email, c.req.param('id')!, c.req.valid('json'))
+    return c.json({ success: true, data })
+  },
+)
+
+export { router as admissionsRouter }

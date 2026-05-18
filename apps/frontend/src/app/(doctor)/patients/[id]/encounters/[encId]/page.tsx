@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  Activity, ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
+  Activity, AlertTriangle, ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
   ChevronDown, ChevronUp, ClipboardList, Copy, ExternalLink, FileText, Link2,
   MessageCircle, Save, Sparkles, Stethoscope, Wand2,
 } from 'lucide-react'
@@ -16,8 +16,14 @@ import {
   type AiAssistMode,
   type ClinicalProtocol,
   type Encounter,
+  type EncounterWorkflowStage,
   type TreatmentPlan,
 } from '@/lib/doctor/api'
+import {
+  runPatientClinicalCopilot,
+  type ClinicalCopilotMode,
+  type ClinicalCopilotResponse,
+} from '@/lib/doctor/clinical-intelligence-api'
 import {
   ClinicalButton,
   ClinicalHeader,
@@ -54,6 +60,13 @@ function withFreshPortalSession(url: string) {
   return next.toString()
 }
 
+function getWorkflowStage(metadata?: Record<string, unknown> | null): EncounterWorkflowStage {
+  const value = metadata?.workflow_stage
+  return typeof value === 'string' && WORKFLOW_STAGES.includes(value as EncounterWorkflowStage)
+    ? value as EncounterWorkflowStage
+    : 'SUBJECTIVE'
+}
+
 const NOTE_TEMPLATES = [
   {
     label: 'SOAP',
@@ -70,6 +83,39 @@ const NOTE_TEMPLATES = [
     notes: 'Estado al egreso:\n\nIndicaciones entregadas:\n\nSignos de alarma revisados:\n',
     summary: 'Plan de egreso:\n- \n\nPróximo control:\n',
   },
+]
+
+const WORKFLOW_STAGE_LABELS: Record<EncounterWorkflowStage, string> = {
+  INTAKE: 'Entrada',
+  ROOMING: 'Triage',
+  SUBJECTIVE: 'Subjetivo',
+  OBJECTIVE: 'Objetivo',
+  ASSESSMENT: 'Evaluación',
+  PLAN: 'Plan',
+  ORDERS: 'Órdenes',
+  READY_TO_CLOSE: 'Listo para cierre',
+}
+
+const WORKFLOW_STAGES: EncounterWorkflowStage[] = [
+  'INTAKE',
+  'ROOMING',
+  'SUBJECTIVE',
+  'OBJECTIVE',
+  'ASSESSMENT',
+  'PLAN',
+  'ORDERS',
+  'READY_TO_CLOSE',
+]
+
+const COPILOT_MODES: Array<{
+  mode: Exclude<ClinicalCopilotMode, 'ASK_CLINICAL_QUESTION'>
+  label: string
+  tone: 'blue' | 'amber' | 'green'
+}> = [
+  { mode: 'PREPARE_CONSULTATION', label: 'Preparar', tone: 'blue' },
+  { mode: 'SUGGEST_PATIENT_QUESTIONS', label: 'Preguntas', tone: 'amber' },
+  { mode: 'REVIEW_CLINICAL_GAPS', label: 'Brechas', tone: 'amber' },
+  { mode: 'DRAFT_SOAP', label: 'Borrador SOAP', tone: 'green' },
 ]
 
 const PLAN_PRESETS = [
@@ -542,12 +588,20 @@ export default function EncounterPage() {
   // Notes editing
   const [notes, setNotes] = useState('')
   const [summary, setSummary] = useState('')
+  const [subjective, setSubjective] = useState('')
+  const [objective, setObjective] = useState('')
+  const [assessment, setAssessment] = useState('')
+  const [plan, setPlan] = useState('')
+  const [workflowStage, setWorkflowStage] = useState<EncounterWorkflowStage>('SUBJECTIVE')
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesError, setNotesError] = useState('')
   const [notesSaved, setNotesSaved] = useState(false)
   const [aiLoading, setAiLoading] = useState<AiAssistMode | null>(null)
   const [aiNotice, setAiNotice] = useState('')
   const [aiError, setAiError] = useState('')
+  const [copilotLoading, setCopilotLoading] = useState<ClinicalCopilotMode | null>(null)
+  const [copilotQuestion, setCopilotQuestion] = useState('')
+  const [copilotResult, setCopilotResult] = useState<ClinicalCopilotResponse | null>(null)
 
   // Treatment builder
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
@@ -582,6 +636,11 @@ export default function EncounterPage() {
       setTreatment(enc.treatment_plan ?? null)
       setNotes(enc.notes ?? '')
       setSummary(enc.summary ?? '')
+      setSubjective(enc.subjective ?? '')
+      setObjective(enc.objective ?? '')
+      setAssessment(enc.assessment ?? '')
+      setPlan(enc.plan ?? '')
+      setWorkflowStage(getWorkflowStage(enc.metadata))
       setProtocols(protocolList.length > 0 ? protocolList : FALLBACK_PROTOCOLS)
     } finally {
       setLoading(false)
@@ -689,6 +748,20 @@ export default function EncounterPage() {
     setShowIntervForm(false)
   }
 
+  function inferWorkflowStage(next = {
+    subjective,
+    objective,
+    assessment,
+    plan,
+    summary,
+  }): EncounterWorkflowStage {
+    if (next.plan.trim() || next.summary.trim() || treatment || medications.length > 0 || interventions.length > 0) return 'PLAN'
+    if (next.assessment.trim()) return 'ASSESSMENT'
+    if (next.objective.trim()) return 'OBJECTIVE'
+    if (next.subjective.trim() || encounter?.chief_complaint?.trim()) return 'SUBJECTIVE'
+    return 'INTAKE'
+  }
+
   async function saveTreatment() {
     if (!token || (medications.length === 0 && interventions.length === 0)) return
     setSavingTreatment(true)
@@ -722,6 +795,7 @@ export default function EncounterPage() {
         })),
       })
       setTreatment(plan)
+      setWorkflowStage('ORDERS')
       setMedications([])
       setInterventions([])
       setSelectedProtocolId(null)
@@ -753,8 +827,14 @@ export default function EncounterPage() {
       const updated = await updateEncounter(token, encId, {
         notes,
         summary,
+        subjective,
+        objective,
+        assessment,
+        plan,
+        workflow_stage: inferWorkflowStage(),
       })
       setEncounter(updated)
+      setWorkflowStage(getWorkflowStage(updated.metadata))
       setNotesSaved(true)
       setTimeout(() => setNotesSaved(false), 3000)
     } catch (err) {
@@ -790,13 +870,73 @@ export default function EncounterPage() {
     }
   }
 
+  async function handleClinicalCopilot(mode: ClinicalCopilotMode, question?: string) {
+    if (!token) return
+    setCopilotLoading(mode)
+    setAiError('')
+    setAiNotice('')
+    try {
+      const sourceText = [
+        encounter?.chief_complaint ? `Motivo: ${encounter.chief_complaint}` : '',
+        subjective ? `Subjetivo:\n${subjective}` : '',
+        objective ? `Objetivo:\n${objective}` : '',
+        assessment ? `Evaluación:\n${assessment}` : '',
+        plan ? `Plan:\n${plan}` : '',
+        notes ? `Notas libres:\n${notes}` : '',
+        summary ? `Resumen:\n${summary}` : '',
+      ].filter(Boolean).join('\n\n')
+
+      const result = await runPatientClinicalCopilot(token, patientId, {
+        mode,
+        encounter_id: encId,
+        question,
+        source_text: sourceText || undefined,
+        save_to_review_queue: mode === 'DRAFT_SOAP',
+      })
+      setCopilotResult(result)
+      setAiNotice(result.safety_notice)
+
+      if (result.soap_draft && mode === 'DRAFT_SOAP') {
+        setSubjective(prev => prev.trim() ? prev : result.soap_draft?.subjective ?? '')
+        setObjective(prev => prev.trim() ? prev : result.soap_draft?.objective ?? '')
+        setAssessment(prev => prev.trim() ? prev : result.soap_draft?.assessment ?? '')
+        setPlan(prev => prev.trim() ? prev : result.soap_draft?.plan ?? '')
+        setWorkflowStage('ASSESSMENT')
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'No se pudo consultar el copiloto clínico')
+    } finally {
+      setCopilotLoading(null)
+    }
+  }
+
+  function handleAskCopilot() {
+    const question = copilotQuestion.trim()
+    if (question.length < 3) return
+    void handleClinicalCopilot('ASK_CLINICAL_QUESTION', question)
+  }
+
   async function handleClose() {
-    if (!token || !confirm('¿Cerrar esta consulta?')) return
+    if (!token) return
+    const missing = [
+      !subjective.trim() && !encounter?.chief_complaint?.trim() ? 'subjetivo' : '',
+      !objective.trim() ? 'objetivo' : '',
+      !assessment.trim() ? 'evaluación' : '',
+      !plan.trim() && !summary.trim() && !treatment ? 'plan' : '',
+    ].filter(Boolean)
+    const message = missing.length > 0
+      ? `Aún faltan: ${missing.join(', ')}. ¿Cerrar esta consulta de todos modos?`
+      : '¿Cerrar esta consulta?'
+    if (!confirm(message)) return
     setClosing(true)
     try {
       await closeEncounter(token, encId, {
         notes,
         summary,
+        subjective,
+        objective,
+        assessment,
+        plan,
       })
       router.push(`/patients/${patientId}`)
     } finally {
@@ -850,7 +990,22 @@ export default function EncounterPage() {
   if (!encounter) return null
 
   const isClosed = encounter.status === 'CLOSED' || encounter.status === 'ARCHIVED'
-  const hasUnsavedNotes = notes !== (encounter.notes ?? '') || summary !== (encounter.summary ?? '')
+  const soapChecks = [
+    { key: 'subjective', label: 'Subjetivo', done: Boolean(subjective.trim() || encounter.chief_complaint?.trim()) },
+    { key: 'objective', label: 'Objetivo', done: Boolean(objective.trim()) },
+    { key: 'assessment', label: 'Evaluación', done: Boolean(assessment.trim()) },
+    { key: 'plan', label: 'Plan', done: Boolean(plan.trim() || summary.trim() || treatment) },
+  ]
+  const missingCloseItems = soapChecks.filter(item => !item.done)
+  const readyToClose = missingCloseItems.length === 0
+  const hasUnsavedNotes =
+    notes !== (encounter.notes ?? '') ||
+    summary !== (encounter.summary ?? '') ||
+    subjective !== (encounter.subjective ?? '') ||
+    objective !== (encounter.objective ?? '') ||
+    assessment !== (encounter.assessment ?? '') ||
+    plan !== (encounter.plan ?? '') ||
+    workflowStage !== getWorkflowStage(encounter.metadata)
 
   return (
     <ClinicalPage size="compact">
@@ -860,9 +1015,14 @@ export default function EncounterPage() {
         subtitle={new Date(encounter.opened_at).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         icon={Stethoscope}
         meta={
-          <StatusPill tone={encounter.status === 'OPEN' ? 'green' : 'slate'}>
-            {encounter.status === 'OPEN' ? 'Abierta' : 'Cerrada'}
-          </StatusPill>
+          <>
+            <StatusPill tone={encounter.status === 'OPEN' ? 'green' : 'slate'}>
+              {encounter.status === 'OPEN' ? 'Abierta' : 'Cerrada'}
+            </StatusPill>
+            <StatusPill tone={readyToClose ? 'green' : 'amber'}>
+              {readyToClose ? 'Lista para cierre' : WORKFLOW_STAGE_LABELS[workflowStage]}
+            </StatusPill>
+          </>
         }
         actions={
           <>
@@ -897,12 +1057,18 @@ export default function EncounterPage() {
 
       {!isClosed && hasUnsavedNotes && (
         <ClinicalInsight tone="amber" title="Cambios sin guardar">
-          Hay cambios en las notas de esta consulta. Guarda antes de cerrar o salir del flujo.
+          Hay cambios en esta consulta. Guarda antes de cerrar o salir del flujo.
+        </ClinicalInsight>
+      )}
+
+      {!isClosed && !readyToClose && (
+        <ClinicalInsight tone="blue" title="Consulta en progreso">
+          Faltan: {missingCloseItems.map(item => item.label).join(', ')}. Puedes guardar el avance y continuar después.
         </ClinicalInsight>
       )}
 
       <ClinicalPanel
-        title="Notas clínicas"
+        title="Flujo clínico de consulta"
         icon={FileText}
         actions={!isClosed ? (
           <button
@@ -986,61 +1152,129 @@ export default function EncounterPage() {
         )}
 
         {isClosed ? (
-          /* ── Read-only preview (closed encounter) ── */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{
-              borderRadius: 10, border: '1px solid var(--mt-border)',
-              background: 'var(--mt-bg)', overflow: 'hidden',
-            }}>
-              <div style={{
-                padding: '6px 14px', borderBottom: '1px solid var(--mt-border)',
-                fontSize: 11, fontWeight: 600, color: 'var(--mt-muted)',
-                letterSpacing: '0.06em', textTransform: 'uppercase',
-              }}>Evolución / Notas</div>
-              <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--mt-text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                {notes || <span style={{ color: 'var(--mt-muted)', fontStyle: 'italic' }}>Sin notas registradas</span>}
-              </div>
-            </div>
-            {summary && (
-              <div style={{
-                borderRadius: 10, border: '1px solid var(--mt-border)',
-                background: 'var(--mt-bg)', overflow: 'hidden',
-              }}>
-                <div style={{
-                  padding: '6px 14px', borderBottom: '1px solid var(--mt-border)',
-                  fontSize: 11, fontWeight: 600, color: 'var(--mt-muted)',
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                }}>Resumen / Plan</div>
-                <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--mt-text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                  {summary}
+          <div className="grid gap-3 md:grid-cols-2">
+            {[
+              ['Subjetivo', subjective || encounter.chief_complaint],
+              ['Objetivo', objective],
+              ['Evaluación', assessment],
+              ['Plan', plan || summary],
+            ].map(([label, value]) => (
+              <div key={label} className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {label}
                 </div>
+                <div className="min-h-24 whitespace-pre-wrap px-3 py-3 text-sm leading-6 text-slate-700">
+                  {value || <span className="italic text-slate-400">Sin registro</span>}
+                </div>
+              </div>
+            ))}
+            {(notes || summary) && (
+              <div className="rounded-lg border border-slate-200 bg-white p-3 md:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas adicionales</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{[notes, summary].filter(Boolean).join('\n\n')}</p>
               </div>
             )}
           </div>
         ) : (
-          /* ── Editable form (open encounter) ── */
           <>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-500">Evolución / Notas</label>
-              <textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                rows={4}
-                placeholder="Anamnesis, exploración física, diagnóstico..."
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-              />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {WORKFLOW_STAGES.map(stage => (
+                  <button
+                    key={stage}
+                    type="button"
+                    onClick={() => setWorkflowStage(stage)}
+                    className={`inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold transition-colors ${
+                      workflowStage === stage
+                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                    }`}
+                  >
+                    {WORKFLOW_STAGE_LABELS[stage]}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {soapChecks.map(item => (
+                  <span
+                    key={item.key}
+                    className={`inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium ${
+                      item.done
+                        ? 'border-green-200 bg-green-50 text-green-700'
+                        : 'border-slate-200 bg-white text-slate-500'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                ))}
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-500">Resumen / Plan</label>
-              <textarea
-                value={summary}
-                onChange={e => setSummary(e.target.value)}
-                rows={3}
-                placeholder="Diagnóstico final, plan de acción..."
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-              />
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Subjetivo</label>
+                <textarea
+                  value={subjective}
+                  onChange={e => { setSubjective(e.target.value); setWorkflowStage('SUBJECTIVE') }}
+                  rows={5}
+                  placeholder="Historia del padecimiento actual, síntomas, revisión por sistemas..."
+                  className="min-h-32 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Objetivo</label>
+                <textarea
+                  value={objective}
+                  onChange={e => { setObjective(e.target.value); setWorkflowStage('OBJECTIVE') }}
+                  rows={5}
+                  placeholder="Signos vitales, examen físico, hallazgos, laboratorios relevantes..."
+                  className="min-h-32 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Evaluación</label>
+                <textarea
+                  value={assessment}
+                  onChange={e => { setAssessment(e.target.value); setWorkflowStage('ASSESSMENT') }}
+                  rows={5}
+                  placeholder="Impresión diagnóstica, CIE-10, diferenciales, riesgos..."
+                  className="min-h-32 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Plan</label>
+                <textarea
+                  value={plan}
+                  onChange={e => { setPlan(e.target.value); setWorkflowStage('PLAN') }}
+                  rows={5}
+                  placeholder="Plan diagnóstico, tratamiento, educación, seguimiento..."
+                  className="min-h-32 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
             </div>
+
+            <details className="rounded-lg border border-slate-200 bg-white">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-slate-600">Notas adicionales y resumen para portal</summary>
+              <div className="grid gap-3 border-t border-slate-100 p-3 md:grid-cols-2">
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Notas libres internas..."
+                  className="resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+                <textarea
+                  value={summary}
+                  onChange={e => setSummary(e.target.value)}
+                  rows={4}
+                  placeholder="Resumen corto, seguimiento o instrucciones para paciente..."
+                  className="resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            </details>
 
             {notesError && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{notesError}</p>
@@ -1060,13 +1294,145 @@ export default function EncounterPage() {
                 variant="outline"
                 tone={hasUnsavedNotes ? 'blue' : 'slate'}
               >
-                Guardar notas
+                Guardar avance
               </ClinicalButton>
             </div>
           </>
         )}
         </div>
       </ClinicalPanel>
+
+      {!isClosed && (
+        <ClinicalPanel title="Copiloto clínico" icon={Sparkles} collapsible defaultOpen={false}>
+          <div className="flex flex-col gap-4 p-5">
+            <div className="flex flex-wrap gap-2">
+              {COPILOT_MODES.map(item => (
+                <ClinicalButton
+                  key={item.mode}
+                  icon={copilotLoading === item.mode ? Loader2 : Sparkles}
+                  onClick={() => handleClinicalCopilot(item.mode)}
+                  disabled={Boolean(copilotLoading)}
+                  variant="outline"
+                  tone={item.tone}
+                >
+                  {item.label}
+                </ClinicalButton>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                value={copilotQuestion}
+                onChange={e => setCopilotQuestion(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAskCopilot()
+                  }
+                }}
+                placeholder="Preguntar al historial del paciente..."
+                className="min-h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+              <ClinicalButton
+                icon={copilotLoading === 'ASK_CLINICAL_QUESTION' ? Loader2 : Sparkles}
+                onClick={handleAskCopilot}
+                disabled={Boolean(copilotLoading) || copilotQuestion.trim().length < 3}
+              >
+                Preguntar
+              </ClinicalButton>
+            </div>
+
+            {copilotResult && (
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                  <p className="text-sm font-semibold text-blue-800">{copilotResult.summary}</p>
+                  {copilotResult.answer && (
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-blue-900">{copilotResult.answer}</p>
+                  )}
+                  {copilotResult.soap_draft && (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {Object.entries(copilotResult.soap_draft).map(([key, value]) => (
+                        <div key={key} className="rounded-md bg-white p-2 text-xs leading-5 text-slate-700">
+                          <span className="font-semibold uppercase text-slate-500">{key}</span>
+                          <p className="mt-1 whitespace-pre-wrap">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {copilotResult.suggested_questions.length > 0 && (
+                    <ClinicalInsight tone="blue" title="Preguntas sugeridas">
+                      {copilotResult.suggested_questions.slice(0, 4).join(' · ')}
+                    </ClinicalInsight>
+                  )}
+                  {copilotResult.clinical_gaps.length > 0 && (
+                    <ClinicalInsight tone="amber" title="Datos faltantes">
+                      {copilotResult.clinical_gaps.slice(0, 4).join(' · ')}
+                    </ClinicalInsight>
+                  )}
+                  {copilotResult.soft_alerts.length > 0 && (
+                    <ClinicalInsight tone="red" title="Alertas suaves">
+                      {copilotResult.soft_alerts.slice(0, 3).join(' · ')}
+                    </ClinicalInsight>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </ClinicalPanel>
+      )}
+
+      {!isClosed && (
+        <ClinicalPanel title="Cierre de consulta" icon={CheckCircle} accent={readyToClose ? 'green' : 'amber'}>
+          <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap gap-2">
+                {soapChecks.map(item => (
+                  <span
+                    key={item.key}
+                    className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs font-semibold ${
+                      item.done
+                        ? 'border-green-200 bg-green-50 text-green-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-700'
+                    }`}
+                  >
+                    {item.done ? <CheckCircle size={13} /> : <AlertTriangle size={13} />}
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {readyToClose
+                  ? 'La consulta tiene los elementos mínimos para cerrarse. Revisa tratamiento, indicaciones y seguimiento antes de finalizar.'
+                  : `Puedes guardar el avance. Para cierre ideal faltan: ${missingCloseItems.map(item => item.label).join(', ')}.`}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:min-w-[340px]">
+              <ClinicalButton
+                icon={savingNotes ? Loader2 : Save}
+                onClick={handleSaveNotes}
+                disabled={savingNotes}
+                variant="outline"
+                tone="blue"
+              >
+                Guardar sin cerrar
+              </ClinicalButton>
+              <ClinicalButton
+                icon={closing ? Loader2 : XCircle}
+                onClick={handleClose}
+                disabled={closing}
+                variant={readyToClose ? 'solid' : 'outline'}
+                tone={readyToClose ? 'green' : 'amber'}
+              >
+                Cerrar consulta
+              </ClinicalButton>
+            </div>
+          </div>
+        </ClinicalPanel>
+      )}
 
       {/* Treatment builder */}
       <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">

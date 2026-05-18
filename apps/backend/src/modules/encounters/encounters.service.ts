@@ -4,6 +4,14 @@ import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { NotFoundError, ForbiddenError } from '../../shared/errors.ts'
 import type { CreateEncounterInput, UpdateEncounterInput, CloseEncounterInput } from './encounters.schema.ts'
 
+type EncounterMetadata = Record<string, unknown>
+
+function asMetadata(value: unknown): EncounterMetadata {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? { ...(value as EncounterMetadata) }
+    : {}
+}
+
 // ─── Create ────────────────────────────────────────────────────────────────────
 
 export async function createEncounter(
@@ -32,6 +40,7 @@ export async function createEncounter(
       objective: input.objective,
       assessment: input.assessment,
       plan: input.plan,
+      metadata: { workflow_stage: input.workflow_stage },
       status: 'OPEN',
     })
     .returning()
@@ -134,9 +143,14 @@ export async function updateEncounter(
   if (!existing) throw new NotFoundError('Encounter')
   if (existing.status === 'CLOSED') throw new ForbiddenError('Cannot edit a closed encounter')
 
+  const { workflow_stage, ...encounterFields } = input
+  const metadata = workflow_stage
+    ? { ...asMetadata(existing.metadata), workflow_stage }
+    : existing.metadata
+
   const [updated] = await db
     .update(encounters)
-    .set({ ...input, updated_at: new Date() })
+    .set({ ...encounterFields, metadata, updated_at: new Date() })
     .where(and(eq(encounters.tenant_id, tenantId), eq(encounters.id, encounterId)))
     .returning()
 

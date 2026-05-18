@@ -288,6 +288,43 @@ async function dispatchWhatsApp(
   }
 }
 
+// ─── Doctor clinical event emails ────────────────────────────────────────────
+
+export interface DoctorEventEmailOptions {
+  recipientEmail: string
+  recipientFirstName: string
+  eventTitle: string
+  eventBody: string
+  ctaLabel?: string
+  ctaUrl?: string
+}
+
+export async function sendDoctorEventEmail(opts: DoctorEventEmailOptions): Promise<void> {
+  const cta = opts.ctaUrl
+    ? `<div style="text-align:center;margin:24px 0">
+        <a href="${opts.ctaUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:600;font-size:15px">
+          ${opts.ctaLabel ?? 'Ver en meditrack →'}
+        </a>
+      </div>`
+    : ''
+
+  const html = baseHtml(`
+    <h2 style="margin:0 0 16px;color:#1e293b;font-size:20px">${opts.eventTitle}</h2>
+    <p style="margin:0 0 8px;color:#475569">Hola <strong>${opts.recipientFirstName}</strong>,</p>
+    <p style="margin:0 0 24px;color:#475569;line-height:1.6">${opts.eventBody}</p>
+    ${cta}
+  `)
+
+  const text = `${opts.eventTitle}\n\nHola ${opts.recipientFirstName},\n\n${opts.eventBody}`
+
+  await sendEmail({
+    to: opts.recipientEmail,
+    subject: opts.eventTitle,
+    html,
+    text,
+  }).catch(() => undefined) // fire-and-forget — don't break the clinical action if email fails
+}
+
 // ─── Email templates ──────────────────────────────────────────────────────────
 
 function baseHtml(content: string): string {

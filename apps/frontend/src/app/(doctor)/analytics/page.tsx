@@ -112,8 +112,39 @@ function CohortCard({ bucket, patients, total }: { bucket: keyof typeof COHORT_C
 type Period = '30' | '60' | '90'
 type WeekRange = '4' | '8' | '12'
 
+const ADMIN_ROLES = new Set(['ADMIN_CLINIC', 'SUPER_ADMIN'])
+
 export default function AnalyticsPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
+
+  if (user && !ADMIN_ROLES.has(user.role)) {
+    return (
+      <ClinicalPage size="compact">
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', padding: '64px 24px', textAlign: 'center', gap: 12,
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12, background: '#fef3c7',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <TrendingUp size={22} color="#b45309" />
+          </div>
+          <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>
+            Acceso restringido
+          </p>
+          <p style={{ fontSize: 14, color: 'var(--mt-text-2)', maxWidth: 320, margin: 0 }}>
+            La sección de analítica clínica está disponible únicamente para administradores.
+          </p>
+          <Link href="/dashboard" style={{
+            marginTop: 8, fontSize: 13, color: 'var(--mt-primary)', textDecoration: 'none',
+          }}>
+            ← Volver al panel
+          </Link>
+        </div>
+      </ClinicalPage>
+    )
+  }
   const [trends, setTrends] = useState<WeeklyTrend[] | null>(null)
   const [cohorts, setCohorts] = useState<AdherenceCohorts | null>(null)
   const [loadingTrends, setLoadingTrends] = useState(true)

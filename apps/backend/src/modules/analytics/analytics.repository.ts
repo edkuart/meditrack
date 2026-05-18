@@ -1,15 +1,16 @@
 import { and, count, eq, gte, lt, sql } from 'drizzle-orm'
-import { db, patients, treatmentPlans, doseEvents, encounters } from '../../shared/db/index.ts'
-import type { ClinicSummary, WeeklyTrend } from './analytics.types.ts'
+import { db, patients, treatmentPlans, doseEvents, encounters, hospitalAdmissions, referrals } from '../../shared/db/index.ts'
+import type { AlertPatient, ClinicSummary, WeeklyTrend } from './analytics.types.ts'
 
 // ─── Clinic summary ───────────────────────────────────────────────────────────
 
-export async function fetchClinicSummary(tenantId: string): Promise<ClinicSummary> {
+export async function fetchClinicSummary(tenantId: string, doctorId: string): Promise<ClinicSummary> {
   const [patientStats] = await db
     .select({
       total: count(patients.id),
       active: sql<number>`count(*) filter (where ${patients.is_active} = true)`,
       this_month: sql<number>`count(*) filter (where ${patients.created_at} >= date_trunc('month', now()))`,
+      no_encounter: sql<number>`count(*) filter (where ${patients.created_at} >= date_trunc('month', now()) and not exists (select 1 from encounters e where e.patient_id = ${patients.id}))`,
     })
     .from(patients)
     .where(eq(patients.tenant_id, tenantId))
@@ -26,23 +27,38 @@ export async function fetchClinicSummary(tenantId: string): Promise<ClinicSummar
   today.setHours(0, 0, 0, 0)
   const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
 
-  const todayRows = await db
-    .select({
-      status: doseEvents.status,
-      cnt: count(doseEvents.id),
-    })
-    .from(doseEvents)
-    .innerJoin(patients, eq(doseEvents.patient_id, patients.id))
-    .where(and(
-      eq(patients.tenant_id, tenantId),
-      gte(doseEvents.scheduled_at, today),
-      lt(doseEvents.scheduled_at, tomorrow),
-    ))
-    .groupBy(doseEvents.status)
+  const [todayRows, admissionStats, referralStats] = await Promise.all([
+    db
+      .select({ status: doseEvents.status, cnt: count(doseEvents.id) })
+      .from(doseEvents)
+      .innerJoin(patients, eq(doseEvents.patient_id, patients.id))
+      .where(and(
+        eq(patients.tenant_id, tenantId),
+        gte(doseEvents.scheduled_at, today),
+        lt(doseEvents.scheduled_at, tomorrow),
+      ))
+      .groupBy(doseEvents.status),
+
+    db
+      .select({ active: count(hospitalAdmissions.id) })
+      .from(hospitalAdmissions)
+      .where(and(
+        eq(hospitalAdmissions.tenant_id, tenantId),
+        eq(hospitalAdmissions.status, 'ACTIVE'),
+      )),
+
+    db
+      .select({ pending: count(referrals.id) })
+      .from(referrals)
+      .where(and(
+        eq(referrals.tenant_id, tenantId),
+        eq(referrals.to_doctor_id, doctorId),
+        eq(referrals.status, 'PENDING'),
+      )),
+  ])
 
   const todayMap: Record<string, number> = {}
   for (const row of todayRows) todayMap[row.status] = Number(row.cnt)
-
   const todayTotal = Object.values(todayMap).reduce((a, b) => a + b, 0)
 
   return {
@@ -50,11 +66,105 @@ export async function fetchClinicSummary(tenantId: string): Promise<ClinicSummar
     active_patients: Number(patientStats.active),
     active_treatments: Number(treatmentStats.active),
     monthly_new_patients: Number(patientStats.this_month),
+    new_patients_no_encounter: Number(patientStats.no_encounter),
     today_doses_total: todayTotal,
     today_doses_confirmed: todayMap['CONFIRMED'] ?? 0,
     today_doses_missed: todayMap['MISSED'] ?? 0,
     today_doses_pending: todayMap['PENDING'] ?? 0,
+    active_admissions: Number(admissionStats[0]?.active ?? 0),
+    pending_incoming_referrals: Number(referralStats[0]?.pending ?? 0),
   }
+}
+
+// ─── Priority alert drill-downs ───────────────────────────────────────────────
+
+export async function fetchPatientsWithDosesToday(
+  tenantId: string,
+  status: 'PENDING' | 'MISSED',
+): Promise<AlertPatient[]> {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
+
+  const rows = await db
+    .select({
+      id: patients.id,
+      first_name: patients.first_name,
+      last_name: patients.last_name,
+      dose_count: count(doseEvents.id),
+    })
+    .from(patients)
+    .innerJoin(doseEvents, eq(doseEvents.patient_id, patients.id))
+    .where(and(
+      eq(patients.tenant_id, tenantId),
+      eq(doseEvents.status, status),
+      gte(doseEvents.scheduled_at, today),
+      lt(doseEvents.scheduled_at, tomorrow),
+    ))
+    .groupBy(patients.id, patients.first_name, patients.last_name)
+    .orderBy(patients.last_name, patients.first_name)
+
+  return rows.map(r => ({
+    id: r.id,
+    first_name: r.first_name,
+    last_name: r.last_name,
+    dose_count: Number(r.dose_count),
+  }))
+}
+
+export async function fetchNewPatientsWithoutEncounter(tenantId: string): Promise<AlertPatient[]> {
+  const monthStart = new Date()
+  monthStart.setDate(1)
+  monthStart.setHours(0, 0, 0, 0)
+
+  const rows = await db
+    .select({
+      id: patients.id,
+      first_name: patients.first_name,
+      last_name: patients.last_name,
+      created_at: patients.created_at,
+    })
+    .from(patients)
+    .where(and(
+      eq(patients.tenant_id, tenantId),
+      gte(patients.created_at, monthStart),
+      sql`NOT EXISTS (
+        SELECT 1 FROM encounters e WHERE e.patient_id = ${patients.id}
+      )`,
+    ))
+    .orderBy(patients.created_at)
+
+  return rows.map(r => ({
+    id: r.id,
+    first_name: r.first_name,
+    last_name: r.last_name,
+    created_at: r.created_at.toISOString().slice(0, 10),
+  }))
+}
+
+export async function fetchPatientsWithActiveTreatments(tenantId: string): Promise<AlertPatient[]> {
+  const rows = await db
+    .select({
+      id: patients.id,
+      first_name: patients.first_name,
+      last_name: patients.last_name,
+      active_treatments: sql<number>`COUNT(${treatmentPlans.id})`,
+    })
+    .from(patients)
+    .innerJoin(treatmentPlans, and(
+      eq(treatmentPlans.patient_id, patients.id),
+      eq(treatmentPlans.status, 'ACTIVE'),
+    ))
+    .where(eq(patients.tenant_id, tenantId))
+    .groupBy(patients.id, patients.first_name, patients.last_name)
+    .orderBy(patients.last_name, patients.first_name)
+
+  return rows.map(r => ({
+    id: r.id,
+    first_name: r.first_name,
+    last_name: r.last_name,
+    active_treatments: Number(r.active_treatments),
+  }))
 }
 
 // ─── Per-patient adherence data ───────────────────────────────────────────────

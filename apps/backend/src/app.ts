@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm'
 import { config } from './shared/config.ts'
 import { db } from './shared/db/index.ts'
 import { errorHandler } from './shared/middleware/error.middleware.ts'
+import { requireAuth, requireVerified } from './shared/middleware/auth.middleware.ts'
 import { authRouter } from './modules/auth/auth.router.ts'
 import { patientsRouter } from './modules/patients/patients.router.ts'
 import { encountersRouter } from './modules/encounters/encounters.router.ts'
@@ -27,6 +28,11 @@ import { patientProblemsRouter } from './modules/patient-problems/patient-proble
 import { patientBackgroundRouter } from './modules/patient-background/patient-background.router.ts'
 import { clinicalIntelligenceRouter } from './modules/clinical-intelligence/clinical-intelligence.router.ts'
 import { aiUsageRouter } from './modules/ai-usage/ai-usage.router.ts'
+import { adminRouter } from './modules/admin/admin.router.ts'
+import { departmentsRouter } from './modules/departments/departments.router.ts'
+import { accessRouter } from './modules/patient-access/access.router.ts'
+import { referralsRouter } from './modules/referrals/referrals.router.ts'
+import { admissionsRouter } from './modules/admissions/admissions.router.ts'
 import { rateLimit } from './shared/middleware/rate-limit.middleware.ts'
 import { securityHeaders } from './shared/middleware/security.middleware.ts'
 import { requestContext, structuredRequestLogger } from './shared/middleware/observability.middleware.ts'
@@ -87,7 +93,18 @@ export function createApp() {
     max: 6,
   }))
 
+  // Clinical routes require authentication + verification.
+  // requireAuth runs first (sets auth context), then requireVerified reads it.
+  // Public and admin routes are exempt from both checks.
+  app.use('/api/v1/*', async (c, next) => {
+    const path = c.req.path
+    const exempt = ['/api/v1/auth', '/api/v1/portal', '/api/v1/stripe', '/api/v1/admin']
+    if (exempt.some(p => path.startsWith(p))) return next()
+    return requireAuth(c, () => requireVerified(c, next))
+  })
+
   // Public routes (no auth middleware) — must come before any router that uses router.use('*', requireAuth)
+  app.route('/api/v1', adminRouter)
   app.route('/api/v1/auth', authRouter)
   app.route('/api/v1', stripeWebhookRouter)
   app.route('/api/v1', portalAuthRouter)
@@ -114,6 +131,10 @@ export function createApp() {
   app.route('/api/v1', patientBackgroundRouter)
   app.route('/api/v1', clinicalIntelligenceRouter)
   app.route('/api/v1', aiUsageRouter)
+  app.route('/api/v1', departmentsRouter)
+  app.route('/api/v1', accessRouter)
+  app.route('/api/v1', referralsRouter)
+  app.route('/api/v1', admissionsRouter)
 
   app.onError(errorHandler)
 

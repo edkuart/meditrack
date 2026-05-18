@@ -9,6 +9,17 @@ const EncounterType = z.enum([
   'EMERGENCY',
 ])
 
+export const EncounterWorkflowStage = z.enum([
+  'INTAKE',
+  'ROOMING',
+  'SUBJECTIVE',
+  'OBJECTIVE',
+  'ASSESSMENT',
+  'PLAN',
+  'ORDERS',
+  'READY_TO_CLOSE',
+])
+
 const SoapFields = {
   subjective: z.string().optional(),
   objective: z.string().optional(),
@@ -20,6 +31,7 @@ export const CreateEncounterSchema = z.object({
   encounter_type: EncounterType.default('CONSULTATION'),
   chief_complaint: z.string().max(500).trim().optional(),
   notes: z.string().optional(),
+  workflow_stage: EncounterWorkflowStage.default('SUBJECTIVE'),
   ...SoapFields,
 })
 
@@ -27,6 +39,7 @@ export const UpdateEncounterSchema = z.object({
   chief_complaint: z.string().max(500).trim().optional(),
   notes: z.string().optional(),
   summary: z.string().optional(),
+  workflow_stage: EncounterWorkflowStage.optional(),
   ...SoapFields,
 })
 

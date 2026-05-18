@@ -134,6 +134,13 @@ export function buildFhirPatient(patient: typeof patients.$inferSelect): FhirRes
   const identifier: Array<{ system: string; value: string; type?: FhirCodeableConcept }> = [
     { system: 'urn:meditrack:patient', value: patient.id },
   ]
+  if (patient.mrn) {
+    identifier.push({
+      system: 'urn:meditrack:mrn',
+      value: patient.mrn,
+      type: { text: 'Medical Record Number' },
+    })
+  }
   if (patient.id_number) {
     identifier.push({
       system: 'urn:meditrack:id_number',

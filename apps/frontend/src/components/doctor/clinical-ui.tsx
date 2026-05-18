@@ -268,6 +268,7 @@ export function MTPanel({
       borderRadius: 12,
       boxShadow: 'var(--mt-shadow-sm)',
       overflow: 'hidden',
+      minWidth: 0,
       borderTop: `3px solid ${t.fg}`,
       ...style,
     }}>
@@ -312,7 +313,7 @@ export function MTPanel({
         )}
       </header>
       {(!collapsible || open) && (
-        <div style={padBody ? { padding: 20 } : undefined}>{children}</div>
+        <div style={{ minWidth: 0, ...(padBody ? { padding: 20 } : undefined) }}>{children}</div>
       )}
     </section>
   )
@@ -459,6 +460,7 @@ export function PriorityRow({
   tone = 'blue',
   critical,
   last,
+  href,
 }: {
   icon: LucideIcon
   title: string
@@ -470,23 +472,23 @@ export function PriorityRow({
   tone?: Tone
   critical?: boolean
   last?: boolean
+  href?: string
 }) {
   const [hover, setHover] = useState(false)
   const t = TONES[tone]
 
-  return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: `14px ${hover ? 17 : 20}px 14px 20px`,
-        background: hover ? 'var(--mt-elevated)' : 'transparent',
-        borderBottom: last ? 'none' : '1px solid var(--mt-border)',
-        borderLeft: `3px solid ${hover ? t.fg : 'transparent'}`,
-        transition: 'all .2s', cursor: 'pointer', position: 'relative',
-      }}
-    >
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 14,
+    padding: `14px ${hover ? 17 : 20}px 14px 20px`,
+    background: hover ? 'var(--mt-elevated)' : 'transparent',
+    borderBottom: last ? 'none' : '1px solid var(--mt-border)',
+    borderLeft: `3px solid ${hover ? t.fg : 'transparent'}`,
+    transition: 'all .2s', cursor: href ? 'pointer' : 'default',
+    position: 'relative', textDecoration: 'none',
+  }
+
+  const inner = (
+    <>
       <div style={{
         width: 40, height: 40, borderRadius: 8, background: t.bg, color: t.fg,
         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -504,7 +506,7 @@ export function PriorityRow({
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{title}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500, color: 'var(--mt-text)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{title}</span>
           {badge && <MTPill tone={badgeTone} style={{ flexShrink: 0 }}>{badge}</MTPill>}
         </div>
         {subtitle && (
@@ -520,10 +522,34 @@ export function PriorityRow({
         }}>{value}</div>
       )}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-        stroke={hover ? 'var(--mt-text)' : 'var(--mt-muted)'} strokeWidth="2"
-        style={{ transition: 'transform .2s, stroke .2s', transform: hover ? 'translateX(2px)' : 'none', flexShrink: 0 }}>
+        stroke={href ? (hover ? 'var(--mt-text)' : 'var(--mt-muted)') : 'var(--mt-elevated)'}
+        strokeWidth="2"
+        style={{ transition: 'transform .2s, stroke .2s', transform: hover && href ? 'translateX(2px)' : 'none', flexShrink: 0 }}>
         <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
+    </>
+  )
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={rowStyle}
+      >
+        {inner}
+      </Link>
+    )
+  }
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={rowStyle}
+    >
+      {inner}
     </div>
   )
 }
@@ -618,6 +644,7 @@ export function ClinicalPage({
       maxWidth: size === 'compact' ? 768 : 1200,
       margin: '0 auto',
       display: 'flex', flexDirection: 'column', gap: 20,
+      minWidth: 0, width: '100%',
     }}>
       {children}
     </div>
@@ -750,6 +777,80 @@ export function ClinicalInsight({
 // ─────────────────────────────────────────────
 // ClinicalTimeline
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// MTStatBox — bordered metric card (biometrics, vitals)
+// ─────────────────────────────────────────────
+export function MTStatBox({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  tone = 'blue',
+}: {
+  label: string
+  value: string
+  helper?: string
+  icon: LucideIcon
+  tone?: Tone
+}) {
+  const t = TONES[tone]
+  return (
+    <div style={{
+      borderRadius: 12, border: '1px solid var(--mt-border)',
+      background: 'var(--mt-surface)', padding: '12px 16px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--mt-muted)' }}>
+          {label}
+        </span>
+        <div style={{ width: 26, height: 26, borderRadius: 6, background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon size={14} color={t.fg} />
+        </div>
+      </div>
+      <p style={{ fontSize: 20, fontWeight: 600, color: 'var(--mt-text)', fontVariantNumeric: 'tabular-nums', margin: 0 }}>{value}</p>
+      {helper && <p style={{ fontSize: 11, color: 'var(--mt-muted)', marginTop: 4 }}>{helper}</p>}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// MTStatChip — compact horizontal stat chip
+// ─────────────────────────────────────────────
+export function MTStatChip({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  tone = 'slate',
+}: {
+  label: string
+  value: string | number
+  helper?: string
+  icon: LucideIcon
+  tone?: Tone
+}) {
+  const t = TONES[tone]
+  return (
+    <div style={{
+      background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+      borderRadius: 10, padding: '10px 12px',
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+        background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon size={14} color={t.fg} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: 'var(--mt-muted)', marginBottom: 1 }}>{label}</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--mt-text)', lineHeight: 1.1 }}>{value}</div>
+        {helper && <div style={{ fontSize: 10, color: 'var(--mt-muted)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{helper}</div>}
+      </div>
+    </div>
+  )
+}
+
 export interface TimelineItem {
   id: string
   title: string

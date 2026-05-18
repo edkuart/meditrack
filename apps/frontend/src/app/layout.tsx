@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import { Toaster } from 'sonner'
 import './globals.css'
@@ -8,6 +8,12 @@ const geist = Geist({ variable: '--font-geist', subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'meditrack',
   description: 'Plataforma médica de adherencia terapéutica',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

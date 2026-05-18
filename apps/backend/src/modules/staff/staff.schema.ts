@@ -1,11 +1,16 @@
 import { z } from 'zod'
 
-// Roles a clinic admin can invite (SUPER_ADMIN is platform-only)
-const InviteableRole = z.enum(['ADMIN_CLINIC', 'DOCTOR', 'NURSE', 'ASSISTANT'])
+// Roles a clinic/hospital admin can invite (SUPER_ADMIN is platform-only)
+const InviteableRole = z.enum([
+  'ADMIN_CLINIC', 'DOCTOR', 'NURSE', 'ASSISTANT',
+  'LAB_TECHNICIAN', 'RADIOLOGIST', 'PHARMACIST', 'RECEPTIONIST', 'WARD_NURSE',
+])
 
 export const InviteStaffSchema = z.object({
   email: z.string().email(),
   role: InviteableRole.default('DOCTOR'),
+  // Hospital only: auto-assign to this department on acceptance
+  department_id: z.string().uuid().optional(),
 })
 
 export const AcceptInviteSchema = z.object({

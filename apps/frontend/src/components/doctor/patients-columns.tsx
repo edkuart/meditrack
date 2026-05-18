@@ -38,6 +38,7 @@ export const patientsColumns: ColumnDef<Patient>[] = [
               {fullName}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">
+              {p.mrn && <span className="font-mono text-blue-600 mr-1">{p.mrn}</span>}
               {calcAge(p.date_of_birth)}
               {p.sex ? ` · ${SEX_LABELS[p.sex]}` : ''}
               {p.id_number ? ` · ${p.id_number}` : ''}

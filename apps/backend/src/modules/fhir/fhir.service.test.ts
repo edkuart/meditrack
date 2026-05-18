@@ -20,6 +20,7 @@ describe('FHIR resource builders', () => {
       phone: '+50255555555',
       email: 'ana@example.com',
       id_number: '123456',
+      mrn: null,
       access_pin_hash: null,
       emergency_contact: null,
       tags: [],

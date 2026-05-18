@@ -8,7 +8,7 @@ import {
   refreshTokenExpiresAt,
 } from '../../shared/services/token.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
-import { UnauthorizedError, ConflictError, NotFoundError } from '../../shared/errors.ts'
+import { UnauthorizedError, ConflictError, NotFoundError, ForbiddenError } from '../../shared/errors.ts'
 import type { LoginInput, RegisterInput } from './auth.schema.ts'
 
 export async function register(input: RegisterInput) {
@@ -31,6 +31,7 @@ export async function register(input: RegisterInput) {
   const [tenant] = await db.insert(tenants).values({
     name: input.clinic_name,
     slug: input.clinic_slug,
+    type: input.tenant_type ?? 'CLINIC',
   }).returning()
 
   const [user] = await db.insert(users).values({
@@ -40,9 +41,11 @@ export async function register(input: RegisterInput) {
     first_name: input.first_name,
     last_name: input.last_name,
     professional_id: input.professional_id,
+    colegiado_number: input.colegiado_number,
     specialty: input.specialty,
+    dpi_document_key: input.dpi_document_key,
     role: 'DOCTOR',
-    is_verified: true,
+    is_verified: false,
   }).returning()
 
   const tokens = await issueTokenPair(user.id, user.tenant_id, user.role, user.email)
@@ -67,6 +70,12 @@ export async function login(input: LoginInput, ip?: string, userAgent?: string) 
 
   if (!user || !user.is_active) {
     // Timing-safe: always hash even on not found to prevent user enumeration
+    await bcrypt.hash(input.password, 12)
+    throw new UnauthorizedError('Invalid email or password', 'INVALID_CREDENTIALS')
+  }
+
+  // SUPER_ADMIN must use the admin portal login, not the doctor portal
+  if (user.role === 'SUPER_ADMIN') {
     await bcrypt.hash(input.password, 12)
     throw new UnauthorizedError('Invalid email or password', 'INVALID_CREDENTIALS')
   }
