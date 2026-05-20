@@ -59,7 +59,7 @@ function PremiumGate() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
             { icon: BedDouble,    text: 'Censo hospitalario en tiempo real por sala y departamento' },
-            { icon: Users,        text: 'Gestión de internamientos, altas y derivaciones integradas' },
+            { icon: Users,        text: 'Gestión de internamientos, altas y referencias integradas' },
             { icon: TrendingUp,   text: 'Métricas de ocupación, estancia promedio y rotación de camas' },
             { icon: Building2,    text: 'Estructura multi-departamento con roles especializados' },
           ].map(({ icon: Icon, text }) => (
@@ -262,7 +262,7 @@ function AdmissionRow({
               {days} día{days !== 1 ? 's' : ''}
             </StatusPill>
             {adm.referral && (
-              <StatusPill tone="purple">Derivación</StatusPill>
+              <StatusPill tone="purple">Referencia</StatusPill>
             )}
           </div>
 

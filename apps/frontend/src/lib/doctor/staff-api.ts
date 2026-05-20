@@ -97,6 +97,14 @@ export function deactivateStaff(token: string, userId: string): Promise<null> {
   return apiFetch(`/staff/${userId}`, token, { method: 'DELETE' })
 }
 
+export function cancelInvitation(token: string, invitationId: string): Promise<null> {
+  return apiFetch(`/staff/invitations/${invitationId}`, token, { method: 'DELETE' })
+}
+
+export function resendInvitation(token: string, invitationId: string): Promise<InviteResult> {
+  return apiFetch(`/staff/invitations/${invitationId}/resend`, token, { method: 'POST' })
+}
+
 export function acceptInvite(data: {
   token: string
   first_name: string

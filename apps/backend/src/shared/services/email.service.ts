@@ -11,7 +11,13 @@ export interface SendEmailOptions {
 // Returns Resend message ID when configured, undefined in dev (console) mode
 export async function sendEmail(opts: SendEmailOptions): Promise<string | undefined> {
   if (!RESEND_API_KEY) {
-    console.log(`[email:dev] → ${opts.to} | ${opts.subject}`)
+    // Extract any URL from the plain-text body so dev can click it directly
+    const urlMatch = opts.text?.match(/https?:\/\/\S+/)
+    console.log(`\n[email:dev] ────────────────────────────────────`)
+    console.log(`  Para:    ${opts.to}`)
+    console.log(`  Asunto:  ${opts.subject}`)
+    if (urlMatch) console.log(`  Link:    ${urlMatch[0]}`)
+    console.log(`────────────────────────────────────────────────\n`)
     return undefined
   }
 

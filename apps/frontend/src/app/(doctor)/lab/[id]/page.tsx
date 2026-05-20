@@ -2,15 +2,22 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { FlaskConical, ArrowLeft, Save, CheckCircle2, XCircle } from 'lucide-react'
+import {
+  FlaskConical, ArrowLeft, Save, CheckCircle2, XCircle, Clock,
+  Upload, BrainCircuit, ChevronRight, Printer,
+} from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   getLabOrder, updateLabOrder, upsertLabResults,
   STATUS_CONFIG, ORDER_STATUS_CONFIG,
   type LabOrder, type LabOrderStatus, type LabResult, type LabResultInput,
 } from '@/lib/doctor/lab-api'
+import {
+  listExternalSubmissions, SUBMISSION_STATUS_CONFIG,
+  type ExternalSubmission,
+} from '@/lib/doctor/lab-external-api'
 import { ClinicalPage, ClinicalHeader, ClinicalButton, LoadingState } from '@/components/doctor/clinical-ui'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -74,7 +81,7 @@ function computeLocalStatus(
 
 export default function LabOrderDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const router = useRouter()
 
   const [order, setOrder] = useState<LabOrder | null>(null)
@@ -84,15 +91,23 @@ export default function LabOrderDetailPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [externalSubs, setExternalSubs] = useState<ExternalSubmission[]>([])
+
+  // Role-based permissions
+  const isLabTech = user?.role === 'LAB_TECHNICIAN'
+  const canEditResults = isLabTech || user?.role === 'ADMIN_CLINIC'
+  const canCancelOrder = !isLabTech
 
   useEffect(() => {
     if (!token || !id) return
-    getLabOrder(token, id)
-      .then(o => {
-        setOrder(o)
-        setRows(buildEditRows(o.results))
-      })
-      .finally(() => setLoading(false))
+    Promise.all([
+      getLabOrder(token, id),
+      listExternalSubmissions(token, undefined, id),
+    ]).then(([o, subs]) => {
+      setOrder(o)
+      setRows(buildEditRows(o.results))
+      setExternalSubs(subs)
+    }).finally(() => setLoading(false))
   }, [token, id])
 
   function handleValueChange(idx: number, val: string) {
@@ -159,6 +174,9 @@ export default function LabOrderDetailPage() {
   const orderCfg = ORDER_STATUS_CONFIG[order.status]
   const isCancelled = order.status === 'CANCELLED'
   const isCompleted = order.status === 'COMPLETED'
+  const isInProgress = order.status === 'IN_PROGRESS'
+  // Editing is only possible for lab tech/admin on non-final orders
+  const editingEnabled = canEditResults && !isCancelled && !isCompleted
 
   // Group rows by panel
   const panels: Record<string, { rows: EditRow[]; indices: number[] }> = {}
@@ -186,7 +204,12 @@ export default function LabOrderDetailPage() {
         actions={
           <div className="flex gap-2">
             <ClinicalButton href="/lab" variant="outline" icon={ArrowLeft}>Volver</ClinicalButton>
-            {!isCancelled && dirty && (
+            {isCompleted && (
+              <ClinicalButton href={`/lab/${id}/print`} variant="outline" icon={Printer}>
+                Imprimir
+              </ClinicalButton>
+            )}
+            {editingEnabled && dirty && (
               <ClinicalButton
                 onClick={saveResults}
                 disabled={saving}
@@ -217,6 +240,92 @@ export default function LabOrderDetailPage() {
       {order.notes && (
         <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">
           <span className="font-medium">Notas: </span>{order.notes}
+        </div>
+      )}
+
+      {/* External submissions from patient */}
+      {externalSubs.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-200">
+            <Upload size={14} className="text-amber-600" />
+            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+              Resultados enviados por el paciente
+            </span>
+            <span className="ml-auto text-xs text-amber-600 font-medium">
+              {externalSubs.length} envío{externalSubs.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          {externalSubs.map((sub, i) => {
+            const cfg = SUBMISSION_STATUS_CONFIG[sub.status]
+            const isPending = sub.status === 'RECEIVED' || sub.status === 'DRAFT_READY'
+            return (
+              <Link
+                key={sub.id}
+                href={`/lab/external/${sub.id}`}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3 hover:bg-amber-100/60 transition-colors group',
+                  i < externalSubs.length - 1 && 'border-b border-amber-100',
+                )}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span
+                      className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                      style={{ color: cfg.color, background: cfg.bg }}
+                    >
+                      {cfg.label}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {new Date(sub.submitted_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                    {(sub.file_count ?? 0) > 0 && (
+                      <span className="text-xs text-slate-400">· {sub.file_count} archivo{(sub.file_count ?? 0) > 1 ? 's' : ''}</span>
+                    )}
+                    {(sub.extracted_count ?? 0) > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-violet-600 font-medium">
+                        <BrainCircuit size={11} />
+                        {sub.extracted_count} valores extraídos
+                      </span>
+                    )}
+                  </div>
+                  {sub.patient_notes && (
+                    <p className="text-xs text-slate-500 truncate">{sub.patient_notes}</p>
+                  )}
+                </div>
+                <span className={cn(
+                  'text-xs font-medium px-2.5 py-1 rounded-lg transition-colors',
+                  isPending
+                    ? 'bg-amber-600 text-white group-hover:bg-amber-700'
+                    : 'text-slate-400 group-hover:text-slate-600',
+                )}>
+                  {isPending ? 'Revisar' : 'Ver'}
+                </span>
+                <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
+              </Link>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Status banners */}
+      {isInProgress && !isLabTech && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-700">
+          <FlaskConical size={16} />
+          El laboratorio está procesando esta orden. Los resultados estarán disponibles pronto.
+        </div>
+      )}
+
+      {isInProgress && isLabTech && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-700">
+          <Clock size={16} />
+          Orden en proceso. Ingresa los valores y guarda para actualizar el estado.
+        </div>
+      )}
+
+      {!canEditResults && !isCancelled && !isCompleted && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600">
+          <FlaskConical size={16} />
+          Los resultados son ingresados por el personal de laboratorio. Esta vista es de solo lectura.
         </div>
       )}
 
@@ -256,16 +365,7 @@ export default function LabOrderDetailPage() {
                       <tr key={row.id} className={cn('border-b border-slate-100 last:border-0', isCancelled && 'opacity-50')}>
                         <td className="px-4 py-2.5 font-medium text-slate-700">{row.parameter_name}</td>
                         <td className="px-4 py-2.5">
-                          {isCancelled || isCompleted ? (
-                            <span className={cn(
-                              'font-semibold',
-                              localStatus === 'CRITICAL_HIGH' || localStatus === 'CRITICAL_LOW' ? 'text-red-600' :
-                              localStatus === 'HIGH' || localStatus === 'LOW' ? 'text-amber-600' :
-                              localStatus === 'NORMAL' ? 'text-emerald-700' : 'text-slate-400',
-                            )}>
-                              {row.value || '—'}
-                            </span>
-                          ) : (
+                          {editingEnabled ? (
                             <input
                               type="text"
                               value={row.value}
@@ -279,6 +379,15 @@ export default function LabOrderDetailPage() {
                                 'border-emerald-300 bg-emerald-50 text-emerald-700',
                               )}
                             />
+                          ) : (
+                            <span className={cn(
+                              'font-semibold',
+                              localStatus === 'CRITICAL_HIGH' || localStatus === 'CRITICAL_LOW' ? 'text-red-600' :
+                              localStatus === 'HIGH' || localStatus === 'LOW' ? 'text-amber-600' :
+                              localStatus === 'NORMAL' ? 'text-emerald-700' : 'text-slate-400',
+                            )}>
+                              {row.value || '—'}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-slate-400 text-xs">{row.unit || '—'}</td>
@@ -306,8 +415,8 @@ export default function LabOrderDetailPage() {
         ))
       )}
 
-      {/* Save floating bar */}
-      {!isCancelled && dirty && (
+      {/* Floating save bar — lab tech only */}
+      {editingEnabled && dirty && (
         <div className="sticky bottom-4 flex justify-center pointer-events-none">
           <div className="flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-xl pointer-events-auto">
             <span className="text-sm">Hay cambios sin guardar.</span>
@@ -323,8 +432,8 @@ export default function LabOrderDetailPage() {
         </div>
       )}
 
-      {/* Cancel order */}
-      {!isCancelled && !isCompleted && (
+      {/* Cancel order — doctors and admins only */}
+      {canCancelOrder && !isCancelled && !isCompleted && (
         <div className="flex justify-end pt-2 border-t border-slate-100">
           {cancelOpen ? (
             <div className="flex items-center gap-3">

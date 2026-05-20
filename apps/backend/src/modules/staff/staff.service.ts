@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm'
+import { eq, and, isNull } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { db, users, tenants, staffInvitations } from '../../shared/db/index.ts'
 import { departmentMembers } from '../../shared/db/schema/departments.ts'
@@ -35,7 +35,7 @@ export async function listStaff(tenantId: string) {
   const pending = await db.query.staffInvitations.findMany({
     where: and(
       eq(staffInvitations.tenant_id, tenantId),
-      eq(staffInvitations.accepted_at, null as unknown as Date),
+      isNull(staffInvitations.accepted_at),
     ),
     columns: {
       id: true,
@@ -117,7 +117,13 @@ export async function inviteStaff(
     subject: `Invitación a ${clinicName} en meditrack`,
     html: inviteEmailHtml(inviterName, clinicName, input.role, inviteUrl, expiresAt),
     text: `${inviterName} te invita a unirte a ${clinicName} en meditrack.\n\nAccede aquí: ${inviteUrl}\n\nEl enlace expira en ${INVITE_EXPIRES_DAYS} días.`,
-  }).catch(err => console.error('[staff] invite email failed:', err))
+  }).catch(err => {
+    console.error('[staff] invite email failed:', err.message)
+    console.log(`\n[invite:fallback] ────────────────────────────────`)
+    console.log(`  Para:  ${input.email}`)
+    console.log(`  Link:  ${inviteUrl}`)
+    console.log(`────────────────────────────────────────────────────\n`)
+  })
 
   return { email: input.email, role: input.role, expires_at: expiresAt }
 }
@@ -250,6 +256,43 @@ export async function deactivateStaff(tenantId: string, requesterId: string, tar
   await db.update(refreshTokens)
     .set({ is_revoked: true, used_at: new Date() })
     .where(eq(refreshTokens.user_id, targetId))
+}
+
+// ─── Cancel invitation ────────────────────────────────────────────────────────
+
+export async function cancelInvitation(tenantId: string, invitationId: string) {
+  const invite = await db.query.staffInvitations.findFirst({
+    where: and(eq(staffInvitations.id, invitationId), eq(staffInvitations.tenant_id, tenantId)),
+    columns: { id: true, accepted_at: true },
+  })
+  if (!invite) throw new NotFoundError('Invitation')
+  if (invite.accepted_at) throw new ForbiddenError('Invitation already accepted')
+
+  await db.delete(staffInvitations).where(eq(staffInvitations.id, invitationId))
+}
+
+// ─── Resend invitation (cancel old + create new) ──────────────────────────────
+
+export async function resendInvitation(
+  tenantId: string,
+  inviterId: string,
+  inviterEmail: string,
+  invitationId: string,
+) {
+  const invite = await db.query.staffInvitations.findFirst({
+    where: and(eq(staffInvitations.id, invitationId), eq(staffInvitations.tenant_id, tenantId)),
+    columns: { id: true, email: true, role: true, department_id: true, accepted_at: true },
+  })
+  if (!invite) throw new NotFoundError('Invitation')
+  if (invite.accepted_at) throw new ForbiddenError('Invitation already accepted')
+
+  await db.delete(staffInvitations).where(eq(staffInvitations.id, invitationId))
+
+  return inviteStaff(tenantId, inviterId, inviterEmail, {
+    email: invite.email,
+    role: invite.role as Exclude<typeof invite.role, 'SUPER_ADMIN'>,
+    department_id: invite.department_id ?? undefined,
+  })
 }
 
 // ─── Get me (full profile from DB) ────────────────────────────────────────────

@@ -28,6 +28,11 @@ export interface Location {
   tenant_id: string
   name: string
   address: string | null
+  formatted_address: string | null
+  google_place_id: string | null
+  latitude: number | null
+  longitude: number | null
+  maps_url: string | null
   phone: string | null
   is_active: boolean
   created_at: string
@@ -37,14 +42,24 @@ export interface Location {
 
 export interface CreateLocationData {
   name: string
-  address?: string
-  phone?: string
+  address?: string | null
+  formatted_address?: string | null
+  google_place_id?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  maps_url?: string | null
+  phone?: string | null
 }
 
 export interface UpdateLocationData {
   name?: string
-  address?: string
-  phone?: string
+  address?: string | null
+  formatted_address?: string | null
+  google_place_id?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  maps_url?: string | null
+  phone?: string | null
 }
 
 // ─── API calls ────────────────────────────────────────────────────────────────

@@ -313,7 +313,7 @@ export default function DashboardPage() {
               { Icon: UserPlus,    value: summary.monthly_new_patients,       label: 'Nuevos este mes',       sub: 'registrados este mes',                        color: '#b45309' },
               { Icon: Pill,        value: summary.today_doses_confirmed,      label: 'Dosis confirmadas',     sub: `de ${summary.today_doses_total} programadas`,  color: adherenceTone === 'red' ? '#b91c1c' : adherenceTone === 'green' ? '#047857' : '#b45309' },
               { Icon: BedDouble,   value: summary.active_admissions,          label: 'Pacientes internados',  sub: 'censo hospitalario activo',                   color: '#6b21a8' },
-              { Icon: ArrowUpDown, value: summary.pending_incoming_referrals, label: 'Derivaciones pendientes', sub: 'esperando tu respuesta',                   color: summary.pending_incoming_referrals > 0 ? '#b91c1c' : '#64748b' },
+              { Icon: ArrowUpDown, value: summary.pending_incoming_referrals, label: 'Referencias pendientes', sub: 'esperando tu respuesta',                    color: summary.pending_incoming_referrals > 0 ? '#b91c1c' : '#64748b' },
             ].map(({ Icon, value, label, sub, color }, i) => (
               <div key={label} style={{
                 padding: '12px 14px',
@@ -347,7 +347,7 @@ export default function DashboardPage() {
                 {summary.pending_incoming_referrals > 0 && (
                   <PriorityRow
                     icon={ArrowUpDown}
-                    title="Derivaciones sin responder"
+                    title="Referencias sin responder"
                     subtitle="Pacientes derivados hacia ti que esperan aceptación."
                     badge={`${summary.pending_incoming_referrals} pendientes`}
                     badgeTone="red"
@@ -485,7 +485,7 @@ export default function DashboardPage() {
                     bg="#faf5ff" fg="#6b21a8" href="/hospital"
                   />
                   <QuickAction
-                    icon={ArrowUpDown} label="Derivaciones" sub="Bandeja de referidos"
+                    icon={ArrowUpDown} label="Referencias" sub="Bandeja de referidos"
                     bg="#fff1f2" fg="#be123c" href="/referrals"
                   />
                   {user && ADMIN_ROLES.has(user.role) && (
@@ -506,9 +506,9 @@ export default function DashboardPage() {
           </div>
 
           {summary.pending_incoming_referrals > 0 && (
-            <ClinicalInsight tone="red" title="Derivaciones sin responder">
-              Tienes {summary.pending_incoming_referrals} derivación{summary.pending_incoming_referrals > 1 ? 'es' : ''} entrante{summary.pending_incoming_referrals > 1 ? 's' : ''} pendiente{summary.pending_incoming_referrals > 1 ? 's' : ''} de respuesta.
-              Acepta o rechaza desde la bandeja de derivaciones.
+            <ClinicalInsight tone="red" title="Referencias sin responder">
+              Tienes {summary.pending_incoming_referrals} referencia{summary.pending_incoming_referrals > 1 ? 's' : ''} entrante{summary.pending_incoming_referrals > 1 ? 's' : ''} pendiente{summary.pending_incoming_referrals > 1 ? 's' : ''} de respuesta.
+              Acepta o rechaza desde la bandeja de referencias.
             </ClinicalInsight>
           )}
           {summary.today_doses_missed > 0 && (

@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { ClipboardList, FileText, Home, Pill } from 'lucide-react'
+import { ClipboardList, FileText, FlaskConical, Home, Pill } from 'lucide-react'
 
 function NavBtn({ icon: Icon, label, href, active }: {
   icon: React.ElementType
@@ -38,6 +38,7 @@ export default function PortalInnerLayout({ children }: { children: React.ReactN
         <NavBtn icon={Pill}          label="Plan"       href="/portal/treatment" active={pathname === '/portal/treatment'} />
         <NavBtn icon={ClipboardList} label="Consultas"  href="/portal/history"   active={pathname === '/portal/history'} />
         <NavBtn icon={FileText}      label="Documentos" href="/portal/documents" active={pathname === '/portal/documents'} />
+        <NavBtn icon={FlaskConical}  label="Lab"        href="/portal/lab"      active={pathname.startsWith('/portal/lab')} />
       </nav>
     </div>
   )

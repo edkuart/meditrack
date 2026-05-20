@@ -147,6 +147,11 @@ export type ClinicalCopilotMode =
   | 'REVIEW_CLINICAL_GAPS'
 
 export type ClinicalCopilotModelTier = 'standard' | 'premium'
+export type ClinicalCopilotContextScope =
+  | 'FULL_RECORD'
+  | 'CURRENT_ENCOUNTER'
+  | 'SAVED_RECORD'
+  | 'DRAFT_ONLY'
 
 export interface ClinicalCopilotResponse {
   mode: ClinicalCopilotMode
@@ -213,6 +218,7 @@ export async function runPatientClinicalCopilot(
   input: {
     mode: ClinicalCopilotMode
     model_tier?: ClinicalCopilotModelTier
+    context_scope?: ClinicalCopilotContextScope
     question?: string
     encounter_id?: string
     source_text?: string

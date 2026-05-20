@@ -8,6 +8,7 @@ import {
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   listStaff, inviteStaff, promoteStaff, deactivateStaff,
+  cancelInvitation, resendInvitation,
   type StaffMember, type PendingInvitation, type StaffRole,
 } from '@/lib/doctor/staff-api'
 import { listDepartments, type Department } from '@/lib/doctor/departments-api'
@@ -164,6 +165,94 @@ function StaffRow({
             : <Trash2 size={15} />
           }
         </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Pending invite row ───────────────────────────────────────────────────────
+
+function PendingInviteRow({
+  inv, token, isAdmin, onResent, onCancelled,
+}: {
+  inv: PendingInvitation
+  token: string
+  isAdmin: boolean
+  onResent: () => void
+  onCancelled: () => void
+}) {
+  const [busy, setBusy] = useState<'resend' | 'cancel' | null>(null)
+  const days = daysUntil(inv.expires_at)
+
+  async function handleResend() {
+    setBusy('resend')
+    try {
+      await resendInvitation(token, inv.id)
+      onResent()
+    } finally { setBusy(null) }
+  }
+
+  async function handleCancel() {
+    if (!confirm(`¿Cancelar la invitación para ${inv.email}?`)) return
+    setBusy('cancel')
+    try {
+      await cancelInvitation(token, inv.id)
+      onCancelled()
+    } finally { setBusy(null) }
+  }
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '12px 20px', borderBottom: '1px solid var(--mt-border)',
+    }}>
+      <div style={{
+        width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+        background: 'var(--mt-warning-subtle)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Clock size={16} color="var(--mt-warning)" />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)' }}>{inv.email}</div>
+        <div style={{ fontSize: 12, color: 'var(--mt-muted)', marginTop: 1 }}>
+          Expira en {days} día{days !== 1 ? 's' : ''}
+        </div>
+      </div>
+      <MTPill tone={ROLE_TONE[inv.role] ?? 'slate'}>
+        {ROLE_LABELS[inv.role] ?? inv.role}
+      </MTPill>
+      {isAdmin && (
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button
+            onClick={handleResend}
+            disabled={busy !== null}
+            title="Reenviar invitación"
+            style={{
+              height: 30, padding: '0 10px', borderRadius: 7,
+              border: '1px solid var(--mt-border)', background: 'none',
+              fontSize: 12, color: 'var(--mt-primary)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5,
+              opacity: busy !== null ? 0.5 : 1,
+            }}
+          >
+            {busy === 'resend' ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
+            Reenviar
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={busy !== null}
+            title="Cancelar invitación"
+            style={{
+              width: 30, height: 30, borderRadius: 7,
+              border: '1px solid var(--mt-border)', background: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--mt-danger)', opacity: busy !== null ? 0.5 : 1,
+            }}
+          >
+            {busy === 'cancel' ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <X size={13} />}
+          </button>
+        </div>
       )}
     </div>
   )
@@ -377,32 +466,16 @@ export default function StaffSettingsPage() {
               icon={Mail}
               accent="amber"
             >
-              {pending.map(inv => {
-                const days = daysUntil(inv.expires_at)
-                return (
-                  <div key={inv.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '12px 20px', borderBottom: '1px solid var(--mt-border)',
-                  }}>
-                    <div style={{
-                      width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                      background: 'var(--mt-warning-subtle)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Clock size={16} color="var(--mt-warning)" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--mt-text)' }}>{inv.email}</div>
-                      <div style={{ fontSize: 12, color: 'var(--mt-muted)', marginTop: 1 }}>
-                        Expira en {days} día{days !== 1 ? 's' : ''}
-                      </div>
-                    </div>
-                    <MTPill tone={ROLE_TONE[inv.role] ?? 'slate'}>
-                      {ROLE_LABELS[inv.role] ?? inv.role}
-                    </MTPill>
-                  </div>
-                )
-              })}
+              {pending.map(inv => (
+                <PendingInviteRow
+                  key={inv.id}
+                  inv={inv}
+                  token={token!}
+                  isAdmin={isAdmin}
+                  onResent={() => void load()}
+                  onCancelled={() => setPending(p => p.filter(i => i.id !== inv.id))}
+                />
+              ))}
             </MTPanel>
           )}
 

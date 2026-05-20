@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Building2, Plus, Users, Trash2, Loader2, ChevronRight, X, Pencil, MapPin } from 'lucide-react'
+import { Building2, Plus, Users, Trash2, Loader2, ChevronRight, X, Pencil, MapPin, UserPlus } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   listDepartments, createDepartment, updateDepartment, deleteDepartment,
@@ -10,6 +10,7 @@ import {
   type Department,
 } from '@/lib/doctor/departments-api'
 import { listLocations, type Location } from '@/lib/doctor/locations-api'
+import { listStaff, type StaffMember } from '@/lib/doctor/staff-api'
 
 const DEPT_TYPES = Object.entries(DEPARTMENT_TYPE_LABELS)
 
@@ -80,6 +81,126 @@ function UpgradeBanner({ token, onUpgraded }: { token: string; onUpgraded: () =>
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Add member panel ──────────────────────────────────────────────────────────
+
+function AddMemberPanel({
+  token, dept, onAdded,
+}: {
+  token: string
+  dept: Department
+  onAdded: (member: StaffMember) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState<string | null>(null)
+
+  async function openPanel() {
+    setOpen(true)
+    setLoading(true)
+    try {
+      const data = await listStaff(token)
+      const existingIds = new Set(dept.members.map((m) => m.user.id))
+      setStaff(data.staff.filter((s) => s.is_active && !existingIds.has(s.id)))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleAdd(userId: string) {
+    setAdding(userId)
+    try {
+      await addMember(token, dept.id, userId)
+      const member = staff.find((s) => s.id === userId)!
+      onAdded(member)
+      setStaff((prev) => prev.filter((s) => s.id !== userId))
+    } finally {
+      setAdding(null)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={openPanel}
+        style={{
+          marginTop: 8, height: 32, padding: '0 12px', borderRadius: 7,
+          border: '1px dashed var(--mt-border)', background: 'transparent',
+          color: 'var(--mt-primary)', fontSize: 12, fontWeight: 500,
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+        }}
+      >
+        <UserPlus size={13} /> Agregar miembro
+      </button>
+    )
+  }
+
+  return (
+    <div style={{
+      marginTop: 8, borderRadius: 8, border: '1px solid var(--mt-border)',
+      background: 'var(--mt-elevated)', overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '8px 12px', borderBottom: '1px solid var(--mt-border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--mt-text)' }}>Agregar miembro</span>
+        <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mt-muted)', padding: 2 }}>
+          <X size={13} />
+        </button>
+      </div>
+      {loading ? (
+        <div style={{ padding: '16px', display: 'flex', justifyContent: 'center' }}>
+          <Loader2 size={16} color="var(--mt-muted)" style={{ animation: 'spin 1s linear infinite' }} />
+        </div>
+      ) : staff.length === 0 ? (
+        <p style={{ padding: '12px', fontSize: 12, color: 'var(--mt-muted)', margin: 0, textAlign: 'center' }}>
+          Todo el personal ya está en este departamento.
+        </p>
+      ) : (
+        <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          {staff.map((s) => (
+            <div key={s.id} style={{
+              padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10,
+              borderBottom: '1px solid var(--mt-border)',
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', background: 'var(--mt-primary-subtle)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 700, color: 'var(--mt-primary)', flexShrink: 0,
+              }}>
+                {s.first_name[0]}{s.last_name[0]}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--mt-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {s.first_name} {s.last_name}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
+                  {ROLE_LABELS[s.role] ?? s.role}{s.specialty ? ` · ${s.specialty}` : ''}
+                </div>
+              </div>
+              <button
+                onClick={() => handleAdd(s.id)}
+                disabled={adding === s.id}
+                style={{
+                  height: 26, padding: '0 10px', borderRadius: 6, border: 'none',
+                  background: 'var(--mt-primary)', color: '#fff',
+                  fontSize: 11, fontWeight: 500, cursor: 'pointer', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  opacity: adding === s.id ? 0.6 : 1,
+                }}
+              >
+                {adding === s.id ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={11} />}
+                Agregar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -248,6 +369,14 @@ function DepartmentCard({
               ))}
             </div>
           )}
+          <AddMemberPanel
+            token={token}
+            dept={dept}
+            onAdded={(s) => onUpdated({
+              ...dept,
+              members: [...dept.members, { user: s, joined_at: new Date().toISOString() }],
+            })}
+          />
         </div>
       )}
     </div>

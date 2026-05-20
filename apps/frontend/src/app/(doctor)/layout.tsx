@@ -34,6 +34,7 @@ import {
   MapPin,
   BookOpen,
   UserCircle,
+  Upload,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
@@ -41,8 +42,24 @@ import { MTAvatar, MTLogo } from '@/components/doctor/clinical-ui'
 import { NotificationPanel } from '@/components/doctor/NotificationPanel'
 import { SearchModal } from '@/components/doctor/SearchModal'
 import { fetchClinicNotifications, type NotificationEntry } from '@/lib/doctor/notifications-api'
+import {
+  fetchDoctorNotifications, markDoctorNotificationRead, markAllDoctorNotificationsRead,
+  type DoctorNotification,
+} from '@/lib/doctor/referral-notifications-api'
 
 const ADMIN_ROLES = new Set(['ADMIN_CLINIC', 'SUPER_ADMIN'])
+
+const ROLE_LABELS: Record<string, string> = {
+  DOCTOR:        'Médico/a',
+  NURSE:         'Enfermero/a',
+  ASSISTANT:     'Asistente',
+  LAB_TECHNICIAN:'Técnico de lab.',
+  RADIOLOGIST:   'Radiólogo/a',
+  PHARMACIST:    'Farmacéutico/a',
+  RECEPTIONIST:  'Recepcionista',
+  WARD_NURSE:    'Enf. de sala',
+  ADMIN_CLINIC:  'Administrador',
+}
 
 // ─────────────────────────────────────────────
 // NavItem
@@ -121,9 +138,10 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const main = [
     { href: '/dashboard',  icon: LayoutGrid,   label: 'Panel operativo', match: (p: string) => p === '/dashboard' },
     { href: '/patients',   icon: Users,         label: 'Pacientes',       match: (p: string) => p.startsWith('/patients') },
-    { href: '/lab',        icon: FlaskConical,  label: 'Laboratorio',     match: (p: string) => p.startsWith('/lab') },
-    { href: '/referrals',  icon: ArrowUpDown,   label: 'Derivaciones',    match: (p: string) => p.startsWith('/referrals') },
-    { href: '/hospital',   icon: BedDouble,     label: 'Hospital',        match: (p: string) => p.startsWith('/hospital') },
+    { href: '/lab',        icon: FlaskConical,  label: 'Laboratorio',     match: (p: string) => p.startsWith('/lab') && !p.startsWith('/lab/external') },
+    { href: '/lab/external', icon: Upload, label: 'Lab externo', match: (p: string) => p.startsWith('/lab/external') },
+    { href: '/referrals',  icon: ArrowUpDown,   label: 'Referencias',     match: (p: string) => p.startsWith('/referrals') },
+    { href: '/hospital',   icon: BedDouble,     label: 'Internados',      match: (p: string) => p.startsWith('/hospital') },
     { href: '/clinical-intelligence', icon: BrainCircuit, label: 'Inteligencia clínica', match: (p: string) => p.startsWith('/clinical-intelligence') },
     { href: '/analytics',  icon: TrendingUp,    label: 'Analítica',       match: (p: string) => p.startsWith('/analytics'), adminOnly: true },
     { href: '/staff',      icon: UserCog,       label: 'Equipo clínico',  match: (p: string) => p === '/staff', adminOnly: true },
@@ -131,7 +149,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
   const config = [
     { href: '/settings/clinic',    icon: Building2,   label: 'Clínica' },
-    { href: '/settings/hospital',  icon: Building2,   label: 'Hospital' },
+    { href: '/settings/hospital',  icon: Building2,   label: 'Config. hospital' },
     { href: '/settings/staff',     icon: UserCog,     label: 'Personal' },
     { href: '/settings/locations', icon: MapPin,      label: 'Sedes' },
     { href: '/settings/protocols', icon: BookOpen,   label: 'Protocolos' },
@@ -269,7 +287,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
                 fontSize: 11, color: 'var(--mt-muted)',
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
-                {user?.specialty || user?.role || 'Cuenta clínica'}
+                {user?.specialty || (user?.role ? ROLE_LABELS[user.role] : undefined) || 'Cuenta clínica'}
               </div>
             </div>
             <UserCircle size={14} color="var(--mt-muted)" style={{ flexShrink: 0 }} />
@@ -321,6 +339,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationEntry[]>([])
+  const [doctorNotifications, setDoctorNotifications] = useState<DoctorNotification[]>([])
   const [loadingNotif, setLoadingNotif] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
 
@@ -346,18 +365,33 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 
   const visibleNotifications = notifications.filter(n => !_dismissed.has(n.id))
   const failedCount = visibleNotifications.filter(n => n.status === 'FAILED' || n.status === 'BOUNCED').length
+  const unreadReferralCount = doctorNotifications.filter(n => !n.is_read).length
 
   const loadNotifications = useCallback(async () => {
     if (!token) return
     setLoadingNotif(true)
     try {
-      const res = await fetchClinicNotifications(token)
-      setNotifications(res.data)
-    } catch {
-      // silently fail — don't break the layout
+      const [patientRes, doctorRes] = await Promise.allSettled([
+        fetchClinicNotifications(token),
+        fetchDoctorNotifications(token),
+      ])
+      if (patientRes.status === 'fulfilled') setNotifications(patientRes.value.data)
+      if (doctorRes.status === 'fulfilled') setDoctorNotifications(doctorRes.value.data)
     } finally {
       setLoadingNotif(false)
     }
+  }, [token])
+
+  const handleDoctorNotifRead = useCallback(async (id: string) => {
+    if (!token) return
+    setDoctorNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+    await markDoctorNotificationRead(token, id).catch(() => {})
+  }, [token])
+
+  const handleMarkAllRead = useCallback(async () => {
+    if (!token) return
+    setDoctorNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    await markAllDoctorNotificationsRead(token).catch(() => {})
   }, [token])
 
   // Initial load + 60-second polling
@@ -479,7 +513,19 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
                 {failedCount > 99 ? '99+' : failedCount}
               </span>
             )}
-            {failedCount === 0 && notifications.length > 0 && (
+            {failedCount === 0 && unreadReferralCount > 0 && (
+              <span style={{
+                position: 'absolute', top: -4, right: -4,
+                minWidth: 16, height: 16, borderRadius: 999,
+                background: '#1d4ed8', border: '2px solid #fff',
+                fontSize: 10, fontWeight: 700, color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 3px',
+              }}>
+                {unreadReferralCount > 9 ? '9+' : unreadReferralCount}
+              </span>
+            )}
+            {failedCount === 0 && unreadReferralCount === 0 && notifications.length > 0 && (
               <span style={{
                 position: 'absolute', top: 6, right: 6, width: 7, height: 7,
                 borderRadius: '50%', background: 'var(--mt-primary)', border: '2px solid #fff',
@@ -490,10 +536,14 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           {panelOpen && (
             <NotificationPanel
               notifications={visibleNotifications}
+              doctorNotifications={doctorNotifications}
               failedCount={failedCount}
+              unreadReferralCount={unreadReferralCount}
               loading={loadingNotif}
               onRefresh={loadNotifications}
               onDismiss={handleDismiss}
+              onDoctorNotifRead={handleDoctorNotifRead}
+              onMarkAllRead={handleMarkAllRead}
             />
           )}
         </div>

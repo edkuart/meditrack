@@ -89,6 +89,10 @@ export const auditActionEnum = pgEnum('audit_action', [
   // Admissions (Phase 5)
   'PATIENT_ADMITTED',
   'PATIENT_DISCHARGED',
+  // Lab external submissions
+  'LAB_EXTERNAL_SUBMITTED',
+  'LAB_EXTERNAL_AI_EXTRACTED',
+  'LAB_EXTERNAL_VALIDATED',
 ])
 
 // This table is APPEND-ONLY — no UPDATE or DELETE should ever run on it.

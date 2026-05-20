@@ -16,6 +16,7 @@ export const ClinicalCopilotMode = z.enum([
 export const ClinicalCopilotSchema = z.object({
   mode: ClinicalCopilotMode,
   model_tier: z.enum(['standard', 'premium']).default('standard'),
+  context_scope: z.enum(['FULL_RECORD', 'CURRENT_ENCOUNTER', 'SAVED_RECORD', 'DRAFT_ONLY']).default('FULL_RECORD'),
   question: z.string().min(3).max(1200).optional(),
   encounter_id: z.string().uuid().optional(),
   source_text: z.string().max(8000).optional(),

@@ -14,7 +14,7 @@ import { portalAuthRouter, portalRouter } from './modules/portal/portal.router.t
 import { documentsRouter } from './modules/documents/documents.router.ts'
 import { notificationsRouter } from './modules/notifications/notifications.router.ts'
 import { analyticsRouter } from './modules/analytics/analytics.router.ts'
-import { staffRouter } from './modules/staff/staff.router.ts'
+import { staffRouter, staffPublicRouter } from './modules/staff/staff.router.ts'
 import { fhirRouter } from './modules/fhir/fhir.router.ts'
 import { clinicalProtocolsRouter } from './modules/clinical-protocols/clinical-protocols.router.ts'
 import { aiAssistRouter } from './modules/ai-assist/ai-assist.router.ts'
@@ -23,6 +23,7 @@ import { onboardingRouter } from './modules/onboarding/onboarding.router.ts'
 import { settingsRouter } from './modules/settings/settings.router.ts'
 import { complianceRouter } from './modules/compliance/compliance.router.ts'
 import { labRouter } from './modules/lab/lab.router.ts'
+import { labExternalRouter } from './modules/lab-external/lab-external.router.ts'
 import { vitalSignsRouter } from './modules/vital-signs/vital-signs.router.ts'
 import { patientProblemsRouter } from './modules/patient-problems/patient-problems.router.ts'
 import { patientBackgroundRouter } from './modules/patient-background/patient-background.router.ts'
@@ -33,6 +34,7 @@ import { departmentsRouter } from './modules/departments/departments.router.ts'
 import { accessRouter } from './modules/patient-access/access.router.ts'
 import { referralsRouter } from './modules/referrals/referrals.router.ts'
 import { admissionsRouter } from './modules/admissions/admissions.router.ts'
+import { doctorNotificationsRouter } from './modules/doctor-notifications/doctor-notifications.router.ts'
 import { locationsRouter } from './modules/locations/locations.router.ts'
 import { rateLimit } from './shared/middleware/rate-limit.middleware.ts'
 import { securityHeaders } from './shared/middleware/security.middleware.ts'
@@ -94,6 +96,10 @@ export function createApp() {
     max: 6,
   }))
 
+  // Public routes that must be registered BEFORE the auth middleware so they
+  // are not blocked by the global requireAuth or by sub-router use('*', requireAuth).
+  app.route('/api/v1', staffPublicRouter)
+
   // Clinical routes require authentication + verification.
   // requireAuth runs first (sets auth context), then requireVerified reads it.
   // Public and admin routes are exempt from both checks.
@@ -127,6 +133,7 @@ export function createApp() {
   app.route('/api/v1', settingsRouter)
   app.route('/api/v1', complianceRouter)
   app.route('/api/v1', labRouter)
+  app.route('/api/v1', labExternalRouter)
   app.route('/api/v1', vitalSignsRouter)
   app.route('/api/v1', patientProblemsRouter)
   app.route('/api/v1', patientBackgroundRouter)
@@ -137,6 +144,7 @@ export function createApp() {
   app.route('/api/v1', referralsRouter)
   app.route('/api/v1', admissionsRouter)
   app.route('/api/v1', locationsRouter)
+  app.route('/api/v1', doctorNotificationsRouter)
 
   app.onError(errorHandler)
 

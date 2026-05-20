@@ -7,6 +7,8 @@ import {
   GenerateAccessSchema, PatientCheckInSchema, ValidateMagicLinkSchema, ValidatePinSchema,
 } from './portal.schema.ts'
 import * as portalService from './portal.service.ts'
+import { SubmitExternalLabSchema } from '../lab-external/lab-external.schema.ts'
+import * as labExternalService from '../lab-external/lab-external.service.ts'
 import { rateLimit } from '../../shared/middleware/rate-limit.middleware.ts'
 import type { PatientTokenPayload } from '../../shared/services/token.service.ts'
 import type { Context, Next } from 'hono'
@@ -148,6 +150,41 @@ router.get('/portal/documents', requirePatient, async (c) => {
 router.get('/portal/lab/orders', requirePatient, async (c) => {
   const p = c.get('patient')
   const data = await portalService.getLabOrdersForPortal(p.sub, p.tenant_id)
+  return c.json({ success: true, data })
+})
+
+router.get('/portal/lab/orders/:id', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.getLabOrderForPortal(p.sub, p.tenant_id, c.req.param('id')!)
+  return c.json({ success: true, data })
+})
+
+// Patient submits external lab results (multipart: files + JSON metadata)
+router.post('/portal/lab/submit-external', requirePatient, async (c) => {
+  const p = c.get('patient')
+
+  const formData = await c.req.formData()
+  const files: File[] = []
+  for (const [, value] of formData.entries()) {
+    if (value instanceof File) files.push(value)
+  }
+
+  const metaRaw = formData.get('meta')
+  const meta = SubmitExternalLabSchema.safeParse(
+    metaRaw ? JSON.parse(String(metaRaw)) : {},
+  )
+  if (!meta.success) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: meta.error.message } }, 400)
+  }
+
+  const data = await labExternalService.submitExternalLab(p.tenant_id, p.sub, files, meta.data)
+  return c.json({ success: true, data }, 201)
+})
+
+// Patient views their external submissions
+router.get('/portal/lab/external-submissions', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await labExternalService.getPatientSubmissions(p.sub, p.tenant_id)
   return c.json({ success: true, data })
 })
 

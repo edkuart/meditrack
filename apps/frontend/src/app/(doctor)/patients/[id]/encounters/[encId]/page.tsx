@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   Activity, AlertTriangle, ArrowLeft, Pill, CheckCircle, XCircle, Loader2, Plus, Trash2,
@@ -24,7 +24,9 @@ import {
   runPatientClinicalCopilot,
   type AiUsageEvent,
   type ClinicalCopilotMode,
+  type ClinicalCopilotModelTier,
   type ClinicalCopilotResponse,
+  type ClinicalCopilotContextScope,
 } from '@/lib/doctor/clinical-intelligence-api'
 import {
   ClinicalButton,
@@ -55,6 +57,7 @@ const INTERV_TYPE_LABELS: Record<string, string> = {
 const DOSE_UNITS = ['mg', 'ml', 'mcg', 'g', 'UI', 'tableta(s)', 'cápsula(s)', 'gota(s)', 'ampolla(s)', 'parche(s)']
 const ROUTES = ['oral', 'sublingual', 'inhalatoria', 'tópica', 'inyectable IV', 'inyectable IM', 'subcutánea', 'rectal', 'vaginal', 'oftálmica', 'ótica']
 const portalAccessStorageKey = (patientId: string) => `meditrack.portalAccess.${patientId}`
+const encounterDraftStorageKey = (encounterId: string) => `meditrack.encounterDraft.${encounterId}`
 
 function withFreshPortalSession(url: string) {
   const next = new URL(url)
@@ -67,6 +70,10 @@ function getWorkflowStage(metadata?: Record<string, unknown> | null): EncounterW
   return typeof value === 'string' && WORKFLOW_STAGES.includes(value as EncounterWorkflowStage)
     ? value as EncounterWorkflowStage
     : 'SUBJECTIVE'
+}
+
+function isClosedEncounterStatus(status?: string) {
+  return status === 'CLOSED' || status === 'ARCHIVED'
 }
 
 const NOTE_TEMPLATES = [
@@ -119,6 +126,33 @@ const COPILOT_MODES: Array<{
   { mode: 'REVIEW_CLINICAL_GAPS', label: 'Revisar faltantes', tone: 'amber' },
   { mode: 'DRAFT_SOAP', label: 'Redactar nota', tone: 'green' },
 ]
+
+const COPILOT_MODEL_OPTIONS: Array<{
+  value: ClinicalCopilotModelTier
+  label: string
+  description: string
+}> = [
+  { value: 'standard', label: 'Rápido', description: 'Para preguntas puntuales y borradores sencillos.' },
+  { value: 'premium', label: 'Análisis clínico', description: 'Para casos complejos o antes de cerrar.' },
+]
+
+const COPILOT_CONTEXT_OPTIONS: Array<{
+  value: ClinicalCopilotContextScope
+  label: string
+  description: string
+}> = [
+  { value: 'FULL_RECORD', label: 'Todo el expediente', description: 'Usa historial del paciente y lo escrito en esta consulta.' },
+  { value: 'CURRENT_ENCOUNTER', label: 'Solo esta consulta', description: 'Prioriza motivo, nota actual y plan en edición.' },
+  { value: 'SAVED_RECORD', label: 'Solo datos guardados', description: 'Evita usar el texto local que todavía no has guardado.' },
+  { value: 'DRAFT_ONLY', label: 'Texto en edición', description: 'Se enfoca en lo que acabas de escribir en pantalla.' },
+]
+
+const COPILOT_CONTEXT_INSTRUCTIONS: Record<ClinicalCopilotContextScope, string> = {
+  FULL_RECORD: 'Usa el expediente del paciente junto con la informacion escrita en esta consulta.',
+  CURRENT_ENCOUNTER: 'Responde priorizando solo esta consulta activa. Usa antecedentes solamente si son necesarios para seguridad.',
+  SAVED_RECORD: 'Responde con datos ya guardados en el expediente. Evita asumir cambios del borrador local no guardado.',
+  DRAFT_ONLY: 'Responde enfocandote en el texto actual en edicion. No agregues datos que no esten en el borrador salvo alertas generales de seguridad.',
+}
 
 const COPILOT_MODE_LABELS: Record<ClinicalCopilotMode, string> = {
   ASK_CLINICAL_QUESTION: 'Respuesta a una pregunta',
@@ -257,6 +291,18 @@ function getCopilotEventAction(event: AiUsageEvent) {
   return 'Abrir respuesta'
 }
 
+function getCopilotEventContext(event: AiUsageEvent) {
+  const value = event.metadata?.context_scope
+  const option = COPILOT_CONTEXT_OPTIONS.find(item => item.value === value)
+  return option?.label ?? 'Contexto no especificado'
+}
+
+function getCopilotEventModelTier(event: AiUsageEvent) {
+  const value = event.metadata?.model_tier
+  const option = COPILOT_MODEL_OPTIONS.find(item => item.value === value)
+  return option?.label ?? 'Rápido'
+}
+
 function getModelLabel(event: Pick<AiUsageEvent, 'provider' | 'model'>) {
   return `Generado con ${event.provider} · ${event.model}`
 }
@@ -360,6 +406,19 @@ interface IntervForm {
 
 function emptyIntervForm(): IntervForm {
   return { type: 'OTHER', title: '', description: '', frequency: '', duration: '', instructions: '' }
+}
+
+type NoteSectionKey = 'subjective' | 'objective' | 'assessment' | 'plan' | 'notes' | 'summary'
+
+interface EncounterLocalDraft {
+  encounter_id: string
+  saved_at: string
+  notes: string
+  summary: string
+  subjective: string
+  objective: string
+  assessment: string
+  plan: string
 }
 
 // ─── Shared field styles ──────────────────────────────────────────────────────
@@ -773,10 +832,15 @@ export default function EncounterPage() {
   const [aiError, setAiError] = useState('')
   const [copilotLoading, setCopilotLoading] = useState<ClinicalCopilotMode | null>(null)
   const [copilotQuestion, setCopilotQuestion] = useState('')
+  const [copilotModelTier, setCopilotModelTier] = useState<ClinicalCopilotModelTier>('standard')
+  const [copilotContextScope, setCopilotContextScope] = useState<ClinicalCopilotContextScope>('FULL_RECORD')
   const [copilotResult, setCopilotResult] = useState<ClinicalCopilotResponse | null>(null)
   const [copilotHistory, setCopilotHistory] = useState<AiUsageEvent[]>([])
   const [copilotHistoryLoading, setCopilotHistoryLoading] = useState(false)
   const [copilotHistoryError, setCopilotHistoryError] = useState('')
+  const [pendingLocalDraft, setPendingLocalDraft] = useState<EncounterLocalDraft | null>(null)
+  const [localDraftNotice, setLocalDraftNotice] = useState('')
+  const autosaveReadyRef = useRef(false)
 
   // Treatment builder
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
@@ -802,6 +866,7 @@ export default function EncounterPage() {
   const load = useCallback(async () => {
     if (!token) return
     setLoading(true)
+    autosaveReadyRef.current = false
     try {
       const [enc, protocolList] = await Promise.all([
         getEncounter(token, encId),
@@ -817,7 +882,30 @@ export default function EncounterPage() {
       setPlan(enc.plan ?? '')
       setWorkflowStage(getWorkflowStage(enc.metadata))
       setProtocols(protocolList.length > 0 ? protocolList : FALLBACK_PROTOCOLS)
+      try {
+        const rawDraft = window.localStorage.getItem(encounterDraftStorageKey(encId))
+        if (rawDraft) {
+          const draft = JSON.parse(rawDraft) as EncounterLocalDraft
+          const hasDifferentDraft =
+            draft.encounter_id === encId &&
+            (
+              draft.notes !== (enc.notes ?? '') ||
+              draft.summary !== (enc.summary ?? '') ||
+              draft.subjective !== (enc.subjective ?? '') ||
+              draft.objective !== (enc.objective ?? '') ||
+              draft.assessment !== (enc.assessment ?? '') ||
+              draft.plan !== (enc.plan ?? '')
+            )
+          setPendingLocalDraft(hasDifferentDraft ? draft : null)
+        } else {
+          setPendingLocalDraft(null)
+        }
+      } catch {
+        window.localStorage.removeItem(encounterDraftStorageKey(encId))
+        setPendingLocalDraft(null)
+      }
     } finally {
+      window.setTimeout(() => { autosaveReadyRef.current = true }, 0)
       setLoading(false)
     }
   }, [token, encId])
@@ -869,6 +957,50 @@ export default function EncounterPage() {
       window.localStorage.removeItem(portalAccessStorageKey(patientId))
     }
   }, [patientId])
+
+  useEffect(() => {
+    if (!encounter || pendingLocalDraft || !autosaveReadyRef.current || isClosedEncounterStatus(encounter.status)) return
+    const id = window.setTimeout(() => {
+      const draft: EncounterLocalDraft = {
+        encounter_id: encId,
+        saved_at: new Date().toISOString(),
+        notes,
+        summary,
+        subjective,
+        objective,
+        assessment,
+        plan,
+      }
+      window.localStorage.setItem(encounterDraftStorageKey(encId), JSON.stringify(draft))
+      setLocalDraftNotice('Borrador protegido en este navegador')
+    }, 900)
+    return () => window.clearTimeout(id)
+  }, [assessment, encId, encounter, notes, objective, pendingLocalDraft, plan, subjective, summary])
+
+  function restoreLocalDraft() {
+    if (!pendingLocalDraft) return
+    setNotes(pendingLocalDraft.notes)
+    setSummary(pendingLocalDraft.summary)
+    setSubjective(pendingLocalDraft.subjective)
+    setObjective(pendingLocalDraft.objective)
+    setAssessment(pendingLocalDraft.assessment)
+    setPlan(pendingLocalDraft.plan)
+    setWorkflowStage(inferWorkflowStage({
+      subjective: pendingLocalDraft.subjective,
+      objective: pendingLocalDraft.objective,
+      assessment: pendingLocalDraft.assessment,
+      plan: pendingLocalDraft.plan,
+      summary: pendingLocalDraft.summary,
+    }))
+    setPendingLocalDraft(null)
+    setLocalDraftNotice('Borrador recuperado. Revísalo y guarda el avance.')
+  }
+
+  function discardLocalDraft() {
+    window.localStorage.removeItem(encounterDraftStorageKey(encId))
+    setPendingLocalDraft(null)
+    setLocalDraftNotice('')
+  }
 
   // Update times_per_day array when count changes
   function updateTimesCount(count: string) {
@@ -1033,6 +1165,9 @@ export default function EncounterPage() {
       setEncounter(updated)
       setWorkflowStage(getWorkflowStage(updated.metadata))
       setNotesSaved(true)
+      setPendingLocalDraft(null)
+      window.localStorage.removeItem(encounterDraftStorageKey(encId))
+      setLocalDraftNotice('')
       setTimeout(() => setNotesSaved(false), 3000)
     } catch (err) {
       setNotesError(err instanceof Error ? err.message : 'Error al guardar las notas')
@@ -1073,7 +1208,7 @@ export default function EncounterPage() {
     setAiError('')
     setAiNotice('')
     try {
-      const sourceText = [
+      const currentDraftSource = [
         encounter?.chief_complaint ? `Motivo: ${encounter.chief_complaint}` : '',
         subjective ? `Subjetivo:\n${subjective}` : '',
         objective ? `Objetivo:\n${objective}` : '',
@@ -1082,9 +1217,25 @@ export default function EncounterPage() {
         notes ? `Notas libres:\n${notes}` : '',
         summary ? `Resumen:\n${summary}` : '',
       ].filter(Boolean).join('\n\n')
+      const savedSource = [
+        encounter?.chief_complaint ? `Motivo: ${encounter.chief_complaint}` : '',
+        encounter?.subjective ? `Subjetivo guardado:\n${encounter.subjective}` : '',
+        encounter?.objective ? `Objetivo guardado:\n${encounter.objective}` : '',
+        encounter?.assessment ? `Evaluación guardada:\n${encounter.assessment}` : '',
+        encounter?.plan ? `Plan guardado:\n${encounter.plan}` : '',
+        encounter?.notes ? `Notas guardadas:\n${encounter.notes}` : '',
+        encounter?.summary ? `Resumen guardado:\n${encounter.summary}` : '',
+      ].filter(Boolean).join('\n\n')
+      const sourceBody = copilotContextScope === 'SAVED_RECORD' ? savedSource : currentDraftSource
+      const sourceText = [
+        `Contexto solicitado por el medico: ${COPILOT_CONTEXT_INSTRUCTIONS[copilotContextScope]}`,
+        sourceBody,
+      ].filter(Boolean).join('\n\n')
 
       const result = await runPatientClinicalCopilot(token, patientId, {
         mode,
+        model_tier: copilotModelTier,
+        context_scope: copilotContextScope,
         encounter_id: encId,
         question,
         source_text: sourceText || undefined,
@@ -1114,14 +1265,53 @@ export default function EncounterPage() {
     void handleClinicalCopilot('ASK_CLINICAL_QUESTION', question)
   }
 
+  function setNoteSection(section: NoteSectionKey, updater: (prev: string) => string) {
+    if (section === 'subjective') {
+      setSubjective(updater)
+      setWorkflowStage('SUBJECTIVE')
+    } else if (section === 'objective') {
+      setObjective(updater)
+      setWorkflowStage('OBJECTIVE')
+    } else if (section === 'assessment') {
+      setAssessment(updater)
+      setWorkflowStage('ASSESSMENT')
+    } else if (section === 'plan') {
+      setPlan(updater)
+      setWorkflowStage('PLAN')
+    } else if (section === 'notes') {
+      setNotes(updater)
+    } else {
+      setSummary(updater)
+    }
+  }
+
+  function insertCopilotText(section: NoteSectionKey, text?: string, replaceEmptyOnly = false) {
+    const clean = text?.trim()
+    if (!clean) return
+    setNoteSection(section, prev => {
+      if (!prev.trim()) return clean
+      if (replaceEmptyOnly) return prev
+      return `${prev.trim()}\n\n${clean}`
+    })
+    setAiNotice('Texto insertado en la nota. Revísalo y guarda el avance.')
+  }
+
+  function insertSoapDraft() {
+    if (!copilotResult?.soap_draft) return
+    insertCopilotText('subjective', copilotResult.soap_draft.subjective, true)
+    insertCopilotText('objective', copilotResult.soap_draft.objective, true)
+    insertCopilotText('assessment', copilotResult.soap_draft.assessment, true)
+    insertCopilotText('plan', copilotResult.soap_draft.plan, true)
+  }
+
+  function scrollToTreatmentPlan() {
+    document.getElementById('encounter-treatment-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setShowTreatmentDetails(true)
+  }
+
   async function handleClose() {
     if (!token) return
-    const missing = [
-      !subjective.trim() && !encounter?.chief_complaint?.trim() ? 'subjetivo' : '',
-      !objective.trim() ? 'objetivo' : '',
-      !assessment.trim() ? 'evaluación' : '',
-      !plan.trim() && !summary.trim() && !treatment ? 'plan' : '',
-    ].filter(Boolean)
+    const missing = closeChecks.filter(item => !item.done).map(item => item.label)
     const message = missing.length > 0
       ? `Aún faltan: ${missing.join(', ')}. ¿Cerrar esta consulta de todos modos?`
       : '¿Cerrar esta consulta?'
@@ -1136,6 +1326,7 @@ export default function EncounterPage() {
         assessment,
         plan,
       })
+      window.localStorage.removeItem(encounterDraftStorageKey(encId))
       router.push(`/patients/${patientId}`)
     } finally {
       setClosing(false)
@@ -1187,14 +1378,20 @@ export default function EncounterPage() {
 
   if (!encounter) return null
 
-  const isClosed = encounter.status === 'CLOSED' || encounter.status === 'ARCHIVED'
-  const soapChecks = [
-    { key: 'subjective', label: 'Subjetivo', done: Boolean(subjective.trim() || encounter.chief_complaint?.trim()) },
-    { key: 'objective', label: 'Objetivo', done: Boolean(objective.trim()) },
-    { key: 'assessment', label: 'Evaluación', done: Boolean(assessment.trim()) },
-    { key: 'plan', label: 'Plan', done: Boolean(plan.trim() || summary.trim() || treatment) },
+  const isClosed = isClosedEncounterStatus(encounter.status)
+  const hasTreatmentWork = Boolean(treatment)
+  const hasFollowUpLanguage = /seguimiento|control|cita|revis/i.test(`${plan}\n${summary}`)
+  const hasSafetyLanguage = /alarma|urgencia|empeora|empeoramiento|fiebre|vomit|debilidad|confusi/i.test(`${plan}\n${summary}`)
+  const closeChecks = [
+    { key: 'subjective', label: 'Lo que cuenta el paciente', done: Boolean(subjective.trim() || encounter.chief_complaint?.trim()) },
+    { key: 'objective', label: 'Datos objetivos', done: Boolean(objective.trim()) },
+    { key: 'assessment', label: 'Impresión médica', done: Boolean(assessment.trim()) },
+    { key: 'plan', label: 'Plan de manejo', done: Boolean(plan.trim() || summary.trim() || treatment) },
+    { key: 'treatment', label: 'Medicamentos/tratamiento revisados', done: Boolean(hasTreatmentWork || /medic|tratamiento|dosis|analg|aines|antib/i.test(`${plan}\n${summary}`)) },
+    { key: 'follow_up', label: 'Seguimiento indicado', done: Boolean(hasFollowUpLanguage) },
+    { key: 'safety', label: 'Signos de alarma explicados', done: Boolean(hasSafetyLanguage) },
   ]
-  const missingCloseItems = soapChecks.filter(item => !item.done)
+  const missingCloseItems = closeChecks.filter(item => !item.done)
   const readyToClose = missingCloseItems.length === 0
   const hasUnsavedNotes =
     notes !== (encounter.notes ?? '') ||
@@ -1256,6 +1453,24 @@ export default function EncounterPage() {
       {!isClosed && hasUnsavedNotes && (
         <ClinicalInsight tone="amber" title="Cambios sin guardar">
           Hay cambios en esta consulta. Guarda antes de cerrar o salir del flujo.
+        </ClinicalInsight>
+      )}
+
+      {!isClosed && pendingLocalDraft && (
+        <ClinicalInsight tone="amber" title="Borrador recuperable">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Encontré texto guardado en este navegador del {new Date(pendingLocalDraft.saved_at).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })}.
+            </span>
+            <span className="flex flex-wrap gap-2">
+              <ClinicalButton icon={Copy} onClick={restoreLocalDraft} variant="outline" tone="amber">
+                Recuperar
+              </ClinicalButton>
+              <ClinicalButton icon={Trash2} onClick={discardLocalDraft} variant="outline" tone="slate">
+                Descartar
+              </ClinicalButton>
+            </span>
+          </div>
         </ClinicalInsight>
       )}
 
@@ -1430,6 +1645,14 @@ export default function EncounterPage() {
                   placeholder="Plan diagnóstico, tratamiento, educación, seguimiento..."
                   className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <ClinicalButton icon={Pill} onClick={scrollToTreatmentPlan} variant="outline" tone="blue">
+                    Agregar medicamento o tratamiento
+                  </ClinicalButton>
+                  <span className="text-xs text-slate-400">
+                    El cierre verificará que el plan y el tratamiento hayan sido revisados.
+                  </span>
+                </div>
               </ClinicalNoteSection>
             </div>
 
@@ -1464,6 +1687,9 @@ export default function EncounterPage() {
                   Guardado
                 </span>
               )}
+              {!notesSaved && localDraftNotice && (
+                <span className="text-xs text-slate-400">{localDraftNotice}</span>
+              )}
               <ClinicalButton
                 icon={savingNotes ? Loader2 : Save}
                 onClick={handleSaveNotes}
@@ -1482,6 +1708,52 @@ export default function EncounterPage() {
       {!isClosed && (
         <ClinicalPanel title="Copiloto clínico" icon={Sparkles} collapsible defaultOpen={false}>
           <div className="flex flex-col gap-4 p-5">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contexto que usará la IA</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {COPILOT_CONTEXT_OPTIONS.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setCopilotContextScope(option.value)}
+                      disabled={Boolean(copilotLoading)}
+                      className={`rounded-lg border px-3 py-2 text-left transition ${
+                        copilotContextScope === option.value
+                          ? 'border-blue-300 bg-white text-blue-900 shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">{option.label}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-slate-500">{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nivel de análisis</p>
+                <div className="mt-2 grid gap-2">
+                  {COPILOT_MODEL_OPTIONS.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setCopilotModelTier(option.value)}
+                      disabled={Boolean(copilotLoading)}
+                      className={`rounded-lg border px-3 py-2 text-left transition ${
+                        copilotModelTier === option.value
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-200'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">{option.label}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-slate-500">{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-2">
               {COPILOT_MODES.map(item => (
                 <ClinicalButton
@@ -1563,7 +1835,9 @@ export default function EncounterPage() {
                         <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-slate-500">
                           {question ?? snapshot?.summary ?? 'Respuesta previa del copiloto'}
                         </p>
-                        <p className="mt-1 text-xs text-slate-400">{getModelLabel(event)}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {getCopilotEventContext(event)} · {getCopilotEventModelTier(event)} · {getModelLabel(event)}
+                        </p>
                       </button>
                     )
                   })}
@@ -1579,6 +1853,26 @@ export default function EncounterPage() {
                   tone="blue"
                 >
                   <p className="text-base font-semibold leading-7">{copilotResult.summary}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <ClinicalButton
+                      icon={Save}
+                      onClick={() => insertCopilotText('summary', copilotResult.summary)}
+                      variant="outline"
+                      tone="blue"
+                    >
+                      Agregar al resumen
+                    </ClinicalButton>
+                    {copilotResult.answer && (
+                      <ClinicalButton
+                        icon={FileText}
+                        onClick={() => insertCopilotText('notes', copilotResult.answer)}
+                        variant="outline"
+                        tone="slate"
+                      >
+                        Guardar análisis en notas
+                      </ClinicalButton>
+                    )}
+                  </div>
                 </CopilotDisclosure>
 
                 <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -1595,9 +1889,27 @@ export default function EncounterPage() {
                         meta="Texto sugerido por IA para que el médico lo revise antes de guardar."
                         tone="green"
                       >
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                          <ClinicalButton icon={Copy} onClick={insertSoapDraft} variant="outline" tone="green">
+                            Llenar secciones vacías
+                          </ClinicalButton>
+                          <span className="text-xs text-green-700">
+                            No reemplaza texto que ya escribiste.
+                          </span>
+                        </div>
                         <div className="grid gap-3">
                           {Object.entries(copilotResult.soap_draft).map(([key, value]) => (
                             <CopilotDisclosure key={key} title={SOAP_SECTION_LABELS[key] ?? key} tone="slate">
+                              <div className="mb-3 flex justify-end">
+                                <ClinicalButton
+                                  icon={Copy}
+                                  onClick={() => insertCopilotText(key as NoteSectionKey, value)}
+                                  variant="outline"
+                                  tone="blue"
+                                >
+                                  Insertar aquí
+                                </ClinicalButton>
+                              </div>
                               <p className="whitespace-pre-wrap break-words text-sm leading-7">{value}</p>
                             </CopilotDisclosure>
                           ))}
@@ -1611,7 +1923,18 @@ export default function EncounterPage() {
                     <CopilotDisclosure title="Preguntas sugeridas" tone="blue">
                       <ul className="space-y-2 text-sm leading-6">
                         {copilotResult.suggested_questions.slice(0, 4).map((item, index) => (
-                          <li key={index} className="rounded-md bg-white/75 px-3 py-2">{item}</li>
+                          <li key={index} className="rounded-md bg-white/75 px-3 py-2">
+                            <div className="flex flex-col gap-2">
+                              <span>{item}</span>
+                              <button
+                                type="button"
+                                onClick={() => setCopilotQuestion(item)}
+                                className="self-start text-xs font-semibold text-blue-700 hover:text-blue-900"
+                              >
+                                Usar como pregunta
+                              </button>
+                            </div>
+                          </li>
                         ))}
                       </ul>
                     </CopilotDisclosure>
@@ -1647,7 +1970,7 @@ export default function EncounterPage() {
           <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap gap-2">
-                {soapChecks.map(item => (
+                {closeChecks.map(item => (
                   <span
                     key={item.key}
                     className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs font-semibold ${
@@ -1666,6 +1989,11 @@ export default function EncounterPage() {
                   ? 'La consulta tiene los elementos mínimos para cerrarse. Revisa tratamiento, indicaciones y seguimiento antes de finalizar.'
                   : `Puedes guardar el avance. Para cierre ideal faltan: ${missingCloseItems.map(item => item.label).join(', ')}.`}
               </p>
+              {(medications.length > 0 || interventions.length > 0) && !treatment && (
+                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                  Hay tratamiento en edición que todavía no se ha guardado como plan.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:min-w-[340px]">
@@ -1693,7 +2021,7 @@ export default function EncounterPage() {
       )}
 
       {/* Treatment builder */}
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <section id="encounter-treatment-plan" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden scroll-mt-24">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-semibold text-slate-800 flex items-center gap-2">
             <Pill size={16} className="text-slate-500" />

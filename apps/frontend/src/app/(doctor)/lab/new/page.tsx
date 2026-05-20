@@ -501,9 +501,16 @@ function OrderPreview({
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function NewLabOrderPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  // Lab technicians cannot create orders
+  useEffect(() => {
+    if (user?.role === 'LAB_TECHNICIAN') {
+      router.replace('/lab')
+    }
+  }, [user, router])
 
   const [patient, setPatient] = useState<Patient | null>(null)
 

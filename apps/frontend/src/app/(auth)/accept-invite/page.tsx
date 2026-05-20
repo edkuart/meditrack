@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, CheckCircle } from 'lucide-react'
-import { acceptInvite } from '@/lib/doctor/api'
+import { acceptInvite } from '@/lib/doctor/staff-api'
 
 function AcceptInviteForm() {
   const router = useRouter()

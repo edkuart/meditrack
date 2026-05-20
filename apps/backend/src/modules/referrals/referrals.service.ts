@@ -2,6 +2,7 @@ import { eq, and, or, desc } from 'drizzle-orm'
 import { db, referrals, patients, users, departments } from '../../shared/db/index.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { sendDoctorEventEmail } from '../notifications/notifications.service.ts'
+import { createDoctorNotification } from '../doctor-notifications/doctor-notifications.service.ts'
 import { NotFoundError, ForbiddenError } from '../../shared/errors.ts'
 import type { CreateReferralInput, RespondReferralInput } from './referrals.schema.ts'
 
@@ -79,6 +80,26 @@ export async function createReferral(
       priority: input.priority,
     },
   })
+
+  // Notify receiving doctor in-app
+  if (input.to_doctor_id) {
+    const [fromDoc, pat] = await Promise.all([
+      getDoctorContact(fromDoctorId),
+      db.query.patients.findFirst({ where: eq(patients.id, patientId), columns: { first_name: true, last_name: true } }),
+    ])
+    const patientName = pat ? `${pat.first_name} ${pat.last_name}` : 'el paciente'
+    const fromName = fromDoc ? `Dr. ${fromDoc.first_name} ${fromDoc.last_name}` : 'Un médico'
+    const priorityLabel = input.priority === 'EMERGENCY' ? '🔴 Emergencia' : input.priority === 'URGENT' ? '🟠 Urgente' : '🟢 Rutina'
+    void createDoctorNotification({
+      tenant_id: tenantId,
+      recipient_id: input.to_doctor_id,
+      referral_id: referral.id,
+      patient_id: patientId,
+      type: 'REFERRAL_CREATED',
+      title: `Nueva referencia de ${fromName}`,
+      body: `${fromName} te refiere a ${patientName}. Prioridad: ${priorityLabel}. Motivo: ${input.reason}`,
+    })
+  }
 
   return referral
 }
@@ -173,7 +194,7 @@ export async function acceptReferral(
   })
 
   if (!referral) throw new NotFoundError('Referral')
-  if (referral.to_doctor_id !== actorId) throw new ForbiddenError('Solo el médico receptor puede aceptar la derivación')
+  if (referral.to_doctor_id !== actorId) throw new ForbiddenError('Solo el médico receptor puede aceptar la referencia')
   if (referral.status !== 'PENDING') throw new ForbiddenError(`Cannot accept a referral in status ${referral.status}`)
 
   const actor = await getDoctorContact(actorId)
@@ -199,13 +220,23 @@ export async function acceptReferral(
     const patientName = referral.patient
       ? `${referral.patient.first_name} ${referral.patient.last_name}${referral.patient.mrn ? ` (${referral.patient.mrn})` : ''}`
       : 'el paciente'
+    const actorName = `Dr. ${actor?.first_name ?? ''} ${actor?.last_name ?? ''}`
     void sendDoctorEventEmail({
       recipientEmail: referral.from_doctor.email,
       recipientFirstName: referral.from_doctor.first_name,
-      eventTitle: 'Derivación aceptada',
-      eventBody: `Dr. ${actor?.first_name ?? ''} ${actor?.last_name ?? ''} ha <strong>aceptado</strong> tu derivación de ${patientName}.${input.notes ? `<br><br><em>Nota: ${input.notes}</em>` : ''}`,
-      ctaLabel: 'Ver derivaciones',
+      eventTitle: 'Referencia aceptada',
+      eventBody: `${actorName} ha <strong>aceptado</strong> tu referencia de ${patientName}.${input.notes ? `<br><br><em>Nota: ${input.notes}</em>` : ''}`,
+      ctaLabel: 'Ver referencias',
       ctaUrl: `${APP_URL}/referrals`,
+    })
+    void createDoctorNotification({
+      tenant_id: tenantId,
+      recipient_id: referral.from_doctor_id,
+      referral_id: referralId,
+      patient_id: referral.patient_id,
+      type: 'REFERRAL_ACCEPTED',
+      title: `${actorName} aceptó tu referencia`,
+      body: `Tu referencia de ${patientName} fue aceptada.${input.notes ? ` Nota: ${input.notes}` : ''}`,
     })
   }
 
@@ -230,7 +261,7 @@ export async function rejectReferral(
   })
 
   if (!referral) throw new NotFoundError('Referral')
-  if (referral.to_doctor_id !== actorId) throw new ForbiddenError('Solo el médico receptor puede rechazar la derivación')
+  if (referral.to_doctor_id !== actorId) throw new ForbiddenError('Solo el médico receptor puede rechazar la referencia')
   if (referral.status !== 'PENDING') throw new ForbiddenError(`Cannot reject a referral in status ${referral.status}`)
 
   const actor = await getDoctorContact(actorId)
@@ -256,13 +287,23 @@ export async function rejectReferral(
     const patientName = referral.patient
       ? `${referral.patient.first_name} ${referral.patient.last_name}${referral.patient.mrn ? ` (${referral.patient.mrn})` : ''}`
       : 'el paciente'
+    const actorName = `Dr. ${actor?.first_name ?? ''} ${actor?.last_name ?? ''}`
     void sendDoctorEventEmail({
       recipientEmail: referral.from_doctor.email,
       recipientFirstName: referral.from_doctor.first_name,
-      eventTitle: 'Derivación rechazada',
-      eventBody: `Dr. ${actor?.first_name ?? ''} ${actor?.last_name ?? ''} ha <strong>rechazado</strong> tu derivación de ${patientName}.${input.notes ? `<br><br><em>Motivo: ${input.notes}</em>` : ''}`,
-      ctaLabel: 'Ver derivaciones',
+      eventTitle: 'Referencia rechazada',
+      eventBody: `${actorName} ha <strong>rechazado</strong> tu referencia de ${patientName}.${input.notes ? `<br><br><em>Motivo: ${input.notes}</em>` : ''}`,
+      ctaLabel: 'Ver referencias',
       ctaUrl: `${APP_URL}/referrals`,
+    })
+    void createDoctorNotification({
+      tenant_id: tenantId,
+      recipient_id: referral.from_doctor_id,
+      referral_id: referralId,
+      patient_id: referral.patient_id,
+      type: 'REFERRAL_REJECTED',
+      title: `${actorName} rechazó tu referencia`,
+      body: `Tu referencia de ${patientName} fue rechazada.${input.notes ? ` Motivo: ${input.notes}` : ''}`,
     })
   }
 
@@ -287,7 +328,7 @@ export async function completeReferral(
   })
 
   if (!referral) throw new NotFoundError('Referral')
-  if (referral.to_doctor_id !== actorId) throw new ForbiddenError('Solo el médico receptor puede completar la derivación')
+  if (referral.to_doctor_id !== actorId) throw new ForbiddenError('Solo el médico receptor puede completar la referencia')
   if (referral.status !== 'ACCEPTED') throw new ForbiddenError(`Cannot complete a referral in status ${referral.status}`)
 
   const actor = await getDoctorContact(actorId)
@@ -313,13 +354,23 @@ export async function completeReferral(
     const patientName = referral.patient
       ? `${referral.patient.first_name} ${referral.patient.last_name}${referral.patient.mrn ? ` (${referral.patient.mrn})` : ''}`
       : 'el paciente'
+    const actorName = `Dr. ${actor?.first_name ?? ''} ${actor?.last_name ?? ''}`
     void sendDoctorEventEmail({
       recipientEmail: referral.from_doctor.email,
       recipientFirstName: referral.from_doctor.first_name,
-      eventTitle: 'Derivación completada',
-      eventBody: `Dr. ${actor?.first_name ?? ''} ${actor?.last_name ?? ''} ha marcado como <strong>completada</strong> la derivación de ${patientName}.${input.notes ? `<br><br><em>Nota de cierre: ${input.notes}</em>` : ''}`,
+      eventTitle: 'Referencia completada ✓',
+      eventBody: `${actorName} ha marcado como <strong>completada</strong> la referencia de ${patientName}.${input.notes ? `<br><br><em>Nota de cierre: ${input.notes}</em>` : ''}`,
       ctaLabel: 'Ver expediente',
       ctaUrl: `${APP_URL}/patients/${referral.patient_id}`,
+    })
+    void createDoctorNotification({
+      tenant_id: tenantId,
+      recipient_id: referral.from_doctor_id,
+      referral_id: referralId,
+      patient_id: referral.patient_id,
+      type: 'REFERRAL_COMPLETED',
+      title: `Referencia de ${patientName} completada`,
+      body: `${actorName} completó la atención.${input.notes ? ` Nota de cierre: ${input.notes}` : ''}`,
     })
   }
 
@@ -340,7 +391,7 @@ export async function cancelReferral(
   })
 
   if (!referral) throw new NotFoundError('Referral')
-  if (referral.from_doctor_id !== actorId) throw new ForbiddenError('Solo el médico emisor puede cancelar la derivación')
+  if (referral.from_doctor_id !== actorId) throw new ForbiddenError('Solo el médico emisor puede cancelar la referencia')
   if (!['PENDING', 'ACCEPTED'].includes(referral.status)) {
     throw new ForbiddenError(`Cannot cancel a referral in status ${referral.status}`)
   }

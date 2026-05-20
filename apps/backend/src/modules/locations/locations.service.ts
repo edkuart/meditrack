@@ -31,6 +31,11 @@ export async function createLocation(tenantId: string, input: CreateLocationInpu
     tenant_id: tenantId,
     name: input.name,
     address: input.address,
+    formatted_address: input.formatted_address,
+    google_place_id: input.google_place_id,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    maps_url: input.maps_url,
     phone: input.phone,
   }).returning()
 

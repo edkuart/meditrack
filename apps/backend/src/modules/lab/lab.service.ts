@@ -301,7 +301,7 @@ export async function upsertLabResults(
 ) {
   const order = await db.query.labOrders.findFirst({
     where: and(eq(labOrders.tenant_id, tenantId), eq(labOrders.id, orderId)),
-    columns: { id: true },
+    columns: { id: true, status: true },
   })
   if (!order) throw new NotFoundError('LabOrder')
 
@@ -312,7 +312,7 @@ export async function upsertLabResults(
     input.results.map((r, i) => toResultValues(r, orderId, tenantId, i)),
   )
 
-  // Auto-complete order if all results are non-pending
+  // Auto-advance order status based on result completeness
   const allResults = await db.query.labResults.findMany({
     where: eq(labResults.order_id, orderId),
     columns: { status: true },
@@ -321,6 +321,11 @@ export async function upsertLabResults(
   if (allFilled) {
     await db.update(labOrders)
       .set({ status: 'COMPLETED', updated_at: new Date() })
+      .where(eq(labOrders.id, orderId))
+  } else if (order.status === 'PENDING') {
+    // Lab tech started entering values — mark as in progress
+    await db.update(labOrders)
+      .set({ status: 'IN_PROGRESS', updated_at: new Date() })
       .where(eq(labOrders.id, orderId))
   }
 

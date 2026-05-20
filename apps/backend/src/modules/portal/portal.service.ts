@@ -536,6 +536,31 @@ export async function getLabOrdersForPortal(patientId: string, tenantId: string)
   })
 }
 
+export async function getLabOrderForPortal(patientId: string, tenantId: string, orderId: string) {
+  const order = await db.query.labOrders.findFirst({
+    where: and(
+      eq(labOrders.tenant_id, tenantId),
+      eq(labOrders.patient_id, patientId),
+      eq(labOrders.id, orderId),
+    ),
+    columns: { id: true, status: true, notes: true, ordered_at: true, updated_at: true },
+    with: {
+      doctor: { columns: { first_name: true, last_name: true, specialty: true } },
+      results: {
+        columns: {
+          id: true, panel_name: true, parameter_name: true,
+          value: true, numeric_value: true, unit: true,
+          ref_min: true, ref_max: true, ref_text: true,
+          status: true, sort_order: true,
+        },
+        orderBy: (r, { asc }) => asc(r.sort_order),
+      },
+    },
+  })
+  if (!order) throw new NotFoundError('LabOrder')
+  return order
+}
+
 export async function getDocumentUrlForPatient(patientId: string, documentId: string) {
   const doc = await db.query.documents.findFirst({
     where: and(

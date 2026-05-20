@@ -19,6 +19,7 @@
     "db:seed": "tsx --env-file=.env src/scripts/seed-admin.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.97.1",
     "@aws-sdk/client-s3": "^3.1045.0",
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
     "@hono/node-server": "^1.14.1",

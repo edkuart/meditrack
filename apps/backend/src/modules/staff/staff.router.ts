@@ -7,9 +7,8 @@ import * as staffService from './staff.service.ts'
 
 const router = new Hono()
 
-function requireAdmin() {
-  return requireAuth  // inline check below — keeps middleware chain clean
-}
+// Public router — must be registered in app.ts BEFORE the global auth middleware
+const staffPublicRouter = new Hono()
 
 // ── Staff list (any authenticated user) ──────────────────────────────────────
 router.get('/staff', requireAuth, async (c) => {
@@ -68,8 +67,29 @@ router.delete('/staff/:userId', requireAuth, async (c) => {
   return c.json({ success: true, data: null })
 })
 
-// ── Accept invitation (public — no auth required) ─────────────────────────────
-router.post(
+// ── Cancel pending invitation (admin only) ────────────────────────────────────
+router.delete('/staff/invitations/:id', requireAuth, async (c) => {
+  const auth = c.get('auth')
+  if (auth.role !== 'ADMIN_CLINIC' && auth.role !== 'SUPER_ADMIN') {
+    throw new ForbiddenError('Only clinic admins can cancel invitations')
+  }
+  await staffService.cancelInvitation(auth.tenant_id, c.req.param('id')!)
+  return c.json({ success: true, data: null })
+})
+
+// ── Resend pending invitation (admin only) ────────────────────────────────────
+router.post('/staff/invitations/:id/resend', requireAuth, async (c) => {
+  const auth = c.get('auth')
+  if (auth.role !== 'ADMIN_CLINIC' && auth.role !== 'SUPER_ADMIN') {
+    throw new ForbiddenError('Only clinic admins can resend invitations')
+  }
+  const data = await staffService.resendInvitation(
+    auth.tenant_id, auth.sub, auth.email, c.req.param('id')!,
+  )
+  return c.json({ success: true, data })
+})
+
+staffPublicRouter.post(
   '/staff/accept-invite',
   zValidator('json', AcceptInviteSchema),
   async (c) => {
@@ -78,4 +98,4 @@ router.post(
   },
 )
 
-export { router as staffRouter }
+export { router as staffRouter, staffPublicRouter }
