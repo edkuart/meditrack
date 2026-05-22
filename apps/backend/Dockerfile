@@ -25,6 +25,7 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-# Run database migrations without blocking healthcheck startup, then start the server.
+# Run migrations first; abort container startup if they fail so Railway retries
+# rather than serving requests against a stale schema.
 # tsx is in devDependencies — kept intentionally since noEmit: true prevents tsc build
-CMD ["sh", "-c", "npx tsx src/shared/db/migrate.ts || echo 'WARNING: migrations failed; starting API for healthcheck' >&2; npx tsx src/index.ts"]
+CMD ["sh", "-c", "npx tsx src/shared/db/migrate.ts && npx tsx src/index.ts"]
