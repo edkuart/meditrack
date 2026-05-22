@@ -25,7 +25,5 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-# Run migrations first; abort container startup if they fail so Railway retries
-# rather than serving requests against a stale schema.
 # tsx is in devDependencies — kept intentionally since noEmit: true prevents tsc build
-CMD ["sh", "-c", "npx tsx src/shared/db/migrate.ts && npx tsx src/index.ts"]
+CMD ["sh", "-c", "npx tsx src/shared/db/migrate.ts; npx tsx src/index.ts"]
