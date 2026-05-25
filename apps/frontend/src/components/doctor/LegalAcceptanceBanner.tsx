@@ -55,29 +55,46 @@ export function LegalAcceptanceBanner() {
   ].filter(Boolean) as string[]
 
   return (
-    <div className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <ShieldCheck size={16} className="shrink-0" />
-        <p className="text-sm">
-          <span className="font-medium">Políticas actualizadas</span>
+    <div style={{
+      background: 'var(--mt-gradient-primary)',
+      color: '#fff',
+      padding: '10px 16px',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <ShieldCheck size={15} style={{ flexShrink: 0, opacity: 0.85 }} />
+        <p style={{ fontSize: 13, margin: 0, lineHeight: 1.45 }}>
+          <span style={{ fontWeight: 600 }}>Políticas actualizadas</span>
           {' — '}Por favor acepta: {items.join(' y ')} para continuar usando meditrack.
         </p>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         <button
           onClick={handleAcceptAll}
           disabled={accepting}
-          className="flex items-center gap-1.5 bg-white text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-70 transition-colors"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'rgba(255,255,255,.15)',
+            border: '1px solid rgba(255,255,255,.30)',
+            color: '#fff', fontSize: 12, fontWeight: 600,
+            padding: '5px 12px', borderRadius: 7, cursor: 'pointer',
+            transition: 'background .15s',
+            opacity: accepting ? 0.7 : 1,
+          }}
         >
-          {accepting ? <Loader2 size={12} className="animate-spin" /> : null}
+          {accepting && <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />}
           Aceptar todo
         </button>
         <button
           onClick={() => setDismissed(true)}
-          className="text-white/70 hover:text-white transition-colors"
           title="Recordar más tarde"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'rgba(255,255,255,.6)', display: 'flex', padding: 4,
+            transition: 'color .15s',
+          }}
         >
-          <X size={16} />
+          <X size={15} />
         </button>
       </div>
     </div>

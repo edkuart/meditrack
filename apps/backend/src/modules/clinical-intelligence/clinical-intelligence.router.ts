@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import {
   CreateProvenanceSchema,
   CreateClinicalTranscriptSchema,
@@ -16,22 +17,23 @@ const router = new Hono()
 router.use('*', requireAuth)
 
 // GET /patients/:patientId/clinical/summary
-router.get('/patients/:patientId/clinical/summary', async (c) => {
+router.get('/patients/:patientId/clinical/summary', requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ), async (c) => {
   const auth = c.get('auth')
-  const summary = await clinicalIntelligenceService.getClinicalSummary(auth.tenant_id, c.req.param('patientId'))
+  const summary = await clinicalIntelligenceService.getClinicalSummary(auth.tenant_id, c.req.param('patientId')!)
   return c.json({ success: true, data: summary })
 })
 
 // GET /patients/:patientId/clinical/transcripts
-router.get('/patients/:patientId/clinical/transcripts', async (c) => {
+router.get('/patients/:patientId/clinical/transcripts', requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ), async (c) => {
   const auth = c.get('auth')
-  const rows = await clinicalIntelligenceService.listClinicalTranscripts(auth.tenant_id, c.req.param('patientId'))
+  const rows = await clinicalIntelligenceService.listClinicalTranscripts(auth.tenant_id, c.req.param('patientId')!)
   return c.json({ success: true, data: rows })
 })
 
 // POST /patients/:patientId/clinical/transcripts
 router.post(
   '/patients/:patientId/clinical/transcripts',
+  requirePermission(PERMISSIONS.ENCOUNTER_WRITE),
   zValidator('json', CreateClinicalTranscriptSchema),
   async (c) => {
     const auth = c.get('auth')
@@ -47,7 +49,7 @@ router.post(
 )
 
 // PATCH /clinical/transcripts/:id
-router.patch('/clinical/transcripts/:id', zValidator('json', ReviewClinicalTranscriptSchema), async (c) => {
+router.patch('/clinical/transcripts/:id', requirePermission(PERMISSIONS.ENCOUNTER_WRITE), zValidator('json', ReviewClinicalTranscriptSchema), async (c) => {
   const auth = c.get('auth')
   const row = await clinicalIntelligenceService.reviewClinicalTranscript(
     auth.tenant_id,
@@ -60,15 +62,16 @@ router.patch('/clinical/transcripts/:id', zValidator('json', ReviewClinicalTrans
 })
 
 // GET /patients/:patientId/clinical/provenance
-router.get('/patients/:patientId/clinical/provenance', async (c) => {
+router.get('/patients/:patientId/clinical/provenance', requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ), async (c) => {
   const auth = c.get('auth')
-  const rows = await clinicalIntelligenceService.listProvenance(auth.tenant_id, c.req.param('patientId'))
+  const rows = await clinicalIntelligenceService.listProvenance(auth.tenant_id, c.req.param('patientId')!)
   return c.json({ success: true, data: rows })
 })
 
 // POST /patients/:patientId/clinical/provenance
 router.post(
   '/patients/:patientId/clinical/provenance',
+  requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ),
   zValidator('json', CreateProvenanceSchema),
   async (c) => {
     const auth = c.get('auth')
@@ -86,6 +89,7 @@ router.post(
 // GET /patients/:patientId/clinical/review-items?status=PENDING
 router.get(
   '/patients/:patientId/clinical/review-items',
+  requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ),
   zValidator('query', ListReviewItemsSchema),
   async (c) => {
     const auth = c.get('auth')
@@ -101,6 +105,7 @@ router.get(
 // POST /patients/:patientId/clinical/review-items
 router.post(
   '/patients/:patientId/clinical/review-items',
+  requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ),
   zValidator('json', CreateReviewItemSchema),
   async (c) => {
     const auth = c.get('auth')
@@ -118,6 +123,7 @@ router.post(
 // GET /clinical/review-items?status=PENDING&limit=50
 router.get(
   '/clinical/review-items',
+  requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ),
   zValidator('query', ListReviewItemsSchema),
   async (c) => {
     const auth = c.get('auth')
@@ -130,7 +136,7 @@ router.get(
 )
 
 // PATCH /clinical/review-items/:id
-router.patch('/clinical/review-items/:id', zValidator('json', ResolveReviewItemSchema), async (c) => {
+router.patch('/clinical/review-items/:id', requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ), zValidator('json', ResolveReviewItemSchema), async (c) => {
   const auth = c.get('auth')
   const row = await clinicalIntelligenceService.resolveReviewItem(
     auth.tenant_id,

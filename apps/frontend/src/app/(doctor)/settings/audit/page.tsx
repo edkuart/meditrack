@@ -4,40 +4,32 @@ import { useEffect, useState, useCallback } from 'react'
 import { ShieldCheck, ChevronLeft, ChevronRight, Loader2, Filter } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import { getAuditLogs, type AuditLogEntry, type AuditLogPage } from '@/lib/doctor/settings-api'
+import { MTButton } from '@/components/doctor/clinical-ui'
 
 const ACTION_LABELS: Record<string, string> = {
-  LOGIN_SUCCESS: 'Inicio de sesión',
-  LOGIN_FAILURE: 'Intento fallido',
-  LOGOUT: 'Cierre de sesión',
-  TOKEN_REFRESH: 'Token renovado',
-  PATIENT_CREATED: 'Paciente creado',
-  PATIENT_UPDATED: 'Paciente actualizado',
-  PATIENT_VIEWED: 'Paciente consultado',
-  ENCOUNTER_OPENED: 'Consulta abierta',
-  ENCOUNTER_CLOSED: 'Consulta cerrada',
-  TREATMENT_CREATED: 'Tratamiento creado',
-  TREATMENT_ACTIVATED: 'Tratamiento activado',
-  TREATMENT_SUSPENDED: 'Tratamiento suspendido',
-  DOCUMENT_UPLOADED: 'Documento subido',
-  DOCUMENT_VIEWED: 'Documento consultado',
-  DOCUMENT_DELETED: 'Documento eliminado',
-  USER_INVITED: 'Miembro invitado',
-  USER_DEACTIVATED: 'Miembro desactivado',
-  SETTINGS_CHANGED: 'Configuración cambiada',
-  DOSE_CONFIRMED: 'Dosis confirmada',
-  BILLING_CHECKOUT_STARTED: 'Checkout iniciado',
-  BILLING_PLAN_CHANGED: 'Plan actualizado',
-  AI_ASSIST_USED: 'IA utilizada',
+  LOGIN_SUCCESS: 'Inicio de sesión', LOGIN_FAILURE: 'Intento fallido',
+  LOGOUT: 'Cierre de sesión', TOKEN_REFRESH: 'Token renovado',
+  PATIENT_CREATED: 'Paciente creado', PATIENT_UPDATED: 'Paciente actualizado',
+  PATIENT_VIEWED: 'Paciente consultado', ENCOUNTER_OPENED: 'Consulta abierta',
+  ENCOUNTER_CLOSED: 'Consulta cerrada', TREATMENT_CREATED: 'Tratamiento creado',
+  TREATMENT_ACTIVATED: 'Tratamiento activado', TREATMENT_SUSPENDED: 'Tratamiento suspendido',
+  DOCUMENT_UPLOADED: 'Documento subido', DOCUMENT_VIEWED: 'Documento consultado',
+  DOCUMENT_DELETED: 'Documento eliminado', USER_INVITED: 'Miembro invitado',
+  USER_DEACTIVATED: 'Miembro desactivado', SETTINGS_CHANGED: 'Configuración cambiada',
+  DOSE_CONFIRMED: 'Dosis confirmada', BILLING_CHECKOUT_STARTED: 'Checkout iniciado',
+  BILLING_PLAN_CHANGED: 'Plan actualizado', AI_ASSIST_USED: 'IA utilizada',
   EXPORT_REQUESTED: 'Exportación solicitada',
 }
 
-const ACTION_TONE: Record<string, string> = {
-  LOGIN_FAILURE: 'text-red-600 bg-red-50',
-  USER_DEACTIVATED: 'text-amber-700 bg-amber-50',
-  DOCUMENT_DELETED: 'text-red-600 bg-red-50',
-  SETTINGS_CHANGED: 'text-blue-700 bg-blue-50',
-  BILLING_CHECKOUT_STARTED: 'text-blue-700 bg-blue-50',
+const ACTION_TONE: Record<string, { bg: string; color: string }> = {
+  LOGIN_FAILURE:           { bg: 'var(--mt-danger-subtle)', color: 'var(--mt-danger)' },
+  USER_DEACTIVATED:        { bg: '#FEF3C7', color: '#92400E' },
+  DOCUMENT_DELETED:        { bg: 'var(--mt-danger-subtle)', color: 'var(--mt-danger)' },
+  SETTINGS_CHANGED:        { bg: 'var(--mt-primary-subtle)', color: 'var(--mt-primary-deep)' },
+  BILLING_CHECKOUT_STARTED:{ bg: 'var(--mt-primary-subtle)', color: 'var(--mt-primary-deep)' },
 }
+
+const DEFAULT_TONE = { bg: 'var(--mt-elevated)', color: 'var(--mt-text-2)' }
 
 const FILTER_ACTIONS = [
   'LOGIN_SUCCESS', 'LOGIN_FAILURE', 'PATIENT_CREATED', 'PATIENT_VIEWED',
@@ -46,9 +38,13 @@ const FILTER_ACTIONS = [
 ]
 
 function ActionPill({ action }: { action: string }) {
-  const tone = ACTION_TONE[action] ?? 'text-slate-600 bg-slate-100'
+  const tone = ACTION_TONE[action] ?? DEFAULT_TONE
   return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>
+    <span style={{
+      display: 'inline-block', borderRadius: 999,
+      padding: '2px 8px', fontSize: 11, fontWeight: 500,
+      background: tone.bg, color: tone.color,
+    }}>
       {ACTION_LABELS[action] ?? action}
     </span>
   )
@@ -56,23 +52,23 @@ function ActionPill({ action }: { action: string }) {
 
 function LogRow({ log }: { log: AuditLogEntry }) {
   return (
-    <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-      <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap tabular-nums">
-        {new Date(log.created_at).toLocaleString('es', {
-          month: 'short', day: 'numeric',
-          hour: '2-digit', minute: '2-digit',
-        })}
+    <tr style={{ borderBottom: '1px solid var(--mt-border)', transition: 'background .1s' }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--mt-elevated)')}
+      onMouseLeave={e => (e.currentTarget.style.background = '')}
+    >
+      <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--mt-muted)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+        {new Date(log.created_at).toLocaleString('es', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
       </td>
-      <td className="px-4 py-3">
+      <td style={{ padding: '10px 16px' }}>
         <ActionPill action={log.action} />
       </td>
-      <td className="px-4 py-3 text-sm text-slate-600 max-w-[180px] truncate">
+      <td style={{ padding: '10px 16px', fontSize: 12, color: 'var(--mt-text-2)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {log.actor_email ?? log.actor_id.slice(0, 8) + '…'}
       </td>
-      <td className="px-4 py-3 text-xs text-slate-400">
+      <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--mt-muted)' }}>
         {log.resource_type}
         {log.resource_id && (
-          <span className="ml-1 font-mono">
+          <span style={{ marginLeft: 4, fontFamily: 'monospace' }}>
             {log.resource_id.slice(0, 8)}…
           </span>
         )}
@@ -92,77 +88,59 @@ export default function AuditLogPage() {
     if (!token) return
     setLoading(true)
     try {
-      const result = await getAuditLogs(token, {
-        page,
-        limit: 50,
-        action: actionFilter || undefined,
-      })
-      setData(result)
-    } catch {
-      // error silently
-    } finally {
-      setLoading(false)
-    }
+      setData(await getAuditLogs(token, { page, limit: 50, action: actionFilter || undefined }))
+    } catch { /* silent */ } finally { setLoading(false) }
   }, [token, page, actionFilter])
 
   useEffect(() => { load() }, [load])
 
-  function handleFilterChange(value: string) {
-    setActionFilter(value)
-    setPage(1)
-  }
+  function handleFilterChange(value: string) { setActionFilter(value); setPage(1) }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">
-      <div className="flex items-center gap-3">
-        <ShieldCheck size={22} className="text-slate-400" />
+    <div style={{ maxWidth: 840, margin: '0 auto', padding: '32px 16px', display: 'flex', flexDirection: 'column', gap: 20, fontFamily: 'var(--mt-font)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <ShieldCheck size={22} color="var(--mt-muted)" />
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Registro de auditoría</h1>
-          <p className="text-sm text-slate-500">
-            Historial completo de acciones realizadas en la clínica.
-          </p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--mt-text)', margin: 0 }}>Registro de auditoría</h1>
+          <p style={{ fontSize: 13, color: 'var(--mt-muted)', margin: 0 }}>Historial completo de acciones realizadas en la clínica.</p>
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-2">
-        <Filter size={15} className="text-slate-400" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Filter size={15} color="var(--mt-muted)" />
         <select
           value={actionFilter}
           onChange={e => handleFilterChange(e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          style={{
+            border: '1px solid var(--mt-border)', borderRadius: 8,
+            background: 'var(--mt-surface)', padding: '7px 12px',
+            fontSize: 13, color: 'var(--mt-text)', outline: 'none',
+            fontFamily: 'var(--mt-font)',
+          }}
         >
           <option value="">Todas las acciones</option>
-          {FILTER_ACTIONS.map(a => (
-            <option key={a} value={a}>{ACTION_LABELS[a] ?? a}</option>
-          ))}
+          {FILTER_ACTIONS.map(a => <option key={a} value={a}>{ACTION_LABELS[a] ?? a}</option>)}
         </select>
-        {data && (
-          <span className="text-xs text-slate-400">
-            {data.meta.total.toLocaleString()} registros
-          </span>
-        )}
+        {data && <span style={{ fontSize: 12, color: 'var(--mt-muted)' }}>{data.meta.total.toLocaleString()} registros</span>}
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div style={{ borderRadius: 14, border: '1px solid var(--mt-border)', background: 'var(--mt-surface)', overflow: 'hidden' }}>
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 size={20} className="animate-spin text-slate-400" />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 20px' }}>
+            <Loader2 size={20} color="var(--mt-muted)" style={{ animation: 'spin 1s linear infinite' }} />
           </div>
         ) : data?.logs.length === 0 ? (
-          <div className="py-16 text-center text-sm text-slate-400">
+          <div style={{ padding: '64px 20px', textAlign: 'center', fontSize: 13, color: 'var(--mt-muted)' }}>
             No hay registros para el filtro seleccionado.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="border-b border-slate-100 bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Fecha</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Acción</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Actor</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Recurso</th>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--mt-border)', background: 'var(--mt-elevated)' }}>
+                  {['Fecha', 'Acción', 'Actor', 'Recurso'].map(h => (
+                    <th key={h} style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--mt-muted)' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -173,27 +151,20 @@ export default function AuditLogPage() {
         )}
       </div>
 
-      {/* Pagination */}
       {data && data.meta.pages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-slate-500">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
+          <p style={{ color: 'var(--mt-text-2)', margin: 0 }}>
             Página {data.meta.page} de {data.meta.pages}
           </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
-            >
-              <ChevronLeft size={14} /> Anterior
-            </button>
-            <button
-              onClick={() => setPage(p => Math.min(data.meta.pages, p + 1))}
-              disabled={page >= data.meta.pages}
-              className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
-            >
-              Siguiente <ChevronRight size={14} />
-            </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <MTButton variant="outline" size="sm" icon={ChevronLeft}
+              disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+              Anterior
+            </MTButton>
+            <MTButton variant="outline" size="sm" iconRight={ChevronRight}
+              disabled={page >= data.meta.pages} onClick={() => setPage(p => Math.min(data.meta.pages, p + 1))}>
+              Siguiente
+            </MTButton>
           </div>
         </div>
       )}

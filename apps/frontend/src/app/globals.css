@@ -1,58 +1,76 @@
 @import "tailwindcss";
 
 /* ============================================================
-   MEDITRACK · Design Tokens
+   MEDITRACK · Design Tokens — Cool Palette (Blues + Purple + Mint)
    ============================================================ */
 
 :root {
-  /* — Brand — */
-  --mt-primary:        #1a56db;
-  --mt-primary-hover:  #1e40af;
-  --mt-primary-subtle: #dbeafe;
-  --mt-accent:         #0284c7;
+  /* === PRIMARY BLUES === */
+  --mt-primary:        #2563EB;   /* CTA principal */
+  --mt-primary-hover:  #1D4ED8;   /* hover */
+  --mt-primary-deep:   #1E3A8A;   /* sidebar activo, énfasis */
+  --mt-primary-subtle: #EFF6FF;   /* fondo suave azul */
+  --mt-primary-mist:   #DBEAFE;   /* tinte muy claro */
+  --mt-accent:         #38BDF8;   /* sky blue — acento secundario */
 
-  /* — Semantic — */
-  --mt-success:        #059669;
-  --mt-success-subtle: #d1fae5;
-  --mt-warning:        #d97706;
-  --mt-warning-subtle: #fef3c7;
-  --mt-danger:         #dc2626;
-  --mt-danger-subtle:  #fee2e2;
-  --mt-info:           #0284c7;
-  --mt-info-subtle:    #e0f2fe;
+  /* === PURPLE ACCENTS === */
+  --mt-purple:         #6366F1;   /* acento principal purple */
+  --mt-purple-light:   #A78BFA;   /* purple suave */
+  --mt-purple-deep:    #4F46E5;   /* purple profundo */
+  --mt-purple-subtle:  #EDE9FE;   /* fondo purple suave */
 
-  /* — Neutrals — */
-  --mt-bg:       #f8fafc;
-  --mt-surface:  #ffffff;
-  --mt-elevated: #f1f5f9;
-  --mt-text:     #0f172a;
-  --mt-text-2:   #475569;
-  --mt-muted:    #94a3b8;
-  --mt-border:   #e2e8f0;
-  --mt-border-2: #cbd5e1;
+  /* === MINT / TEAL SUCCESS === */
+  --mt-success:        #10B981;
+  --mt-success-subtle: #ECFDF5;
+  --mt-teal:           #2A9D8F;
 
-  /* — Shadows — */
-  --mt-shadow-xs:    0 1px 2px rgba(15,23,42,.04);
-  --mt-shadow-sm:    0 1px 3px rgba(15,23,42,.08);
-  --mt-shadow-md:    0 4px 12px rgba(15,23,42,.10);
-  --mt-shadow-lg:    0 8px 24px rgba(15,23,42,.12);
-  --mt-shadow-focus: 0 0 0 3px rgba(26,86,219,.15);
+  /* === SEMANTIC === */
+  --mt-warning:        #F59E0B;
+  --mt-warning-subtle: #FFFBEB;
+  --mt-danger:         #EF4444;
+  --mt-danger-subtle:  #FEF2F2;
+  --mt-info:           #38BDF8;
+  --mt-info-subtle:    #F0F9FF;
 
-  /* — Radii — */
+  /* === NEUTRALS (cool-leaning) === */
+  --mt-bg:       #F8FAFC;
+  --mt-surface:  #FFFFFF;
+  --mt-elevated: #F1F5F9;
+  --mt-text:     #0F172A;
+  --mt-text-2:   #334155;
+  --mt-muted:    #94A3B8;
+  --mt-border:   #E2E8F0;
+  --mt-border-2: #CBD5E1;
+
+  /* === SHADOWS (con tinte de color) === */
+  --mt-shadow-xs:    0 1px 2px rgba(37, 99, 235, 0.04);
+  --mt-shadow-sm:    0 1px 3px rgba(37, 99, 235, 0.08);
+  --mt-shadow-md:    0 4px 12px rgba(37, 99, 235, 0.10);
+  --mt-shadow-lg:    0 8px 24px rgba(37, 99, 235, 0.12);
+  --mt-shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.20);
+  --mt-shadow-glow:  0 0 20px rgba(99, 102, 241, 0.25), 0 0 40px rgba(37, 99, 235, 0.10);
+
+  /* === GRADIENTS === */
+  --mt-gradient-primary: linear-gradient(135deg, #1D4ED8 0%, #2563EB 50%, #6366F1 100%);
+  --mt-gradient-accent:  linear-gradient(90deg, #2563EB, #6366F1, #A78BFA);
+  --mt-gradient-mint:    linear-gradient(90deg, #10B981, #2A9D8F);
+  --mt-gradient-surface: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+
+  /* === RADII === */
   --mt-r-sm: 6px;
   --mt-r-md: 8px;
   --mt-r-lg: 12px;
   --mt-r-xl: 16px;
 
-  /* — Typography — */
-  --mt-font:      'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* === TYPOGRAPHY === */
+  --mt-font:      'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --mt-font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
 }
 
 @theme inline {
   --color-background: var(--mt-bg);
   --color-foreground: var(--mt-text);
-  --font-sans: var(--font-geist);
+  --font-sans: var(--font-jakarta);
   --font-mono: var(--font-geist-mono);
 
   /* shadcn/ui token mapping */
@@ -78,11 +96,12 @@
   --radius: 0.5rem;
 
   /* chart colors */
-  --color-chart-1: #1a56db;
-  --color-chart-2: #059669;
-  --color-chart-3: #d97706;
-  --color-chart-4: #dc2626;
-  --color-chart-5: #7c3aed;
+  --color-chart-1: #2563EB;
+  --color-chart-2: #10B981;
+  --color-chart-3: #F59E0B;
+  --color-chart-4: #EF4444;
+  --color-chart-5: #6366F1;
+  --color-chart-6: #38BDF8;
 }
 
 /* ============================================================
@@ -93,7 +112,7 @@ body {
   background: var(--mt-bg);
   color: var(--mt-text);
   font-family: var(--mt-font);
-  font-size: 14px;
+  font-size: 14.5px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -103,17 +122,17 @@ body {
    Type utilities
    ============================================================ */
 
-.mt-display    { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; color: var(--mt-text); margin: 0; }
-.mt-heading    { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; color: var(--mt-text); margin: 0; }
-.mt-subheading { font-size: 16px; font-weight: 600; letter-spacing: -0.005em; line-height: 1.3;  color: var(--mt-text); margin: 0; }
-.mt-body       { font-size: 14px; font-weight: 400; color: var(--mt-text); }
-.mt-small      { font-size: 13px; font-weight: 400; color: var(--mt-text-2); margin: 0; }
-.mt-micro      { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mt-muted); margin: 0; }
+.mt-display    { font-size: 30px;   font-weight: 700; letter-spacing: -0.025em; line-height: 1.1;  color: var(--mt-text); margin: 0; }
+.mt-heading    { font-size: 21px;   font-weight: 700; letter-spacing: -0.015em; line-height: 1.2;  color: var(--mt-text); margin: 0; }
+.mt-subheading { font-size: 16px;   font-weight: 600; letter-spacing: -0.008em; line-height: 1.3;  color: var(--mt-text); margin: 0; }
+.mt-body       { font-size: 14.5px; font-weight: 400; line-height: 1.55;        color: var(--mt-text); }
+.mt-small      { font-size: 13px;   font-weight: 400; line-height: 1.5;         color: var(--mt-text-2); margin: 0; }
+.mt-micro      { font-size: 11px;   font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mt-muted); margin: 0; }
 .mt-muted      { color: var(--mt-muted); }
 .mt-text-2     { color: var(--mt-text-2); }
 
 /* ============================================================
-   Animations
+   Animations — existing (preserved)
    ============================================================ */
 
 @keyframes mt-shimmer {
@@ -142,11 +161,75 @@ body {
 }
 
 /* ============================================================
+   Animations — new
+   ============================================================ */
+
+/* Glow border rotante para botones y cards especiales */
+@keyframes mt-glow-rotate {
+  to { transform: rotate(1turn); }
+}
+
+/* Shine sweep — destello que cruza el botón */
+@keyframes mt-shine-sweep {
+  0%   { left: -100%; opacity: 0; }
+  50%  { opacity: 1; }
+  100% { left: 200%;  opacity: 0; }
+}
+
+/* Float suave para cards de métricas */
+@keyframes mt-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-4px); }
+}
+
+/* Entrada desde abajo con fade */
+@keyframes mt-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Border glow pulse para elementos activos */
+@keyframes mt-border-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+  50%       { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+}
+
+/* Color sweep en gradient text */
+@keyframes mt-gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ============================================================
    Utility classes
    ============================================================ */
 
 .mt-page-in       { animation: mt-page-in .3s ease-out; }
 .mt-fade-scale-in { animation: mt-fade-scale-in .3s ease-out; }
+
+.mt-slide-up {
+  animation: mt-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.mt-gradient-text {
+  background: linear-gradient(90deg, #2563EB, #6366F1, #A78BFA, #38BDF8);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: mt-gradient-shift 4s ease infinite;
+}
+
+/* Card con hover glow y lift */
+.mt-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.mt-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(99, 102, 241, 0.12), 0 2px 8px rgba(37, 99, 235, 0.08);
+  border-color: rgba(99, 102, 241, 0.3);
+}
 
 .mt-skeleton {
   background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
@@ -165,6 +248,57 @@ body {
 }
 
 /* ============================================================
+   Botón solid con glow border + shine sweep
+   ============================================================ */
+
+.mt-btn-glow {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #2563EB, #6366F1);
+  border: none;
+  color: white;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+.mt-btn-glow::before {
+  content: '';
+  position: absolute;
+  top: -2px; left: -2px; right: -2px; bottom: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    #6366F1 20%,
+    #A78BFA 35%,
+    #38BDF8 50%,
+    #2563EB 65%,
+    transparent 80%
+  );
+  z-index: -1;
+  animation: mt-glow-rotate 3s linear infinite;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.mt-btn-glow:hover::before {
+  opacity: 1;
+}
+.mt-btn-glow::after {
+  content: '';
+  position: absolute;
+  top: 1px; left: 1px; right: 1px; bottom: 1px;
+  background: linear-gradient(135deg, #2563EB, #6366F1);
+  border-radius: calc(inherit - 2px);
+  z-index: 0;
+}
+.mt-btn-glow > * { position: relative; z-index: 1; }
+.mt-btn-glow:hover {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 0 4px 15px rgba(37, 99, 235, 0.3);
+  transform: translateY(-1px);
+}
+.mt-btn-glow:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* ============================================================
    Scrollbars
    ============================================================ */
 
@@ -176,53 +310,45 @@ body {
    Responsive layout utilities
    ============================================================ */
 
-/* Page wrapper — shrinks padding on small screens */
 .mt-page {
   padding: 28px 32px 48px;
 }
 
-/* Topbar horizontal padding */
 .mt-topbar-pad {
   padding-left: 32px;
   padding-right: 32px;
 }
 
-/* 4-column metric grid → 2 cols on mobile */
 .mt-grid-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 
-/* Main body 1.4:1 split → single column on mobile */
 .mt-grid-body {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 16px;
 }
 
-/* 2-column halves → single column on mobile */
 .mt-grid-halves {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
 }
 
-/* 2-column form grid → single column on mobile */
 .mt-grid-form-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-/* Quick action 2×2 grid → stacked on mobile */
 .mt-grid-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-/* Force all grid items to not bleed beyond their track */
 .mt-grid-body > *,
 .mt-grid-halves > *,
 .mt-grid-metrics > *,
@@ -239,7 +365,7 @@ body {
   .mt-grid-halves   { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .mt-grid-form-2   { grid-template-columns: minmax(0, 1fr); }
   .mt-grid-actions  { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mt-display       { font-size: 22px; }
+  .mt-display       { font-size: 24px; }
 }
 
 /* ============================================================
@@ -398,7 +524,7 @@ body {
   border: 1px solid var(--mt-border);
   border-radius: 10px;
   font-size: 13px;
-  background: #fff;
+  background: var(--mt-surface);
 }
 
 .portal-bottom-nav {
@@ -517,7 +643,7 @@ body {
 
 @media (min-width: 860px) {
   .portal-main-grid {
-    grid-template-columns: minmax(0, 390px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
   }
 }
 
@@ -555,4 +681,486 @@ body {
   .portal-checkin-vitals {
     grid-template-columns: 1fr !important;
   }
+}
+/* ============================================================
+   MEDITRACK · Patient portal — additions (rediseño 2026-05)
+   ============================================================
+   Pega este bloque AL FINAL de src/app/globals.css.
+   No reemplaza nada existente — sólo añade keyframes y
+   clases del portal del paciente. Si ves duplicados con
+   bloques previos del portal (.portal-shell, .portal-card, etc.)
+   esos se mantienen como están; aquí solo se agregan nuevas
+   utilidades y se sobreescriben quirúrgicamente algunas.
+   ============================================================ */
+
+
+/* ─── Animations: celebration + tap feedback ────────────────── */
+@keyframes mt-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes mt-ring-expand {
+  0%   { transform: scale(0.6); opacity: 0.7; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+@keyframes mt-tap {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(0.96); }
+}
+
+
+/* ─── Dose card: "misión del día" ───────────────────────────── */
+.portal-dose-card {
+  position: relative;
+  background: var(--mt-surface);
+  border: 1px solid var(--mt-border);
+  border-radius: 16px;
+  padding: 16px 16px 14px;
+  box-shadow: var(--mt-shadow-sm);
+  overflow: hidden;
+  animation: mt-fade-scale-in 0.3s ease-out;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.portal-dose-card.pending      { border-color: #FDE68A; }
+.portal-dose-card.pending:hover{ box-shadow: 0 6px 20px rgba(245, 158, 11, 0.16); transform: translateY(-1px); }
+.portal-dose-card.confirmed    { background: var(--mt-success-subtle); border-color: #A7F3D0; }
+.portal-dose-card.missed       { background: var(--mt-danger-subtle);  border-color: #FECACA; }
+
+/* Strip de acento a la izquierda en cards pendientes */
+.portal-dose-card.pending::before {
+  content: '';
+  position: absolute; top: 0; bottom: 0; left: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+}
+.portal-dose-card.confirmed::before {
+  content: '';
+  position: absolute; top: 0; bottom: 0; left: 0;
+  width: 4px; background: var(--mt-success);
+}
+
+/* Chip de hora destacado dentro del dose card */
+.portal-time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--mt-elevated);
+  color: var(--mt-text);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+}
+.portal-dose-card.pending   .portal-time-chip { background: #FEF3C7; color: #B45309; }
+.portal-dose-card.confirmed .portal-time-chip { background: #fff;     color: #047857; }
+.portal-dose-card.missed    .portal-time-chip { background: #fff;     color: #B91C1C; }
+
+/* Badge "con comida" — amigable, no advertencia */
+.portal-food-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+
+/* ─── Botón flagship: "Confirmar dosis" ─────────────────────── */
+.portal-confirm-btn {
+  position: relative;
+  width: 100%;
+  min-height: 56px;
+  margin-top: 14px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--mt-primary) 0%, var(--mt-primary-deep) 100%);
+  color: #fff;
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-family: var(--mt-font);
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow:
+    0 4px 14px rgba(37, 99, 235, 0.30),
+    0 1px 2px rgba(37, 99, 235, 0.15);
+  transition: box-shadow 0.2s ease, transform 0.12s ease;
+}
+.portal-confirm-btn:hover {
+  box-shadow:
+    0 6px 22px rgba(37, 99, 235, 0.36),
+    0 2px 6px rgba(37, 99, 235, 0.20);
+}
+.portal-confirm-btn:active   { transform: scale(0.985); }
+.portal-confirm-btn:disabled { opacity: 0.75; cursor: not-allowed; }
+.portal-confirm-btn::after {
+  content: '';
+  position: absolute; top: 0; left: -100%;
+  width: 60%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+  transition: none;
+}
+.portal-confirm-btn:hover::after { animation: mt-shine-sweep 1.1s ease-out; }
+
+
+/* ─── Strip post-confirmación: celebración sutil ────────────── */
+.portal-confirm-strip {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #A7F3D0;
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--mt-text-2);
+}
+.portal-confirm-strip strong { color: var(--mt-text); font-weight: 700; }
+.portal-confirm-strip-icon {
+  position: relative;
+  width: 30px; height: 30px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--mt-success);
+  color: #fff;
+  animation: mt-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.portal-confirm-strip-icon::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--mt-success);
+  animation: mt-ring-expand 0.7s ease-out 0.1s both;
+}
+
+
+/* ─── Strip post-perdida: empática, sin regaño ──────────────── */
+.portal-missed-strip {
+  margin-top: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #FECACA;
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--mt-text-2);
+  line-height: 1.45;
+}
+.portal-missed-strip strong { color: var(--mt-text); font-weight: 700; }
+
+
+/* ─── Adherence card: hero stat ─────────────────────────────── */
+.portal-adherence-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--mt-gradient-primary);
+  color: #fff;
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  box-shadow:
+    0 8px 24px rgba(37, 99, 235, 0.28),
+    0 2px 6px rgba(37, 99, 235, 0.18);
+}
+.portal-adherence-card::before {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 160px; height: 160px;
+  border-radius: 50%;
+  border: 42px solid rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+.portal-adherence-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
+}
+.portal-adherence-figure {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+  line-height: 1;
+}
+.portal-adherence-figure-big {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.portal-adherence-figure-sub {
+  font-size: 17px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  padding-bottom: 5px;
+}
+.portal-adherence-message {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.45;
+}
+.portal-streak-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  backdrop-filter: blur(8px);
+}
+
+
+/* ─── Hero: greeting + mood ─────────────────────────────────── */
+.portal-hero { align-items: flex-start; }
+.portal-hero-title {
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.028em !important;
+  line-height: 1.1 !important;
+}
+.portal-hero-meta {
+  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 13px;
+  color: var(--mt-text-2);
+}
+.portal-hero-meta-sep {
+  display: inline-block;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--mt-border-2);
+  margin: 0 2px 2px;
+}
+
+@media (max-width: 767px) {
+  .portal-hero-title { font-size: 24px !important; }
+}
+
+
+/* ─── Check-in: pain slider con espectro de color ───────────── */
+.portal-pain-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+    #10B981 0%,    /* 0  · sin dolor  */
+    #84CC16 22%,
+    #FBBF24 50%,   /* 5  · moderado   */
+    #F97316 76%,
+    #EF4444 100%   /* 10 · intenso    */
+  );
+  outline: none;
+  cursor: pointer;
+}
+.portal-pain-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--mt-primary);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  cursor: grab;
+}
+.portal-pain-slider::-moz-range-thumb {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--mt-primary);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  cursor: grab;
+}
+.portal-pain-bubble {
+  min-width: 36px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--mt-text);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+
+/* ─── Panel de señales de alarma: claramente separado ───────── */
+.portal-redflag-panel {
+  margin-bottom: 12px;
+  border: 1px solid #FECACA;
+  background: var(--mt-danger-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.portal-redflag-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  font-family: var(--mt-font);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #B91C1C;
+  text-align: left;
+  cursor: pointer;
+}
+.portal-redflag-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: #B91C1C;
+  background: #fff;
+  border: 1px solid #FECACA;
+  border-radius: 999px;
+  padding: 2px 8px;
+  min-width: 24px;
+  text-align: center;
+}
+.portal-redflag-body {
+  padding: 4px 12px 12px;
+}
+
+
+/* ─── Bottom nav: tab activa más legible ────────────────────── */
+.portal-nav-link {
+  position: relative;
+}
+.portal-nav-link::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 0;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--mt-primary);
+  transform: translateX(-50%);
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.portal-nav-link.active::before { width: 28px; }
+.portal-nav-pill {
+  padding: 5px 16px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, transform 0.12s ease;
+}
+.portal-nav-link.active .portal-nav-pill { background: var(--mt-primary-subtle); }
+.portal-nav-link:active   .portal-nav-pill { transform: scale(0.9); }
+
+
+/* ─── Plan page: tarjetas con sabor de paciente ─────────────── */
+.portal-plan-summary {
+  border: 1px solid var(--mt-primary-mist);
+  background: var(--mt-primary-subtle);
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+.portal-plan-card {
+  background: var(--mt-surface);
+  border: 1px solid var(--mt-border);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--mt-shadow-sm);
+}
+.portal-plan-card-head {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--mt-border);
+}
+.portal-plan-active-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--mt-success-subtle);
+  color: #047857;
+  border: 1px solid #A7F3D0;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.portal-plan-item {
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+}
+.portal-plan-item + .portal-plan-item {
+  border-top: 1px solid var(--mt-border);
+}
+.portal-plan-item-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.portal-plan-item-icon.med {
+  background: var(--mt-primary-subtle);
+  color: var(--mt-primary);
+}
+.portal-plan-item-icon.intervention {
+  background: var(--mt-success-subtle);
+  color: var(--mt-success);
+}
+.portal-time-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--mt-primary-subtle);
+  color: var(--mt-primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+}
+.portal-intervention-note {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--mt-success-subtle);
+  color: #065F46;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.portal-med-note {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--mt-elevated);
+  color: var(--mt-text-2);
+  font-size: 13px;
+  line-height: 1.5;
 }

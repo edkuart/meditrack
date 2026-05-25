@@ -1,18 +1,22 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ShieldCheck, Users, Building2, Clock, CheckCircle2,
   XCircle, LogOut, ChevronRight, Loader2, AlertTriangle,
+  KeyRound, FileClock,
 } from 'lucide-react'
 import {
-  getAdminToken, clearAdminSession,
+  clearAdminSession,
   fetchMetrics, fetchUsers, verifyDoctor, rejectDoctor, fetchTenants, updateTenant,
-  type PendingDoctor, type Tenant, type AdminMetrics,
+  fetchPasswordTickets, updatePasswordTicket, issuePasswordResetLink,
+  fetchAdminAuditLogs,
+  type PendingDoctor, type Tenant, type AdminMetrics, type PasswordTicket, type PasswordTicketStatus, type AdminAuditLog,
 } from '@/lib/admin/admin-api'
 
-type Tab = 'pending' | 'tenants'
+type Tab = 'pending' | 'tickets' | 'tenants' | 'audit'
 
 function StatCard({ label, value, icon: Icon, accent }: {
   label: string; value: number; icon: React.ElementType; accent: string
@@ -145,43 +149,236 @@ function DoctorRow({ doctor, onVerify, onReject }: {
   )
 }
 
+function PasswordTicketRow({ ticket, onUpdate }: {
+  ticket: PasswordTicket
+  onUpdate: (id: string, status: 'IN_REVIEW' | 'RESOLVED' | 'REJECTED', adminNotes?: string) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [notes, setNotes] = useState(ticket.admin_notes ?? '')
+  const [resetLink, setResetLink] = useState<{ url: string; expiresAt: string } | null>(null)
+
+  async function act(status: 'IN_REVIEW' | 'RESOLVED' | 'REJECTED') {
+    setBusy(true)
+    try {
+      await updatePasswordTicket(ticket.id, { status, admin_notes: notes || undefined })
+      onUpdate(ticket.id, status, notes || undefined)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function issueResetLink() {
+    setBusy(true)
+    try {
+      const result = await issuePasswordResetLink(ticket.id)
+      setResetLink({ url: result.data.reset_url, expiresAt: result.data.expires_at })
+      onUpdate(ticket.id, 'IN_REVIEW', notes || ticket.admin_notes || undefined)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const badge = ticket.status === 'OPEN'
+    ? { label: 'Abierto', bg: 'rgba(251,191,36,.12)', color: '#fbbf24' }
+    : ticket.status === 'IN_REVIEW'
+      ? { label: 'En revisión', bg: 'rgba(96,165,250,.12)', color: '#60a5fa' }
+      : ticket.status === 'RESOLVED'
+        ? { label: 'Resuelto', bg: 'rgba(52,211,153,.12)', color: '#34d399' }
+        : { label: 'Rechazado', bg: 'rgba(239,68,68,.12)', color: '#f87171' }
+
+  return (
+    <div style={{
+      background: '#1e293b', border: '1px solid #334155',
+      borderRadius: 10, padding: '16px 18px',
+      display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#f1f5f9' }}>
+            {ticket.requester_name || (ticket.user ? `${ticket.user.first_name} ${ticket.user.last_name}`.trim() : ticket.requester_email)}
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{ticket.requester_email}</div>
+        </div>
+        <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: badge.bg, color: badge.color, fontWeight: 500, flexShrink: 0 }}>
+          {badge.label}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Clínica</div>
+          <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 1 }}>{ticket.tenant?.name ?? 'Sin clínica'}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Origen</div>
+          <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 1 }}>
+            {ticket.source === 'AUTHENTICATED_PROFILE' ? 'Perfil autenticado' : 'Login'}
+          </div>
+        </div>
+      </div>
+
+      {ticket.message && (
+        <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#cbd5e1', lineHeight: 1.5 }}>
+          {ticket.message}
+        </div>
+      )}
+
+      <textarea
+        value={notes}
+        onChange={event => setNotes(event.target.value)}
+        placeholder="Notas internas para seguimiento..."
+        rows={2}
+        style={{
+          width: '100%',
+          boxSizing: 'border-box',
+          resize: 'vertical',
+          borderRadius: 8,
+          border: '1px solid #334155',
+          background: '#0f172a',
+          color: '#cbd5e1',
+          padding: '9px 10px',
+          fontSize: 12,
+          lineHeight: 1.4,
+          outline: 'none',
+        }}
+      />
+
+      {resetLink && (
+        <div style={{
+          border: '1px solid rgba(96,165,250,.35)',
+          background: 'rgba(96,165,250,.09)',
+          borderRadius: 8,
+          padding: '10px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}>
+          <div style={{ fontSize: 12, color: '#93c5fd', fontWeight: 700 }}>Enlace emitido</div>
+          <div style={{ fontSize: 11, color: '#64748b' }}>
+            Expira: {new Date(resetLink.expiresAt).toLocaleString('es-GT')}
+          </div>
+          <button
+            type="button"
+            onClick={() => navigator.clipboard?.writeText(resetLink.url)}
+            style={ticketButtonStyle('#60a5fa', false)}
+          >
+            Copiar enlace
+          </button>
+        </div>
+      )}
+
+      {(ticket.status === 'OPEN' || ticket.status === 'IN_REVIEW') && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={issueResetLink} disabled={busy} style={ticketButtonStyle('#f472b6', busy)}>
+            Emitir enlace
+          </button>
+          {ticket.status === 'OPEN' && (
+            <button onClick={() => act('IN_REVIEW')} disabled={busy} style={ticketButtonStyle('#60a5fa', busy)}>
+              Revisar
+            </button>
+          )}
+          <button onClick={() => act('RESOLVED')} disabled={busy} style={ticketButtonStyle('#16a34a', busy)}>
+            Resolver
+          </button>
+          <button onClick={() => act('REJECTED')} disabled={busy} style={ticketButtonStyle('#ef4444', busy)}>
+            Rechazar
+          </button>
+        </div>
+      )}
+
+      <div style={{ fontSize: 11, color: '#334155' }}>
+        Creado: {new Date(ticket.created_at).toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })}
+      </div>
+    </div>
+  )
+}
+
+function ticketButtonStyle(color: string, busy: boolean): CSSProperties {
+  return {
+    height: 32, padding: '0 12px', borderRadius: 8,
+    border: `1px solid ${color}66`, background: `${color}22`,
+    color, fontSize: 12, fontWeight: 600,
+    cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1,
+  }
+}
+
+function AuditLogRow({ log }: { log: AdminAuditLog }) {
+  const contextAction = typeof log.context?.action === 'string' ? log.context.action : null
+  const title = contextAction ?? log.action
+  const detail = [
+    log.actor_email ?? log.actor_type,
+    log.resource_type,
+    log.resource_id?.slice(0, 8),
+  ].filter(Boolean).join(' · ')
+
+  return (
+    <div style={{
+      background: '#1e293b', border: '1px solid #334155',
+      borderRadius: 10, padding: '14px 16px',
+      display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12,
+      alignItems: 'start',
+    }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <FileClock size={14} color="#60a5fa" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {title}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: '#64748b', marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {detail}
+        </div>
+        {log.ip_address && (
+          <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
+            IP {log.ip_address}
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>
+        {new Date(log.created_at).toLocaleString('es-GT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('pending')
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null)
   const [doctors, setDoctors] = useState<PendingDoctor[]>([])
   const [tenants, setTenants] = useState<Tenant[]>([])
+  const [tickets, setTickets] = useState<PasswordTicket[]>([])
+  const [ticketFilter, setTicketFilter] = useState<PasswordTicketStatus | 'all'>('OPEN')
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([])
   const [loading, setLoading] = useState(true)
-
-  const token = getAdminToken()
-
-  useEffect(() => {
-    if (!token) { router.replace('/admin/login'); return }
-  }, [token, router])
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [m, u, t] = await Promise.all([
+      const [m, u, t, pt, audit] = await Promise.all([
         fetchMetrics(),
         fetchUsers('pending'),
         fetchTenants(),
+        fetchPasswordTickets(ticketFilter),
+        fetchAdminAuditLogs(),
       ])
       setMetrics(m.data)
       setDoctors(u.data)
       setTenants(t.data)
+      setTickets(pt.data)
+      setAuditLogs(audit.data)
     } catch {
-      clearAdminSession()
+      await clearAdminSession()
       router.replace('/admin/login')
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [router, ticketFilter])
 
   useEffect(() => { loadData() }, [loadData])
 
-  function handleLogout() {
-    clearAdminSession()
+  async function handleLogout() {
+    await clearAdminSession()
     router.replace('/admin/login')
   }
 
@@ -193,6 +390,16 @@ export default function AdminDashboardPage() {
   async function handleTenantStatus(id: string, status: 'active' | 'suspended') {
     await updateTenant(id, { status })
     setTenants(prev => prev.map(t => t.id === id ? { ...t, status } : t))
+  }
+
+  function updateTicket(id: string, status: 'IN_REVIEW' | 'RESOLVED' | 'REJECTED', adminNotes?: string) {
+    setTickets(prev => prev.map(t => t.id === id ? { ...t, status, admin_notes: adminNotes ?? t.admin_notes, updated_at: new Date().toISOString() } : t))
+    if (metrics) {
+      const wasOpen = tickets.find(t => t.id === id)?.status === 'OPEN'
+      if (wasOpen) {
+        setMetrics({ ...metrics, tickets: { password_open: Math.max(0, metrics.tickets.password_open - 1) } })
+      }
+    }
   }
 
   return (
@@ -234,13 +441,16 @@ export default function AdminDashboardPage() {
               <StatCard label="Pendientes de verificación" value={metrics?.doctors.pending_verification ?? 0} icon={Clock} accent="#fbbf24" />
               <StatCard label="Tenants totales" value={metrics?.tenants.total ?? 0} icon={Building2} accent="#a78bfa" />
               <StatCard label="Tenants activos" value={metrics?.tenants.active ?? 0} icon={CheckCircle2} accent="#34d399" />
+              <StatCard label="Tickets de contraseña" value={metrics?.tickets.password_open ?? 0} icon={KeyRound} accent="#f472b6" />
             </div>
 
             {/* Tabs */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #1e293b', paddingBottom: 0 }}>
               {[
                 { key: 'pending' as Tab, label: 'Doctores pendientes', badge: metrics?.doctors.pending_verification },
+                { key: 'tickets' as Tab, label: 'Tickets', badge: metrics?.tickets.password_open },
                 { key: 'tenants' as Tab, label: 'Tenants' },
+                { key: 'audit' as Tab, label: 'Auditoría' },
               ].map(t => (
                 <button
                   key={t.key}
@@ -289,6 +499,54 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
+            {tab === 'tickets' && (
+              <div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                  {([
+                    ['OPEN', 'Abiertos'],
+                    ['IN_REVIEW', 'En revisión'],
+                    ['RESOLVED', 'Resueltos'],
+                    ['REJECTED', 'Rechazados'],
+                    ['all', 'Todos'],
+                  ] as Array<[PasswordTicketStatus | 'all', string]>).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setTicketFilter(value)}
+                      style={{
+                        height: 32,
+                        padding: '0 12px',
+                        borderRadius: 8,
+                        border: ticketFilter === value ? '1px solid #60a5fa' : '1px solid #334155',
+                        background: ticketFilter === value ? 'rgba(96,165,250,.12)' : 'transparent',
+                        color: ticketFilter === value ? '#60a5fa' : '#94a3b8',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {tickets.length === 0 ? (
+                  <div style={{ textAlign: 'center', paddingTop: 60, color: '#475569' }}>
+                    <CheckCircle2 size={36} color="#34d399" style={{ margin: '0 auto 12px' }} />
+                    <p style={{ fontSize: 15 }}>Sin tickets de contraseña</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+                    {tickets.map(ticket => (
+                      <PasswordTicketRow
+                        key={ticket.id}
+                        ticket={ticket}
+                        onUpdate={updateTicket}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {tab === 'tenants' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {tenants.map(tenant => (
@@ -325,6 +583,23 @@ export default function AdminDashboardPage() {
                     <ChevronRight size={16} color="#334155" />
                   </div>
                 ))}
+              </div>
+            )}
+
+            {tab === 'audit' && (
+              <div>
+                {auditLogs.length === 0 ? (
+                  <div style={{ textAlign: 'center', paddingTop: 60, color: '#475569' }}>
+                    <CheckCircle2 size={36} color="#34d399" style={{ margin: '0 auto 12px' }} />
+                    <p style={{ fontSize: 15 }}>Sin eventos de auditoría</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {auditLogs.map(log => (
+                      <AuditLogRow key={log.id} log={log} />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </>

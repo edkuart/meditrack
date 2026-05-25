@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, type CSSProperties } from 'react'
+import { Fragment, useEffect, useState, useCallback, useRef, type CSSProperties } from 'react'
 import {
   MapPin, Plus, Pencil, Power, Building2,
   Loader2, CheckCircle2, AlertCircle, X, ExternalLink, Navigation, Map,
@@ -1033,16 +1033,15 @@ export default function LocationsSettingsPage() {
                       />
                     </div>
                   ) : (
-                    <>
+                    <Fragment key={loc.id}>
                       <LocationRow
-                        key={`${loc.id}-row`}
                         loc={loc}
                         onEdit={setEditing}
                         onDeactivate={handleDeactivate}
                         isCurrentUser={false}
                       />
-                      <LocationMapPreview key={`${loc.id}-map`} loc={loc} />
-                    </>
+                      <LocationMapPreview loc={loc} />
+                    </Fragment>
                   )
                 ))
               )}

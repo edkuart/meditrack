@@ -3,21 +3,25 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Clock, ShieldCheck, LogOut, RefreshCw } from 'lucide-react'
-import { getMe } from '@/lib/doctor/api'
+import { getMe, logoutSession, refreshSession } from '@/lib/doctor/api'
 
 const TOKEN_KEY = 'meditrack_doctor_token'
+const REFRESH_TOKEN_KEY = 'meditrack_doctor_refresh_token'
 
 export default function PendingVerificationPage() {
   const router = useRouter()
   const [checking, setChecking] = useState(false)
   const [rejectedReason, setRejectedReason] = useState<string | null>(null)
+  const [sessionToken, setSessionToken] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (!token) { router.replace('/login'); return }
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
 
-    // Check if the user has been approved or rejected since they last loaded
-    getMe(token).then(user => {
+    refreshSession().then(next => {
+      setSessionToken(next.access_token)
+      return getMe(next.access_token)
+    }).then(user => {
       if (user.is_verified) { router.replace('/patients') }
       if (user.verification_rejected_at) { setRejectedReason(user.verification_rejected_reason ?? 'Sin razón especificada') }
     }).catch(() => {
@@ -26,10 +30,11 @@ export default function PendingVerificationPage() {
   }, [router])
 
   function handleCheckAgain() {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (!token) { router.replace('/login'); return }
     setChecking(true)
-    getMe(token).then(user => {
+    Promise.resolve(sessionToken ?? refreshSession().then(next => {
+      setSessionToken(next.access_token)
+      return next.access_token
+    })).then(token => getMe(token)).then(user => {
       if (user.is_verified) { router.replace('/patients'); return }
       if (user.verification_rejected_at) {
         setRejectedReason(user.verification_rejected_reason ?? 'Sin razón especificada')
@@ -41,7 +46,8 @@ export default function PendingVerificationPage() {
 
   function handleLogout() {
     localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem('meditrack_doctor_refresh_token')
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    logoutSession(sessionToken).catch(() => {})
     router.replace('/login')
   }
 

@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import {
   getPatientConsents,
   recordConsent,
@@ -60,7 +61,7 @@ router.get('/compliance/patients/:patientId/export', async (c) => {
 
 router.delete(
   '/compliance/patients/:patientId/pii',
-  requireRole('ADMIN_CLINIC', 'SUPER_ADMIN'),
+  requirePermission(PERMISSIONS.HOSPITAL_MANAGE),
   async (c) => {
     const { tenant_id, sub, email } = c.get('auth')
     const data = await anonymizePatient(tenant_id, c.req.param('patientId')!, sub, email)

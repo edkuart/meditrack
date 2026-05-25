@@ -365,9 +365,20 @@ function severityForCheckIn(input: PatientCheckInInput) {
   const hasRedFlags = input.red_flags.length > 0
   const highPain = typeof pain === 'number' && pain >= 8
   const fever = typeof temperature === 'number' && temperature >= 38
+  const noMeds = input.adherence_self_report === 'none'
+  const severeSideEffects = (input.side_effects ?? []).length >= 3
 
-  if (hasRedFlags || highPain || fever || input.medication_issue) return 'ALERT' as const
-  if ((typeof pain === 'number' && pain >= 4) || input.symptoms.length > 0 || input.mood === 'worse') return 'WATCH' as const
+  if (hasRedFlags || highPain || fever || noMeds || input.medication_issue) return 'ALERT' as const
+  if (
+    (typeof pain === 'number' && pain >= 4) ||
+    input.symptoms.length > 0 ||
+    (input.side_effects ?? []).length > 0 ||
+    severeSideEffects ||
+    input.mood === 'worse' ||
+    input.adherence_self_report === 'some' ||
+    input.treatment_perception === 'worse' ||
+    input.energy_level === 'low'
+  ) return 'WATCH' as const
   return 'OK' as const
 }
 
@@ -394,8 +405,14 @@ export async function submitPatientCheckIn(
     pain_score: input.pain_score ?? null,
     temperature_c: input.temperature_c ?? null,
     symptoms: input.symptoms,
+    side_effects: input.side_effects ?? [],
     red_flags: input.red_flags,
-    medication_issue: input.medication_issue,
+    medication_issue: input.medication_issue || input.adherence_self_report === 'none' || input.adherence_self_report === 'some',
+    adherence_self_report: input.adherence_self_report ?? null,
+    adherence_skip_reason: input.adherence_skip_reason?.trim() || null,
+    energy_level: input.energy_level ?? null,
+    sleep_quality: input.sleep_quality ?? null,
+    treatment_perception: input.treatment_perception ?? null,
     mood: input.mood ?? null,
     notes: input.notes?.trim() || null,
     severity,

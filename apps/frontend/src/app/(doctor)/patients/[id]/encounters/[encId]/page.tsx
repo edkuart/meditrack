@@ -171,34 +171,34 @@ const SOAP_SECTION_LABELS: Record<string, string> = {
 
 const COPILOT_SECTION_TONES = {
   slate: {
-    shell: 'border-slate-200 bg-white',
-    header: 'bg-slate-50 text-slate-900',
-    meta: 'text-slate-500',
-    body: 'text-slate-700',
+    shell: 'border-[var(--mt-border)] bg-[var(--mt-surface)]',
+    header: 'bg-[var(--mt-elevated)] text-[var(--mt-text)]',
+    meta: 'text-[var(--mt-muted)]',
+    body: 'text-[var(--mt-text-2)]',
   },
   blue: {
-    shell: 'border-blue-100 bg-blue-50',
-    header: 'bg-blue-100/60 text-blue-950',
-    meta: 'text-blue-700',
-    body: 'text-blue-950',
+    shell: 'border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)]',
+    header: 'bg-[var(--mt-primary-subtle)] text-[var(--mt-primary-deep)]',
+    meta: 'text-[var(--mt-primary)]',
+    body: 'text-[var(--mt-primary-deep)]',
   },
   amber: {
-    shell: 'border-amber-100 bg-amber-50',
-    header: 'bg-amber-100/70 text-amber-950',
-    meta: 'text-amber-700',
-    body: 'text-amber-950',
+    shell: 'border-[#FDE68A] bg-[#FFFBEB]',
+    header: 'bg-[#FEF3C7] text-[#92400E]',
+    meta: 'text-[#B45309]',
+    body: 'text-[#92400E]',
   },
   red: {
-    shell: 'border-red-100 bg-red-50',
-    header: 'bg-red-100/70 text-red-950',
-    meta: 'text-red-700',
-    body: 'text-red-950',
+    shell: 'border-[var(--mt-danger-subtle)] bg-[var(--mt-danger-subtle)]',
+    header: 'bg-[var(--mt-danger-subtle)] text-[var(--mt-danger)]',
+    meta: 'text-[var(--mt-danger)]',
+    body: 'text-[var(--mt-danger)]',
   },
   green: {
-    shell: 'border-green-100 bg-green-50',
-    header: 'bg-green-100/70 text-green-950',
-    meta: 'text-green-700',
-    body: 'text-green-950',
+    shell: 'border-[var(--mt-border)] bg-[var(--mt-success-subtle)]',
+    header: 'bg-[var(--mt-success-subtle)] text-[var(--mt-success)]',
+    meta: 'text-[var(--mt-success)]',
+    body: 'text-[var(--mt-success)]',
   },
 } as const
 
@@ -243,22 +243,25 @@ function ClinicalNoteSection({
   children: ReactNode
 }) {
   return (
-    <details open className="group overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-50 px-4 py-3">
+    <details open className="group overflow-hidden rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)]">
+      <summary className="flex cursor-pointer list-none items-center gap-3 bg-[var(--mt-elevated)] px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-slate-900">{title}</p>
-            <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-              done ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
-            }`}>
+            <p className="text-sm font-semibold text-[var(--mt-text)]">{title}</p>
+            <span
+              className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
+              style={done
+                ? { background: 'var(--mt-success-subtle)', color: 'var(--mt-success)' }
+                : { background: 'var(--mt-elevated)', color: 'var(--mt-muted)' }}
+            >
               {done ? 'Con información' : 'Pendiente'}
             </span>
           </div>
-          <p className="mt-0.5 text-xs leading-5 text-slate-500">{helper}</p>
+          <p className="mt-0.5 text-xs leading-5 text-[var(--mt-muted)]">{helper}</p>
         </div>
-        <ChevronDown size={16} className="shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+        <ChevronDown size={16} className="shrink-0 text-[var(--mt-muted)] transition-transform group-open:rotate-180" />
       </summary>
-      <div className="border-t border-slate-100 p-3">
+      <div className="border-t border-[var(--mt-border)] p-3">
         {children}
       </div>
     </details>
@@ -1516,7 +1519,7 @@ export default function EncounterPage() {
                   key={template.label}
                   type="button"
                   onClick={() => applyNoteTemplate(template)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:text-blue-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-1.5 text-xs font-medium text-[var(--mt-text-2)] transition-colors hover:border-[var(--mt-primary-mist)] hover:text-[var(--mt-primary)]"
                 >
                   <Sparkles size={12} />
                   {template.label}
@@ -1530,7 +1533,7 @@ export default function EncounterPage() {
                 type="button"
                 onClick={() => handleAiAssist('SUMMARIZE_ENCOUNTER')}
                 disabled={Boolean(aiLoading)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)] px-3 py-1.5 text-xs font-medium text-[var(--mt-primary)] transition-colors hover:bg-[var(--mt-primary-subtle)] disabled:opacity-60"
               >
                 {aiLoading === 'SUMMARIZE_ENCOUNTER' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                 Sugerir resumen
@@ -1539,7 +1542,7 @@ export default function EncounterPage() {
                 type="button"
                 onClick={() => handleAiAssist('SIMPLIFY_FOR_PATIENT')}
                 disabled={Boolean(aiLoading)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-success-subtle)] px-3 py-1.5 text-xs font-medium text-[var(--mt-success)] transition-colors hover:opacity-90 disabled:opacity-60"
               >
                 {aiLoading === 'SIMPLIFY_FOR_PATIENT' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                 Lenguaje paciente
@@ -1554,13 +1557,13 @@ export default function EncounterPage() {
           )}
 
           {aiError && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{aiError}</p>
+            <p className="rounded-lg bg-[var(--mt-danger-subtle)] px-3 py-2 text-sm text-[var(--mt-danger)]">{aiError}</p>
           )}
 
         {encounter.chief_complaint && (
           <div>
-            <p className="text-xs font-medium text-slate-400 mb-1">Motivo de consulta</p>
-            <p className="text-sm text-slate-700">{encounter.chief_complaint}</p>
+            <p className="text-xs font-medium text-[var(--mt-muted)] mb-1">Motivo de consulta</p>
+            <p className="text-sm text-[var(--mt-text-2)]">{encounter.chief_complaint}</p>
           </div>
         )}
 
@@ -1572,19 +1575,19 @@ export default function EncounterPage() {
               ['Evaluación', assessment],
               ['Plan', plan || summary],
             ].map(([label, value]) => (
-              <div key={label} className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div key={label} className="overflow-hidden rounded-lg border border-[var(--mt-border)] bg-[var(--mt-elevated)]">
+                <div className="border-b border-[var(--mt-border)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">
                   {label}
                 </div>
-                <div className="min-h-24 whitespace-pre-wrap px-3 py-3 text-sm leading-6 text-slate-700">
-                  {value || <span className="italic text-slate-400">Sin registro</span>}
+                <div className="min-h-24 whitespace-pre-wrap px-3 py-3 text-sm leading-6 text-[var(--mt-text-2)]">
+                  {value || <span className="italic text-[var(--mt-muted)]">Sin registro</span>}
                 </div>
               </div>
             ))}
             {(notes || summary) && (
-              <div className="rounded-lg border border-slate-200 bg-white p-3 md:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notas adicionales</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{[notes, summary].filter(Boolean).join('\n\n')}</p>
+              <div className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3 md:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Notas adicionales</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--mt-text-2)]">{[notes, summary].filter(Boolean).join('\n\n')}</p>
               </div>
             )}
           </div>
@@ -1601,7 +1604,7 @@ export default function EncounterPage() {
                   onChange={e => { setSubjective(e.target.value); setWorkflowStage('SUBJECTIVE') }}
                   rows={5}
                   placeholder="Historia del padecimiento actual, síntomas, revisión por sistemas..."
-                  className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="min-h-36 w-full resize-y rounded-lg border border-[var(--mt-border)] px-3 py-2 text-sm leading-6 text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
                 />
               </ClinicalNoteSection>
 
@@ -1615,7 +1618,7 @@ export default function EncounterPage() {
                   onChange={e => { setObjective(e.target.value); setWorkflowStage('OBJECTIVE') }}
                   rows={5}
                   placeholder="Signos vitales, examen físico, hallazgos, laboratorios relevantes..."
-                  className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="min-h-36 w-full resize-y rounded-lg border border-[var(--mt-border)] px-3 py-2 text-sm leading-6 text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
                 />
               </ClinicalNoteSection>
 
@@ -1629,7 +1632,7 @@ export default function EncounterPage() {
                   onChange={e => { setAssessment(e.target.value); setWorkflowStage('ASSESSMENT') }}
                   rows={5}
                   placeholder="Impresión diagnóstica, CIE-10, diferenciales, riesgos..."
-                  className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="min-h-36 w-full resize-y rounded-lg border border-[var(--mt-border)] px-3 py-2 text-sm leading-6 text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
                 />
               </ClinicalNoteSection>
 
@@ -1643,41 +1646,41 @@ export default function EncounterPage() {
                   onChange={e => { setPlan(e.target.value); setWorkflowStage('PLAN') }}
                   rows={5}
                   placeholder="Plan diagnóstico, tratamiento, educación, seguimiento..."
-                  className="min-h-36 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="min-h-36 w-full resize-y rounded-lg border border-[var(--mt-border)] px-3 py-2 text-sm leading-6 text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
                 />
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <ClinicalButton icon={Pill} onClick={scrollToTreatmentPlan} variant="outline" tone="blue">
                     Agregar medicamento o tratamiento
                   </ClinicalButton>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-[var(--mt-muted)]">
                     El cierre verificará que el plan y el tratamiento hayan sido revisados.
                   </span>
                 </div>
               </ClinicalNoteSection>
             </div>
 
-            <details className="rounded-lg border border-slate-200 bg-white">
-              <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-slate-600">Notas adicionales y resumen para portal</summary>
-              <div className="grid gap-3 border-t border-slate-100 p-3 md:grid-cols-2">
+            <details className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)]">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-[var(--mt-text-2)]">Notas adicionales y resumen para portal</summary>
+              <div className="grid gap-3 border-t border-[var(--mt-border)] p-3 md:grid-cols-2">
                 <textarea
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   rows={4}
                   placeholder="Notas libres internas..."
-                  className="resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="resize-none rounded-lg border border-[var(--mt-border)] px-3 py-2 text-sm text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
                 />
                 <textarea
                   value={summary}
                   onChange={e => setSummary(e.target.value)}
                   rows={4}
                   placeholder="Resumen corto, seguimiento o instrucciones para paciente..."
-                  className="resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="resize-none rounded-lg border border-[var(--mt-border)] px-3 py-2 text-sm text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
                 />
               </div>
             </details>
 
             {notesError && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{notesError}</p>
+              <p className="rounded-lg bg-[var(--mt-danger-subtle)] px-3 py-2 text-sm text-[var(--mt-danger)]">{notesError}</p>
             )}
 
             <div className="flex items-center justify-end gap-3">
@@ -1688,7 +1691,7 @@ export default function EncounterPage() {
                 </span>
               )}
               {!notesSaved && localDraftNotice && (
-                <span className="text-xs text-slate-400">{localDraftNotice}</span>
+                <span className="text-xs text-[var(--mt-muted)]">{localDraftNotice}</span>
               )}
               <ClinicalButton
                 icon={savingNotes ? Loader2 : Save}
@@ -1709,8 +1712,8 @@ export default function EncounterPage() {
         <ClinicalPanel title="Copiloto clínico" icon={Sparkles} collapsible defaultOpen={false}>
           <div className="flex flex-col gap-4 p-5">
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contexto que usará la IA</p>
+              <div className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-elevated)] p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Contexto que usará la IA</p>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {COPILOT_CONTEXT_OPTIONS.map(option => (
                     <button
@@ -1720,19 +1723,19 @@ export default function EncounterPage() {
                       disabled={Boolean(copilotLoading)}
                       className={`rounded-lg border px-3 py-2 text-left transition ${
                         copilotContextScope === option.value
-                          ? 'border-blue-300 bg-white text-blue-900 shadow-sm'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200'
+                          ? 'border-[var(--mt-primary-mist)] bg-[var(--mt-surface)] text-[var(--mt-primary-deep)] shadow-sm'
+                          : 'border-[var(--mt-border)] bg-[var(--mt-surface)] text-[var(--mt-text-2)] hover:border-[var(--mt-primary-mist)]'
                       }`}
                     >
                       <span className="block text-sm font-semibold">{option.label}</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-slate-500">{option.description}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-[var(--mt-muted)]">{option.description}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nivel de análisis</p>
+              <div className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Nivel de análisis</p>
                 <div className="mt-2 grid gap-2">
                   {COPILOT_MODEL_OPTIONS.map(option => (
                     <button
@@ -1742,12 +1745,12 @@ export default function EncounterPage() {
                       disabled={Boolean(copilotLoading)}
                       className={`rounded-lg border px-3 py-2 text-left transition ${
                         copilotModelTier === option.value
-                          ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-200'
+                          ? 'border-[var(--mt-border)] bg-[var(--mt-success-subtle)] text-[var(--mt-success)]'
+                          : 'border-[var(--mt-border)] bg-[var(--mt-surface)] text-[var(--mt-text-2)] hover:border-[var(--mt-border)]'
                       }`}
                     >
                       <span className="block text-sm font-semibold">{option.label}</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-slate-500">{option.description}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-[var(--mt-muted)]">{option.description}</span>
                     </button>
                   ))}
                 </div>
@@ -1780,7 +1783,7 @@ export default function EncounterPage() {
                   }
                 }}
                 placeholder="Escribe una pregunta sobre este paciente o esta consulta..."
-                className="min-h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="min-h-10 flex-1 rounded-lg border border-[var(--mt-border)] px-3 text-sm text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
               />
               <ClinicalButton
                 icon={copilotLoading === 'ASK_CLINICAL_QUESTION' ? Loader2 : Sparkles}
@@ -1797,10 +1800,10 @@ export default function EncounterPage() {
               tone="slate"
             >
               {copilotHistoryError && (
-                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{copilotHistoryError}</p>
+                <p className="rounded-md bg-[var(--mt-danger-subtle)] px-3 py-2 text-sm text-[var(--mt-danger)]">{copilotHistoryError}</p>
               )}
               {!copilotHistoryError && copilotHistory.length === 0 && (
-                <p className="rounded-md bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                <p className="rounded-md bg-[var(--mt-elevated)] px-3 py-3 text-sm text-[var(--mt-muted)]">
                   Todavía no hay respuestas guardadas para esta consulta. Las próximas preguntas aparecerán aquí aunque recargues la página.
                 </p>
               )}
@@ -1819,23 +1822,23 @@ export default function EncounterPage() {
                           setCopilotResult(snapshot)
                           setAiNotice(snapshot.safety_notice)
                         }}
-                        className="w-full rounded-lg border border-slate-100 bg-white px-3 py-2 text-left transition hover:border-blue-100 hover:bg-blue-50/50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="w-full rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-left transition hover:border-[var(--mt-primary-mist)] hover:bg-[var(--mt-primary-subtle)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <span className="block text-sm font-semibold text-slate-900">{getCopilotEventMode(event)}</span>
-                            <span className="mt-0.5 block text-xs text-slate-400">
+                            <span className="block text-sm font-semibold text-[var(--mt-text)]">{getCopilotEventMode(event)}</span>
+                            <span className="mt-0.5 block text-xs text-[var(--mt-muted)]">
                               {new Date(event.created_at).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })}
                             </span>
                           </div>
-                          <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                          <span className="rounded-md bg-[var(--mt-primary-subtle)] px-2 py-1 text-xs font-semibold text-[var(--mt-primary)]">
                             {getCopilotEventAction(event)}
                           </span>
                         </div>
-                        <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-slate-500">
+                        <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-[var(--mt-muted)]">
                           {question ?? snapshot?.summary ?? 'Respuesta previa del copiloto'}
                         </p>
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-[var(--mt-muted)]">
                           {getCopilotEventContext(event)} · {getCopilotEventModelTier(event)} · {getModelLabel(event)}
                         </p>
                       </button>
@@ -1893,7 +1896,7 @@ export default function EncounterPage() {
                           <ClinicalButton icon={Copy} onClick={insertSoapDraft} variant="outline" tone="green">
                             Llenar secciones vacías
                           </ClinicalButton>
-                          <span className="text-xs text-green-700">
+                          <span className="text-xs text-[var(--mt-success)]">
                             No reemplaza texto que ya escribiste.
                           </span>
                         </div>
@@ -1929,7 +1932,7 @@ export default function EncounterPage() {
                               <button
                                 type="button"
                                 onClick={() => setCopilotQuestion(item)}
-                                className="self-start text-xs font-semibold text-blue-700 hover:text-blue-900"
+                                className="self-start text-xs font-semibold text-[var(--mt-primary)] hover:text-[var(--mt-primary-deep)]"
                               >
                                 Usar como pregunta
                               </button>
@@ -1973,24 +1976,23 @@ export default function EncounterPage() {
                 {closeChecks.map(item => (
                   <span
                     key={item.key}
-                    className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs font-semibold ${
-                      item.done
-                        ? 'border-green-200 bg-green-50 text-green-700'
-                        : 'border-amber-200 bg-amber-50 text-amber-700'
-                    }`}
+                    className="inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs font-semibold"
+                    style={item.done
+                      ? { borderColor: 'var(--mt-border)', background: 'var(--mt-success-subtle)', color: 'var(--mt-success)' }
+                      : { borderColor: '#FDE68A', background: '#FEF3C7', color: '#B45309' }}
                   >
                     {item.done ? <CheckCircle size={13} /> : <AlertTriangle size={13} />}
                     {item.label}
                   </span>
                 ))}
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
+              <p className="mt-3 text-sm leading-6 text-[var(--mt-text-2)]">
                 {readyToClose
                   ? 'La consulta tiene los elementos mínimos para cerrarse. Revisa tratamiento, indicaciones y seguimiento antes de finalizar.'
                   : `Puedes guardar el avance. Para cierre ideal faltan: ${missingCloseItems.map(item => item.label).join(', ')}.`}
               </p>
               {(medications.length > 0 || interventions.length > 0) && !treatment && (
-                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                <p className="mt-2 rounded-md px-3 py-2 text-sm" style={{ background: '#FEF3C7', color: '#B45309' }}>
                   Hay tratamiento en edición que todavía no se ha guardado como plan.
                 </p>
               )}
@@ -2021,18 +2023,21 @@ export default function EncounterPage() {
       )}
 
       {/* Treatment builder */}
-      <section id="encounter-treatment-plan" className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden scroll-mt-24">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-            <Pill size={16} className="text-slate-500" />
+      <section id="encounter-treatment-plan" className="bg-[var(--mt-surface)] rounded-2xl border border-[var(--mt-border)] shadow-sm overflow-hidden scroll-mt-24">
+        <div className="px-5 py-4 border-b border-[var(--mt-border)] flex items-center justify-between">
+          <h2 className="font-semibold text-[var(--mt-text)] flex items-center gap-2">
+            <Pill size={16} className="text-[var(--mt-muted)]" />
             Plan de tratamiento
           </h2>
           {treatment && (
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              treatment.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
-              treatment.status === 'DRAFT' ? 'bg-amber-100 text-amber-700' :
-              'bg-slate-100 text-slate-500'
-            }`}>
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={treatment.status === 'ACTIVE'
+                ? { background: 'var(--mt-success-subtle)', color: 'var(--mt-success)' }
+                : treatment.status === 'DRAFT'
+                  ? { background: '#FEF3C7', color: '#B45309' }
+                  : { background: 'var(--mt-elevated)', color: 'var(--mt-muted)' }}
+            >
               {treatment.status === 'ACTIVE' ? 'Activo' :
                treatment.status === 'DRAFT' ? 'Borrador' : treatment.status}
             </span>
@@ -2048,47 +2053,47 @@ export default function EncounterPage() {
                 type="button"
                 onClick={() => setShowTreatmentDetails(prev => !prev)}
                 aria-expanded={showTreatmentDetails}
-                className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white p-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/40"
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3 text-left transition-colors hover:border-[var(--mt-primary-mist)] hover:bg-[var(--mt-primary-subtle)]"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-700">{treatment.name}</p>
-                  <p className="text-xs text-slate-400">
+                  <p className="truncate text-sm font-medium text-[var(--mt-text)]">{treatment.name}</p>
+                  <p className="text-xs text-[var(--mt-muted)]">
                     Desde {new Date(treatment.start_date).toLocaleDateString('es')}
                     {treatment.end_date ? ` hasta ${new Date(treatment.end_date).toLocaleDateString('es')}` : ''}
                   </p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-blue-600">
+                <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[var(--mt-primary)]">
                   {showTreatmentDetails ? 'Ocultar detalles' : 'Ver detalles'}
                   {showTreatmentDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </span>
               </button>
 
               {showTreatmentDetails && (
-                <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+                <div className="rounded-xl border border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)] p-4">
                   <div className="grid gap-3 sm:grid-cols-4">
                     <div>
-                      <p className="text-xs font-medium uppercase text-slate-400">Inicio</p>
-                      <p className="mt-1 text-sm text-slate-700">{new Date(treatment.start_date).toLocaleDateString('es')}</p>
+                      <p className="text-xs font-medium uppercase text-[var(--mt-muted)]">Inicio</p>
+                      <p className="mt-1 text-sm text-[var(--mt-text)]">{new Date(treatment.start_date).toLocaleDateString('es')}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium uppercase text-slate-400">Fin estimado</p>
-                      <p className="mt-1 text-sm text-slate-700">
+                      <p className="text-xs font-medium uppercase text-[var(--mt-muted)]">Fin estimado</p>
+                      <p className="mt-1 text-sm text-[var(--mt-text)]">
                         {treatment.end_date ? new Date(treatment.end_date).toLocaleDateString('es') : 'Sin fecha'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium uppercase text-slate-400">Medicamentos</p>
-                      <p className="mt-1 text-sm text-slate-700">{treatment.medications.length}</p>
+                      <p className="text-xs font-medium uppercase text-[var(--mt-muted)]">Medicamentos</p>
+                      <p className="mt-1 text-sm text-[var(--mt-text)]">{treatment.medications.length}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium uppercase text-slate-400">Indicaciones</p>
-                      <p className="mt-1 text-sm text-slate-700">{(treatment.interventions ?? []).length}</p>
+                      <p className="text-xs font-medium uppercase text-[var(--mt-muted)]">Indicaciones</p>
+                      <p className="mt-1 text-sm text-[var(--mt-text)]">{(treatment.interventions ?? []).length}</p>
                     </div>
                   </div>
 
-                  <div className="mt-4 border-t border-blue-100 pt-4">
-                    <p className="text-xs font-medium uppercase text-slate-400">Indicaciones generales</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+                  <div className="mt-4 border-t border-[var(--mt-primary-mist)] pt-4">
+                    <p className="text-xs font-medium uppercase text-[var(--mt-muted)]">Indicaciones generales</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--mt-text)]">
                       {treatment.instructions || 'Sin indicaciones generales registradas.'}
                     </p>
                   </div>
@@ -2098,11 +2103,11 @@ export default function EncounterPage() {
               {(treatment.medications ?? []).length > 0 && (
                 <div className="flex flex-col gap-2">
                   {(treatment.medications ?? []).map(med => (
-                    <div key={med.id} className="flex items-start gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50">
-                      <Pill size={14} className="text-blue-500 mt-0.5 shrink-0" />
+                    <div key={med.id} className="flex items-start gap-3 p-3 rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)]">
+                      <Pill size={14} className="text-[var(--mt-primary)] mt-0.5 shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-800">{med.drug_name}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-sm font-medium text-[var(--mt-text)]">{med.drug_name}</p>
+                        <p className="text-xs text-[var(--mt-text-2)]">
                           {med.dose_amount} {med.dose_unit}
                           {med.presentation ? ` · ${med.presentation}` : ''}
                           {med.route ? ` · ${med.route}` : ''}
@@ -2112,10 +2117,10 @@ export default function EncounterPage() {
                           {med.duration_days && ` · ${med.duration_days} días`}
                         </p>
                         {showTreatmentDetails && (
-                          <div className="mt-2 flex flex-col gap-1 text-xs text-slate-500">
+                          <div className="mt-2 flex flex-col gap-1 text-xs text-[var(--mt-text-2)]">
                             <p>{med.with_food ? 'Tomar con alimentos.' : 'Sin indicación de alimentos.'}</p>
                             {med.special_instructions && (
-                              <p className="whitespace-pre-wrap text-slate-600">{med.special_instructions}</p>
+                              <p className="whitespace-pre-wrap text-[var(--mt-muted)]">{med.special_instructions}</p>
                             )}
                           </div>
                         )}
@@ -2128,17 +2133,17 @@ export default function EncounterPage() {
               {(treatment.interventions ?? []).length > 0 && (
                 <div className="flex flex-col gap-2">
                   {(treatment.interventions ?? []).map(iv => (
-                    <div key={iv.id} className="flex items-start gap-3 p-3 rounded-xl border border-emerald-100 bg-emerald-50/40">
-                      <Activity size={14} className="text-emerald-600 mt-0.5 shrink-0" />
+                    <div key={iv.id} className="flex items-start gap-3 p-3 rounded-xl border border-[var(--mt-border)] bg-[var(--mt-success-subtle)]">
+                      <Activity size={14} className="text-[var(--mt-success)] mt-0.5 shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-800">{iv.title}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-sm font-medium text-[var(--mt-text)]">{iv.title}</p>
+                        <p className="text-xs text-[var(--mt-text-2)]">
                           {INTERV_TYPE_LABELS[iv.type] ?? iv.type}
                           {iv.frequency ? ` · ${iv.frequency}` : ''}
                           {iv.duration ? ` · ${iv.duration}` : ''}
                         </p>
                         {showTreatmentDetails && iv.instructions && (
-                          <p className="mt-1 whitespace-pre-wrap text-xs text-slate-600">{iv.instructions}</p>
+                          <p className="mt-1 whitespace-pre-wrap text-xs text-[var(--mt-muted)]">{iv.instructions}</p>
                         )}
                       </div>
                     </div>
@@ -2150,7 +2155,7 @@ export default function EncounterPage() {
                 <button
                   onClick={handleActivate}
                   disabled={activating}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-green-500 text-white font-medium text-sm disabled:opacity-60 hover:bg-green-600 transition-colors"
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[var(--mt-success)] text-white font-medium text-sm disabled:opacity-60 hover:opacity-90 transition-opacity"
                 >
                   {activating
                     ? <><Loader2 size={16} className="animate-spin" /> Activando...</>
@@ -2159,14 +2164,14 @@ export default function EncounterPage() {
                 </button>
               )}
               {treatment.status === 'ACTIVE' && (
-                <p className="flex items-center gap-2 text-sm text-green-600">
+                <p className="flex items-center gap-2 text-sm text-[var(--mt-success)]">
                   <CheckCircle size={16} />
                   Tratamiento activo — generando recordatorios de dosis
                 </p>
               )}
             </>
           ) : isClosed ? (
-            <p className="text-sm text-slate-400 text-center py-4">Esta consulta no tiene plan de tratamiento.</p>
+            <p className="text-sm text-[var(--mt-muted)] text-center py-4">Esta consulta no tiene plan de tratamiento.</p>
           ) : (
             <>
               <div style={{
@@ -2342,7 +2347,7 @@ export default function EncounterPage() {
               )}
 
               {treatmentError && (
-                <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{treatmentError}</p>
+                <p className="text-[var(--mt-danger)] text-sm bg-[var(--mt-danger-subtle)] rounded-lg px-3 py-2">{treatmentError}</p>
               )}
 
               {medications.length === 0 && interventions.length === 0 ? (
@@ -2353,7 +2358,7 @@ export default function EncounterPage() {
                 <button
                   onClick={saveTreatment}
                   disabled={savingTreatment}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-500 text-white font-medium text-sm disabled:opacity-60 hover:bg-blue-600 transition-colors"
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[var(--mt-primary)] text-white font-medium text-sm disabled:opacity-60 hover:bg-[var(--mt-primary-deep)] transition-colors"
                 >
                   {savingTreatment
                     ? <><Loader2 size={16} className="animate-spin" /> Guardando...</>
@@ -2370,8 +2375,8 @@ export default function EncounterPage() {
         <div className="flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-slate-800">Portal para seguimiento</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="text-sm font-medium text-[var(--mt-text)]">Portal para seguimiento</p>
+              <p className="mt-1 text-xs text-[var(--mt-text-2)]">
                 Envía WhatsApp con link directo y PIN de respaldo para que el paciente vea su tratamiento, dosis e historial compartido.
               </p>
             </div>
@@ -2398,16 +2403,16 @@ export default function EncounterPage() {
           </div>
 
           {portalError && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{portalError}</p>
+            <p className="rounded-lg bg-[var(--mt-danger-subtle)] px-3 py-2 text-sm text-[var(--mt-danger)]">{portalError}</p>
           )}
 
           {portalAccess && (
-            <div className="rounded-xl border border-green-100 bg-green-50/60 p-4">
+            <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-success-subtle)] p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase text-green-700">
+                <p className="text-xs font-medium uppercase text-[var(--mt-success)]">
                   {portalAccess.channel === 'whatsapp' ? 'WhatsApp enviado al paciente' : 'Link directo listo para entregar'}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[var(--mt-text-2)]">
                   Expira: {new Date(portalAccess.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               </div>
@@ -2416,7 +2421,7 @@ export default function EncounterPage() {
                 <input
                   readOnly
                   value={withFreshPortalSession(portalAccess.access_url)}
-                  className="min-w-0 flex-1 rounded-lg border border-green-100 bg-white px-3 py-2 text-xs text-slate-700"
+                  className="min-w-0 flex-1 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-xs text-[var(--mt-text)]"
                 />
                 <div className="flex gap-2">
                   <ClinicalButton
@@ -2437,13 +2442,13 @@ export default function EncounterPage() {
                   </ClinicalButton>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-slate-500">
+              <p className="mt-3 text-xs text-[var(--mt-text-2)]">
                 {portalAccess.channel === 'whatsapp'
                   ? 'El mensaje incluye este link directo y un PIN de respaldo.'
                   : 'Puedes pegar este link en WhatsApp, SMS o correo. El paciente entra con este enlace sin escribir credenciales.'}
               </p>
               {portalAccess.pin && (
-                <p className="mt-2 text-xs font-medium text-green-700">PIN enviado: {portalAccess.pin}</p>
+                <p className="mt-2 text-xs font-medium text-[var(--mt-success)]">PIN enviado: {portalAccess.pin}</p>
               )}
             </div>
           )}

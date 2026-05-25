@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -14,37 +14,60 @@ import {
 } from 'lucide-react'
 
 // ─────────────────────────────────────────────
-// Tone system — matches design spec
+// Tone system — Cool Palette (Blues + Purple + Mint)
 // ─────────────────────────────────────────────
-export type Tone = 'blue' | 'green' | 'amber' | 'red' | 'slate' | 'purple' | 'sky'
+export type Tone = 'blue' | 'green' | 'amber' | 'red' | 'slate' | 'purple' | 'sky' | 'mint' | 'indigo'
 
 const TONES: Record<Tone, { bg: string; fg: string; bd: string }> = {
-  blue:   { bg: '#eff6ff', fg: '#1e40af', bd: '#bfdbfe' },
-  green:  { bg: '#ecfdf5', fg: '#047857', bd: '#a7f3d0' },
-  amber:  { bg: '#fffbeb', fg: '#b45309', bd: '#fde68a' },
-  red:    { bg: '#fef2f2', fg: '#b91c1c', bd: '#fecaca' },
-  slate:  { bg: '#f1f5f9', fg: '#475569', bd: '#e2e8f0' },
-  purple: { bg: '#faf5ff', fg: '#6b21a8', bd: '#e9d5ff' },
-  sky:    { bg: '#f0f9ff', fg: '#075985', bd: '#bae6fd' },
+  blue:   { bg: '#EFF6FF', fg: '#1D4ED8', bd: '#BFDBFE' },
+  green:  { bg: '#ECFDF5', fg: '#059669', bd: '#A7F3D0' },
+  amber:  { bg: '#FFFBEB', fg: '#B45309', bd: '#FDE68A' },
+  red:    { bg: '#FEF2F2', fg: '#B91C1C', bd: '#FECACA' },
+  slate:  { bg: '#F1F5F9', fg: '#475569', bd: '#E2E8F0' },
+  purple: { bg: '#EDE9FE', fg: '#4F46E5', bd: '#C4B5FD' },
+  sky:    { bg: '#F0F9FF', fg: '#0369A1', bd: '#BAE6FD' },
+  mint:   { bg: '#ECFDF5', fg: '#065F46', bd: '#6EE7B7' },
+  indigo: { bg: '#EEF2FF', fg: '#3730A3', bd: '#C7D2FE' },
 }
 
 // ─────────────────────────────────────────────
-// MTLogo
+// MTLogo — animated gradient wordmark
 // ─────────────────────────────────────────────
 export function MTLogo({ size = 16, mono = false }: { size?: number; mono?: boolean }) {
-  const color = mono ? '#fff' : 'var(--mt-primary)'
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
       <svg width={size + 8} height={size + 8} viewBox="0 0 24 24" fill="none">
-        <rect x="1.5" y="1.5" width="21" height="21" rx="6" fill={mono ? 'rgba(255,255,255,.15)' : 'var(--mt-primary)'} />
+        <defs>
+          <linearGradient id="mt-logo-bg" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+            <stop offset="0%"   stopColor="#1D4ED8" />
+            <stop offset="55%"  stopColor="#2563EB" />
+            <stop offset="100%" stopColor="#6366F1" />
+          </linearGradient>
+        </defs>
+        <rect
+          x="1.5" y="1.5" width="21" height="21" rx="6"
+          fill={mono ? 'rgba(255,255,255,.15)' : 'url(#mt-logo-bg)'}
+        />
         <path d="M5 13 H8 L9.5 9.5 L11.5 16 L13 12 H19"
           stroke="#fff" strokeWidth="1.8" fill="none"
           strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <span style={{
-        fontSize: size, fontWeight: 700, letterSpacing: '-0.02em',
-        color, fontFamily: 'var(--mt-font)',
-      }}>meditrack</span>
+      {mono ? (
+        <span style={{
+          fontSize: size, fontWeight: 700, letterSpacing: '-0.02em',
+          color: '#fff', fontFamily: 'var(--mt-font)',
+        }}>meditrack</span>
+      ) : (
+        <span
+          className="mt-gradient-text"
+          style={{
+            fontSize: size + 2, fontWeight: 700, letterSpacing: '-0.02em',
+            fontFamily: 'var(--mt-font)',
+          }}
+        >
+          meditrack
+        </span>
+      )}
     </div>
   )
 }
@@ -53,13 +76,13 @@ export function MTLogo({ size = 16, mono = false }: { size?: number; mono?: bool
 // MTAvatar — colored-initials circle
 // ─────────────────────────────────────────────
 const AVATAR_TONES = [
-  { bg: '#dbeafe', fg: '#1a56db' },
-  { bg: '#d1fae5', fg: '#059669' },
-  { bg: '#fef3c7', fg: '#b45309' },
-  { bg: '#fee2e2', fg: '#b91c1c' },
-  { bg: '#e0e7ff', fg: '#4338ca' },
-  { bg: '#f3e8ff', fg: '#7e22ce' },
-  { bg: '#cffafe', fg: '#0e7490' },
+  { bg: '#DBEAFE', fg: '#1D4ED8' },
+  { bg: '#ECFDF5', fg: '#059669' },
+  { bg: '#FEF3C7', fg: '#B45309' },
+  { bg: '#FEE2E2', fg: '#B91C1C' },
+  { bg: '#EDE9FE', fg: '#4F46E5' },
+  { bg: '#EEF2FF', fg: '#3730A3' },
+  { bg: '#F0F9FF', fg: '#0369A1' },
 ]
 function hashIdx(s: string, n: number) {
   let h = 0
@@ -136,6 +159,7 @@ export const StatusPill = MTPill
 
 // ─────────────────────────────────────────────
 // MTButton (replaces ClinicalButton)
+// Solid variant uses .mt-btn-glow (rotating conic glow + shine sweep).
 // ─────────────────────────────────────────────
 export function MTButton({
   children,
@@ -149,6 +173,7 @@ export function MTButton({
   href,
   type = 'button',
   style,
+  asChild = false,
 }: {
   children?: ReactNode
   icon?: LucideIcon
@@ -161,44 +186,61 @@ export function MTButton({
   href?: string
   type?: 'button' | 'submit'
   style?: React.CSSProperties
+  asChild?: boolean
 }) {
   const [hover, setHover] = useState(false)
   const [pressed, setPressed] = useState(false)
 
   const sizeMap = {
-    sm: { pad: '6px 10px', fs: 13, h: 30, gap: 6, icon: 13 },
-    md: { pad: '8px 14px', fs: 13, h: 36, gap: 8, icon: 14 },
-    lg: { pad: '10px 18px', fs: 14, h: 42, gap: 8, icon: 15 },
+    sm: { pad: '6px 10px', fs: 13,   h: 30, gap: 6, icon: 13 },
+    md: { pad: '8px 14px', fs: 13,   h: 36, gap: 8, icon: 14 },
+    lg: { pad: '10px 18px', fs: 14,  h: 42, gap: 8, icon: 15 },
   }[size]
 
+  const isSolid = variant === 'solid'
   let bg: string, fg: string, bd: string, sh: string
-  if (variant === 'solid') {
-    bg = hover ? 'var(--mt-primary-hover)' : 'var(--mt-primary)'
-    fg = '#fff'; bd = 'transparent'
-    sh = hover ? '0 4px 12px rgba(26,86,219,.30)' : '0 1px 3px rgba(26,86,219,.25)'
+
+  if (isSolid) {
+    bg = 'transparent'
+    fg = '#fff'
+    bd = 'transparent'
+    sh = hover
+      ? '0 0 20px rgba(99,102,241,.40), 0 4px 15px rgba(37,99,235,.30)'
+      : '0 1px 3px rgba(37,99,235,.25)'
   } else if (variant === 'outline') {
     bg = hover ? 'var(--mt-elevated)' : 'var(--mt-surface)'
-    fg = 'var(--mt-text-2)'; bd = hover ? 'var(--mt-border-2)' : 'var(--mt-border)'
+    fg = 'var(--mt-text-2)'
+    bd = hover ? 'var(--mt-border-2)' : 'var(--mt-border)'
     sh = 'var(--mt-shadow-xs)'
   } else if (variant === 'ghost') {
     bg = hover ? 'var(--mt-elevated)' : 'transparent'
-    fg = 'var(--mt-text-2)'; bd = 'transparent'; sh = 'none'
+    fg = 'var(--mt-text-2)'
+    bd = 'transparent'
+    sh = 'none'
   } else if (variant === 'soft') {
-    bg = TONES[tone].bg; fg = TONES[tone].fg; bd = 'transparent'; sh = 'none'
+    bg = TONES[tone].bg
+    fg = TONES[tone].fg
+    bd = 'transparent'
+    sh = 'none'
   } else {
     // danger
-    bg = hover ? '#b91c1c' : 'var(--mt-danger)'; fg = '#fff'; bd = 'transparent'
-    sh = '0 1px 3px rgba(220,38,38,.30)'
+    bg = hover ? '#B91C1C' : 'var(--mt-danger)'
+    fg = '#fff'
+    bd = 'transparent'
+    sh = '0 1px 3px rgba(239,68,68,.30)'
   }
 
   const baseStyle: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: sizeMap.gap,
-    padding: sizeMap.pad, height: sizeMap.h, fontSize: sizeMap.fs, fontWeight: 500,
+    padding: sizeMap.pad, height: sizeMap.h, fontSize: sizeMap.fs, fontWeight: 600,
     border: `1px solid ${bd}`, background: bg, color: fg, borderRadius: 8,
-    boxShadow: sh, transition: 'background .2s, color .2s, box-shadow .2s, transform .1s, border-color .2s',
+    boxShadow: sh,
+    transition: 'background .2s, color .2s, box-shadow .2s, transform .1s, border-color .2s',
     transform: pressed ? 'scale(.97)' : 'scale(1)',
     whiteSpace: 'nowrap', cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.5 : 1, fontFamily: 'var(--mt-font)',
+    position: isSolid ? 'relative' : undefined,
+    overflow: isSolid ? 'hidden' : undefined,
     ...style,
   }
 
@@ -209,24 +251,63 @@ export function MTButton({
     onMouseUp: () => setPressed(false),
   }
 
+  // Shine-sweep span (solid only)
+  const shine = isSolid ? (
+    <span
+      aria-hidden
+      style={{
+        position: 'absolute',
+        top: 0, bottom: 0, width: 60,
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+        animation: 'mt-shine-sweep 3s ease-in-out infinite',
+        pointerEvents: 'none',
+        zIndex: 2,
+      }}
+    />
+  ) : null
+
+  const childContent = asChild && isValidElement(children)
+    ? (children.props as { children?: ReactNode }).children
+    : children
+
   const content = (
     <>
+      {shine}
       {Icon && <Icon size={sizeMap.icon} />}
-      {children && <span>{children}</span>}
+      {childContent && <span>{childContent}</span>}
       {IconRight && <IconRight size={sizeMap.icon} />}
     </>
   )
 
+  const className = isSolid ? 'mt-btn-glow' : undefined
+
+  if (asChild && isValidElement(children)) {
+    const child = children as React.ReactElement<{
+      className?: string
+      style?: React.CSSProperties
+      onClick?: () => void
+      'aria-disabled'?: boolean
+    }>
+
+    return cloneElement(child, {
+      className: [child.props.className, className].filter(Boolean).join(' ') || undefined,
+      style: { ...baseStyle, ...child.props.style },
+      onClick,
+      'aria-disabled': disabled,
+      ...handlers,
+    }, content)
+  }
+
   if (href) {
     return (
-      <Link href={href} style={baseStyle} aria-disabled={disabled} {...handlers}>
+      <Link href={href} className={className} style={baseStyle} aria-disabled={disabled} {...handlers}>
         {content}
       </Link>
     )
   }
 
   return (
-    <button type={type} onClick={onClick} disabled={disabled} style={baseStyle} {...handlers}>
+    <button type={type} onClick={onClick} disabled={disabled} className={className} style={baseStyle} {...handlers}>
       {content}
     </button>
   )
@@ -237,6 +318,7 @@ export const ClinicalButton = MTButton
 
 // ─────────────────────────────────────────────
 // MTPanel (replaces ClinicalPanel)
+// Accent bar uses gradient strip on the left.
 // ─────────────────────────────────────────────
 export function MTPanel({
   title,
@@ -263,15 +345,27 @@ export function MTPanel({
   const t = TONES[accent]
   return (
     <section style={{
+      position: 'relative',
       background: 'var(--mt-surface)',
       border: '1px solid var(--mt-border)',
       borderRadius: 12,
       boxShadow: 'var(--mt-shadow-sm)',
       overflow: 'hidden',
       minWidth: 0,
-      borderTop: `3px solid ${t.fg}`,
       ...style,
     }}>
+      {/* Gradient accent bar — left edge */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: 0, top: 0, bottom: 0,
+          width: 3,
+          background: 'var(--mt-gradient-accent)',
+          borderRadius: '4px 0 0 4px',
+          zIndex: 1,
+        }}
+      />
       <header
         style={{
           display: 'flex', alignItems: 'center', gap: 12,
@@ -285,7 +379,7 @@ export function MTPanel({
         {Icon && (
           <div style={{
             width: 32, height: 32, borderRadius: 8,
-            background: 'var(--mt-elevated)', color: 'var(--mt-text-2)',
+            background: t.bg, color: t.fg,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
             <Icon size={16} />
@@ -344,7 +438,7 @@ export function MTInput({
   style?: React.CSSProperties
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'>) {
   const [focus, setFocus] = useState(false)
-  const bd = error ? 'var(--mt-danger)' : focus ? 'var(--mt-primary)' : 'var(--mt-border)'
+  const bd = error ? 'var(--mt-danger)' : focus ? 'var(--mt-purple)' : 'var(--mt-border)'
   const sh = focus ? 'var(--mt-shadow-focus)' : 'var(--mt-shadow-xs)'
 
   return (
@@ -555,7 +649,8 @@ export function PriorityRow({
 }
 
 // ─────────────────────────────────────────────
-// MetricCard — dashboard stat card with hover lift
+// MetricCard — dashboard stat card with hover lift,
+// gradient top accent and tinted shadow.
 // ─────────────────────────────────────────────
 export function MetricCard({
   label,
@@ -581,17 +676,29 @@ export function MetricCard({
 
   return (
     <div
+      className="mt-card-hover"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
+        position: 'relative',
         background: 'var(--mt-surface)',
         border: '1px solid var(--mt-border)',
-        borderRadius: 12, padding: 20, position: 'relative',
+        borderRadius: 'var(--mt-r-lg)',
+        padding: 20,
         boxShadow: hover ? 'var(--mt-shadow-md)' : 'var(--mt-shadow-sm)',
-        transform: hover ? 'translateY(-2px)' : 'none',
-        transition: 'box-shadow .2s, transform .2s',
+        overflow: 'hidden',
       }}
     >
+      {/* Gradient top accent bar */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0,
+          height: 3,
+          background: 'var(--mt-gradient-accent)',
+        }}
+      />
       <div style={{
         position: 'absolute', top: 16, right: 16, width: 40, height: 40, borderRadius: '50%',
         background: t.bg, color: t.fg, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -601,8 +708,8 @@ export function MetricCard({
       <div style={{ fontSize: 13, color: 'var(--mt-text-2)', marginBottom: 12 }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 12 }}>
         <span style={{
-          fontSize: 28, fontWeight: 700, color: 'var(--mt-text)',
-          letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums',
+          fontSize: 30, fontWeight: 700, color: 'var(--mt-text)',
+          letterSpacing: '-0.025em', fontVariantNumeric: 'tabular-nums',
         }}>
           {isNum && animate ? <CountUp value={numValue} /> : value}
         </span>
@@ -613,7 +720,7 @@ export function MetricCard({
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 2,
             color: trend.dir === 'up' ? 'var(--mt-success)' : 'var(--mt-danger)',
-            fontSize: 12, fontWeight: 500,
+            fontSize: 12, fontWeight: 600,
           }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2.5"
@@ -677,7 +784,7 @@ export function ClinicalHeader({
     }}>
       <div>
         {eyebrow && (
-          <div className="mt-micro" style={{ color: 'var(--mt-primary)', marginBottom: 8 }}>{eyebrow}</div>
+          <div className="mt-micro" style={{ color: 'var(--mt-purple)', marginBottom: 8 }}>{eyebrow}</div>
         )}
         <h1 className="mt-display">{title}</h1>
         {subtitle && (
@@ -758,7 +865,7 @@ export function ClinicalInsight({
   children: ReactNode
 }) {
   const t = TONES[tone]
-  const Icon = tone === 'green' ? CheckCircle2 : tone === 'amber' ? Clock3 : tone === 'red' ? AlertTriangle : Info
+  const Icon = tone === 'green' || tone === 'mint' ? CheckCircle2 : tone === 'amber' ? Clock3 : tone === 'red' ? AlertTriangle : Info
 
   return (
     <div style={{
@@ -774,9 +881,6 @@ export function ClinicalInsight({
   )
 }
 
-// ─────────────────────────────────────────────
-// ClinicalTimeline
-// ─────────────────────────────────────────────
 // ─────────────────────────────────────────────
 // MTStatBox — bordered metric card (biometrics, vitals)
 // ─────────────────────────────────────────────

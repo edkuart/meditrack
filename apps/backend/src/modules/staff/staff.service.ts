@@ -1,17 +1,30 @@
-import { eq, and, isNull } from 'drizzle-orm'
+import { eq, and, isNull, ne } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
-import { db, users, tenants, staffInvitations } from '../../shared/db/index.ts'
+import { db, users, tenants, staffInvitations, customRoles } from '../../shared/db/index.ts'
 import { departmentMembers } from '../../shared/db/schema/departments.ts'
 import { generateOpaqueToken, hashToken, signAccessToken, generateRefreshToken, refreshTokenExpiresAt } from '../../shared/services/token.service.ts'
 import { sendEmail } from '../../shared/services/email.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { assertStaffLimit } from '../../shared/services/limits.service.ts'
 import { ConflictError, NotFoundError, UnauthorizedError, ForbiddenError } from '../../shared/errors.ts'
-import type { InviteStaffInput, AcceptInviteInput, PromoteStaffInput } from './staff.schema.ts'
+import type {
+  InviteStaffInput,
+  AcceptInviteInput,
+  PromoteStaffInput,
+  CreateCustomRoleInput,
+  UpdateCustomRoleInput,
+} from './staff.schema.ts'
 import { refreshTokens } from '../../shared/db/index.ts'
+import { PERMISSIONS, ROLE_PERMISSIONS, defaultPermissionsForRole, normalizePermissions, resolveEffectivePermissions } from '../../shared/permissions.ts'
 
 const INVITE_EXPIRES_DAYS = 7
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
+type AssignableRole = InviteStaffInput['role']
+const ADMIN_ONLY_PERMISSIONS = new Set<string>([
+  PERMISSIONS.STAFF_MANAGE,
+  PERMISSIONS.HOSPITAL_MANAGE,
+  PERMISSIONS.ANALYTICS_READ,
+])
 
 // ─── List clinic staff ─────────────────────────────────────────────────────────
 
@@ -24,6 +37,7 @@ export async function listStaff(tenantId: string) {
       first_name: true,
       last_name: true,
       role: true,
+      custom_role_id: true,
       specialty: true,
       is_active: true,
       is_verified: true,
@@ -31,6 +45,21 @@ export async function listStaff(tenantId: string) {
     },
     orderBy: (u, { asc }) => asc(u.created_at),
   })
+
+  const roles = await db.query.customRoles.findMany({
+    where: and(eq(customRoles.tenant_id, tenantId), eq(customRoles.is_active, true)),
+    columns: {
+      id: true,
+      name: true,
+      description: true,
+      base_role: true,
+      permissions: true,
+      is_active: true,
+      created_at: true,
+      updated_at: true,
+    },
+  })
+  const rolesById = new Map(roles.map(role => [role.id, role]))
 
   const pending = await db.query.staffInvitations.findMany({
     where: and(
@@ -41,12 +70,176 @@ export async function listStaff(tenantId: string) {
       id: true,
       email: true,
       role: true,
+      custom_role_id: true,
       expires_at: true,
       created_at: true,
     },
   })
 
-  return { staff, pending_invitations: pending.filter(i => i.expires_at > new Date()) }
+  return {
+    staff: staff.map(member => ({
+      ...member,
+      custom_role: member.custom_role_id ? rolesById.get(member.custom_role_id) ?? null : null,
+    })),
+    pending_invitations: pending
+      .filter(i => i.expires_at > new Date())
+      .map(invite => ({
+        ...invite,
+        custom_role: invite.custom_role_id ? rolesById.get(invite.custom_role_id) ?? null : null,
+      })),
+  }
+}
+
+export async function listCustomRoles(tenantId: string) {
+  const tenantRoles = await db.query.customRoles.findMany({
+    where: and(eq(customRoles.tenant_id, tenantId), eq(customRoles.is_active, true)),
+    orderBy: (role, { asc }) => asc(role.name),
+  })
+
+  const system_roles = Object.entries(ROLE_PERMISSIONS)
+    .filter(([role]) => role !== 'SUPER_ADMIN')
+    .map(([role, permissions]) => ({
+      id: role,
+      name: role,
+      base_role: role,
+      description: null,
+      permissions: Array.from(permissions),
+      is_system: true,
+    }))
+
+  return {
+    system_roles,
+    custom_roles: tenantRoles.map(role => ({
+      ...role,
+      permissions: normalizePermissions(role.permissions),
+      is_system: false,
+    })),
+  }
+}
+
+export async function createCustomRole(
+  tenantId: string,
+  creatorId: string,
+  creatorEmail: string,
+  input: CreateCustomRoleInput,
+) {
+  const permissions = normalizePermissions(input.permissions)
+  assertCustomRolePermissions(input.base_role, permissions)
+  const existing = await db.query.customRoles.findFirst({
+    where: and(eq(customRoles.tenant_id, tenantId), eq(customRoles.name, input.name)),
+    columns: { id: true },
+  })
+  if (existing) throw new ConflictError('Ya existe un rol con este nombre', 'CUSTOM_ROLE_EXISTS')
+
+  const [created] = await db.insert(customRoles).values({
+    tenant_id: tenantId,
+    name: input.name,
+    description: input.description,
+    base_role: input.base_role,
+    permissions,
+    created_by: creatorId,
+  }).returning()
+
+  await createAuditLog({
+    tenant_id: tenantId,
+    actor_id: creatorId,
+    actor_type: 'USER',
+    actor_email: creatorEmail,
+    action: 'SETTINGS_CHANGED',
+    resource_type: 'CUSTOM_ROLE',
+    resource_id: created.id,
+    context: { action: 'CUSTOM_ROLE_CREATED', name: created.name, base_role: created.base_role, permissions },
+  })
+
+  return { ...created, permissions, is_system: false }
+}
+
+export async function updateCustomRole(
+  tenantId: string,
+  updaterId: string,
+  updaterEmail: string,
+  roleId: string,
+  input: UpdateCustomRoleInput,
+) {
+  const existing = await db.query.customRoles.findFirst({
+    where: and(eq(customRoles.id, roleId), eq(customRoles.tenant_id, tenantId), eq(customRoles.is_active, true)),
+  })
+  if (!existing) throw new NotFoundError('Custom role')
+
+  const patch: Partial<typeof customRoles.$inferInsert> = {
+    updated_at: new Date(),
+  }
+  if (input.name !== undefined) patch.name = input.name
+  if (input.description !== undefined) patch.description = input.description
+  if (input.base_role !== undefined) patch.base_role = input.base_role
+  if (input.permissions !== undefined) patch.permissions = normalizePermissions(input.permissions)
+
+  assertCustomRolePermissions(
+    input.base_role ?? existing.base_role,
+    input.permissions !== undefined ? normalizePermissions(input.permissions) : normalizePermissions(existing.permissions),
+  )
+
+  if (input.name !== undefined) {
+    const duplicate = await db.query.customRoles.findFirst({
+      where: and(
+        eq(customRoles.tenant_id, tenantId),
+        eq(customRoles.name, input.name),
+        ne(customRoles.id, roleId),
+      ),
+      columns: { id: true },
+    })
+    if (duplicate) throw new ConflictError('Ya existe un rol con este nombre', 'CUSTOM_ROLE_EXISTS')
+  }
+
+  const [updated] = await db.update(customRoles)
+    .set(patch)
+    .where(and(eq(customRoles.id, roleId), eq(customRoles.tenant_id, tenantId)))
+    .returning()
+
+  await createAuditLog({
+    tenant_id: tenantId,
+    actor_id: updaterId,
+    actor_type: 'USER',
+    actor_email: updaterEmail,
+    action: 'SETTINGS_CHANGED',
+    resource_type: 'CUSTOM_ROLE',
+    resource_id: roleId,
+    context: { action: 'CUSTOM_ROLE_UPDATED', changed: Object.keys(input) },
+  })
+
+  return { ...updated, permissions: normalizePermissions(updated.permissions), is_system: false }
+}
+
+export async function deactivateCustomRole(
+  tenantId: string,
+  updaterId: string,
+  updaterEmail: string,
+  roleId: string,
+) {
+  const existing = await db.query.customRoles.findFirst({
+    where: and(eq(customRoles.id, roleId), eq(customRoles.tenant_id, tenantId), eq(customRoles.is_active, true)),
+    columns: { id: true, name: true },
+  })
+  if (!existing) throw new NotFoundError('Custom role')
+
+  await db.update(customRoles)
+    .set({ is_active: false, updated_at: new Date() })
+    .where(and(eq(customRoles.id, roleId), eq(customRoles.tenant_id, tenantId)))
+
+  await db.update(users)
+    .set({ custom_role_id: null, updated_at: new Date() })
+    .where(and(eq(users.tenant_id, tenantId), eq(users.custom_role_id, roleId)))
+
+  await createAuditLog({
+    tenant_id: tenantId,
+    actor_id: updaterId,
+    actor_type: 'USER',
+    actor_email: updaterEmail,
+    action: 'SETTINGS_CHANGED',
+    resource_type: 'CUSTOM_ROLE',
+    resource_id: roleId,
+    context: { action: 'CUSTOM_ROLE_DEACTIVATED', name: existing.name },
+  })
 }
 
 // ─── Send staff invitation ─────────────────────────────────────────────────────
@@ -88,11 +281,13 @@ export async function inviteStaff(
   const tokenHash = hashToken(rawToken)
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRES_DAYS)
+  const roleAssignment = await resolveRoleAssignment(tenantId, input.role, input.custom_role_id)
 
   await db.insert(staffInvitations).values({
     tenant_id: tenantId,
     email: input.email,
-    role: input.role,
+    role: roleAssignment.role,
+    custom_role_id: roleAssignment.custom_role_id,
     department_id: input.department_id,
     token_hash: tokenHash,
     invited_by: inviterId,
@@ -106,7 +301,7 @@ export async function inviteStaff(
     actor_email: inviterName,
     action: 'USER_INVITED',
     resource_type: 'USER',
-    context: { email: input.email, role: input.role },
+    context: { email: input.email, role: roleAssignment.role, custom_role_id: roleAssignment.custom_role_id },
   })
 
   const inviteUrl = `${FRONTEND_URL}/accept-invite?token=${rawToken}`
@@ -115,7 +310,7 @@ export async function inviteStaff(
   sendEmail({
     to: input.email,
     subject: `Invitación a ${clinicName} en meditrack`,
-    html: inviteEmailHtml(inviterName, clinicName, input.role, inviteUrl, expiresAt),
+    html: inviteEmailHtml(inviterName, clinicName, roleAssignment.label, inviteUrl, expiresAt),
     text: `${inviterName} te invita a unirte a ${clinicName} en meditrack.\n\nAccede aquí: ${inviteUrl}\n\nEl enlace expira en ${INVITE_EXPIRES_DAYS} días.`,
   }).catch(err => {
     console.error('[staff] invite email failed:', err.message)
@@ -125,7 +320,13 @@ export async function inviteStaff(
     console.log(`────────────────────────────────────────────────────\n`)
   })
 
-  return { email: input.email, role: input.role, expires_at: expiresAt }
+  return {
+    email: input.email,
+    role: roleAssignment.role,
+    custom_role_id: roleAssignment.custom_role_id,
+    custom_role: roleAssignment.custom_role,
+    expires_at: expiresAt,
+  }
 }
 
 // ─── Accept invitation ─────────────────────────────────────────────────────────
@@ -156,6 +357,7 @@ export async function acceptInvitation(input: AcceptInviteInput) {
     email: invite.email,
     password_hash,
     role: invite.role,
+    custom_role_id: invite.custom_role_id,
     first_name: input.first_name,
     last_name: input.last_name,
     specialty: input.specialty,
@@ -204,7 +406,8 @@ export async function acceptInvitation(input: AcceptInviteInput) {
     user: {
       id: user.id, email: user.email,
       first_name: user.first_name, last_name: user.last_name,
-      role: user.role, tenant_id: user.tenant_id,
+      role: user.role, custom_role_id: user.custom_role_id, tenant_id: user.tenant_id,
+      permissions: await resolveEffectivePermissions(user.tenant_id, user.role, user.custom_role_id),
     },
     access_token,
     refresh_token: rawRefresh,
@@ -221,6 +424,8 @@ export async function promoteStaff(
 ) {
   if (requesterId === targetId) throw new ForbiddenError('Cannot change your own role')
 
+  const roleAssignment = await resolveRoleAssignment(tenantId, input.role, input.custom_role_id ?? undefined)
+
   const target = await db.query.users.findFirst({
     where: and(eq(users.id, targetId), eq(users.tenant_id, tenantId)),
     columns: { id: true, email: true, role: true },
@@ -230,11 +435,15 @@ export async function promoteStaff(
 
   const [updated] = await db
     .update(users)
-    .set({ role: input.role, updated_at: new Date() })
+    .set({
+      role: roleAssignment.role,
+      custom_role_id: roleAssignment.custom_role_id,
+      updated_at: new Date(),
+    })
     .where(eq(users.id, targetId))
-    .returning({ id: users.id, email: users.email, role: users.role })
+    .returning({ id: users.id, email: users.email, role: users.role, custom_role_id: users.custom_role_id })
 
-  return updated
+  return { ...updated, custom_role: roleAssignment.custom_role }
 }
 
 // ─── Deactivate staff ─────────────────────────────────────────────────────────
@@ -281,7 +490,7 @@ export async function resendInvitation(
 ) {
   const invite = await db.query.staffInvitations.findFirst({
     where: and(eq(staffInvitations.id, invitationId), eq(staffInvitations.tenant_id, tenantId)),
-    columns: { id: true, email: true, role: true, department_id: true, accepted_at: true },
+    columns: { id: true, email: true, role: true, custom_role_id: true, department_id: true, accepted_at: true },
   })
   if (!invite) throw new NotFoundError('Invitation')
   if (invite.accepted_at) throw new ForbiddenError('Invitation already accepted')
@@ -291,6 +500,7 @@ export async function resendInvitation(
   return inviteStaff(tenantId, inviterId, inviterEmail, {
     email: invite.email,
     role: invite.role as Exclude<typeof invite.role, 'SUPER_ADMIN'>,
+    custom_role_id: invite.custom_role_id ?? undefined,
     department_id: invite.department_id ?? undefined,
   })
 }
@@ -303,6 +513,7 @@ export async function getFullUser(userId: string) {
     columns: {
       id: true, email: true, first_name: true, last_name: true,
       role: true, specialty: true, colegiado_number: true, professional_id: true,
+      custom_role_id: true,
       tenant_id: true, is_active: true, is_verified: true,
       verification_rejected_at: true, verification_rejected_reason: true,
     },
@@ -312,7 +523,22 @@ export async function getFullUser(userId: string) {
   })
   if (!user || !user.is_active) throw new NotFoundError('User')
   const { tenant, ...rest } = user
-  return { ...rest, tenant_type: tenant?.type ?? 'CLINIC' }
+  const customRole = rest.custom_role_id
+    ? await db.query.customRoles.findFirst({
+        where: and(
+          eq(customRoles.id, rest.custom_role_id),
+          eq(customRoles.tenant_id, rest.tenant_id),
+          eq(customRoles.is_active, true),
+        ),
+        columns: { id: true, name: true, description: true, base_role: true, permissions: true },
+      })
+    : null
+  return {
+    ...rest,
+    tenant_type: tenant?.type ?? 'CLINIC',
+    custom_role: customRole ? { ...customRole, permissions: normalizePermissions(customRole.permissions) } : null,
+    permissions: await resolveEffectivePermissions(rest.tenant_id, rest.role, rest.custom_role_id),
+  }
 }
 
 // ─── Invite email template ────────────────────────────────────────────────────
@@ -354,4 +580,52 @@ function inviteEmailHtml(
     </div>
   </div>
 </body></html>`
+}
+
+async function resolveRoleAssignment(
+  tenantId: string,
+  requestedRole: AssignableRole,
+  customRoleId?: string | null,
+) {
+  if (!customRoleId) {
+    return {
+      role: requestedRole,
+      custom_role_id: null,
+      custom_role: null,
+      label: requestedRole,
+      permissions: defaultPermissionsForRole(requestedRole),
+    }
+  }
+
+  const customRole = await db.query.customRoles.findFirst({
+    where: and(
+      eq(customRoles.id, customRoleId),
+      eq(customRoles.tenant_id, tenantId),
+      eq(customRoles.is_active, true),
+    ),
+  })
+  if (!customRole) throw new NotFoundError('Custom role')
+
+  if (customRole.base_role === 'SUPER_ADMIN') {
+    throw new ForbiddenError('Custom roles cannot use platform admin permissions')
+  }
+  assertCustomRolePermissions(customRole.base_role, normalizePermissions(customRole.permissions))
+
+  return {
+    role: customRole.base_role as AssignableRole,
+    custom_role_id: customRole.id,
+    custom_role: { ...customRole, permissions: normalizePermissions(customRole.permissions), is_system: false },
+    label: customRole.name,
+    permissions: normalizePermissions(customRole.permissions),
+  }
+}
+
+function assertCustomRolePermissions(baseRole: string, permissions: readonly string[]) {
+  if (baseRole === 'SUPER_ADMIN') {
+    throw new ForbiddenError('Custom roles cannot use platform admin permissions')
+  }
+
+  if (baseRole !== 'ADMIN_CLINIC' && permissions.some(permission => ADMIN_ONLY_PERMISSIONS.has(permission))) {
+    throw new ForbiddenError('Only administrator roles can receive staff, hospital or analytics management permissions')
+  }
 }

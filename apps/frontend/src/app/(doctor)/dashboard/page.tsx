@@ -26,6 +26,7 @@ import {
 import { useAuth } from '@/lib/doctor/auth-context'
 import { getClinicSummary, type ClinicSummary } from '@/lib/doctor/analytics-api'
 import { listPatients, type Patient } from '@/lib/doctor/api'
+import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
 import {
   ClinicalButton,
   ClinicalHeader,
@@ -42,7 +43,6 @@ import {
 } from '@/components/doctor/clinical-ui'
 import { OnboardingBanner } from '@/components/doctor/OnboardingBanner'
 
-const ADMIN_ROLES = new Set(['ADMIN_CLINIC', 'SUPER_ADMIN'])
 const SEX_LABELS: Record<string, string> = { male: 'M', female: 'F', other: 'O' }
 
 function calcAge(dob: string | null): string | null {
@@ -420,7 +420,7 @@ export default function DashboardPage() {
                   collapsible
                   defaultOpen={false}
                   actions={
-                    user && ADMIN_ROLES.has(user.role) ? (
+                    hasPermission(user?.role, PERMISSIONS.ANALYTICS_READ, user?.permissions) ? (
                       <ClinicalButton href="/analytics" variant="ghost" size="sm" iconRight={ArrowRight}>
                         Detalle
                       </ClinicalButton>
@@ -488,7 +488,7 @@ export default function DashboardPage() {
                     icon={ArrowUpDown} label="Referencias" sub="Bandeja de referidos"
                     bg="#fff1f2" fg="#be123c" href="/referrals"
                   />
-                  {user && ADMIN_ROLES.has(user.role) && (
+                  {hasPermission(user?.role, PERMISSIONS.ANALYTICS_READ, user?.permissions) && (
                     <>
                       <QuickAction
                         icon={TrendingUp} label="Analítica" sub="Reportes de adherencia"

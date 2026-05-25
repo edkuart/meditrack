@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import {
   getClinicProfile,
   updateClinicProfile,
@@ -24,7 +25,7 @@ router.get('/settings/clinic', async (c) => {
 
 router.patch(
   '/settings/clinic',
-  requireRole('ADMIN_CLINIC', 'SUPER_ADMIN'),
+  requirePermission(PERMISSIONS.HOSPITAL_MANAGE),
   zValidator('json', z.object({ name: z.string().min(2).max(200) })),
   async (c) => {
     const { tenant_id, sub, email } = c.get('auth')
@@ -37,7 +38,7 @@ router.patch(
 
 router.get(
   '/settings/audit-logs',
-  requireRole('ADMIN_CLINIC', 'SUPER_ADMIN'),
+  requirePermission(PERMISSIONS.HOSPITAL_MANAGE),
   async (c) => {
     const { tenant_id } = c.get('auth')
     const page = Math.max(1, Number(c.req.query('page') ?? 1))

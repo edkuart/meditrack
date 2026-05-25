@@ -31,14 +31,14 @@ export const patientsColumns: ColumnDef<Patient>[] = [
       const p = row.original
       const fullName = `${p.first_name} ${p.last_name}`
       return (
-        <Link href={`/patients/${p.id}`} className="flex items-center gap-3 group">
+        <Link href={`/patients/${p.id}`} style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
           <MTAvatar name={fullName} size={36} />
           <div>
-            <p className="text-sm font-medium text-slate-900 group-hover:text-blue-600 transition-colors">
+            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)', margin: 0 }}>
               {fullName}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {p.mrn && <span className="font-mono text-blue-600 mr-1">{p.mrn}</span>}
+            <p style={{ fontSize: 11, color: 'var(--mt-muted)', marginTop: 2, margin: '2px 0 0' }}>
+              {p.mrn && <span style={{ fontFamily: 'monospace', color: 'var(--mt-primary)', marginRight: 4 }}>{p.mrn}</span>}
               {calcAge(p.date_of_birth)}
               {p.sex ? ` · ${SEX_LABELS[p.sex]}` : ''}
               {p.id_number ? ` · ${p.id_number}` : ''}
@@ -54,18 +54,18 @@ export const patientsColumns: ColumnDef<Patient>[] = [
     cell: ({ row }) => {
       const p = row.original
       return (
-        <div className="flex flex-col gap-0.5">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {p.phone && (
-            <span className="flex items-center gap-1.5 text-xs text-slate-500">
-              <Phone size={11} className="text-slate-400" />{p.phone}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--mt-text-2)' }}>
+              <Phone size={11} color="var(--mt-muted)" />{p.phone}
             </span>
           )}
           {p.email && (
-            <span className="flex items-center gap-1.5 text-xs text-slate-500">
-              <Mail size={11} className="text-slate-400" />{p.email}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--mt-text-2)' }}>
+              <Mail size={11} color="var(--mt-muted)" />{p.email}
             </span>
           )}
-          {!p.phone && !p.email && <span className="text-xs text-slate-300">—</span>}
+          {!p.phone && !p.email && <span style={{ fontSize: 12, color: 'var(--mt-muted)' }}>—</span>}
         </div>
       )
     },
@@ -73,8 +73,11 @@ export const patientsColumns: ColumnDef<Patient>[] = [
   {
     id: 'status',
     header: 'Estado',
-    cell: ({ row }) => (
-      <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-medium">
+    cell: () => (
+      <Badge variant="secondary" style={{
+        background: 'var(--mt-success-subtle)', color: '#065F46',
+        border: '1px solid #6EE7B7', fontSize: 11, fontWeight: 500,
+      }}>
         Activo
       </Badge>
     ),
@@ -86,14 +89,14 @@ export const patientsColumns: ColumnDef<Patient>[] = [
     cell: ({ row }) => {
       const p = row.original
       return (
-        <div className="flex items-center justify-end gap-1">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-700" onClick={e => e.stopPropagation()}>
+              <Button variant="ghost" size="icon" style={{ width: 28, height: 28, color: 'var(--mt-muted)' }} onClick={e => e.stopPropagation()}>
                 <MoreHorizontal size={15} />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="text-sm">
+            <DropdownMenuContent align="end" style={{ fontSize: 13 }}>
               <DropdownMenuItem asChild>
                 <Link href={`/patients/${p.id}`}>Ver perfil</Link>
               </DropdownMenuItem>
@@ -102,7 +105,7 @@ export const patientsColumns: ColumnDef<Patient>[] = [
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Link href={`/patients/${p.id}`} className="text-slate-300 hover:text-slate-600 transition-colors">
+          <Link href={`/patients/${p.id}`} style={{ color: 'var(--mt-muted)', display: 'flex', transition: 'color .15s' }}>
             <ChevronRight size={16} />
           </Link>
         </div>

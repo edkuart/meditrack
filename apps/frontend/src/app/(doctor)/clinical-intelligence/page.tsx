@@ -135,15 +135,15 @@ function UsageBand({ status }: { status: AiUsageStatus }) {
       <div className="space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm text-slate-500">Plan actual</p>
+            <p className="text-sm text-[var(--mt-muted)]">Plan actual</p>
             <div className="mt-1 flex items-center gap-2">
-              <p className="text-2xl font-bold text-slate-900">{PLAN_LABELS[status.plan]}</p>
+              <p className="text-2xl font-bold text-[var(--mt-text)]">{PLAN_LABELS[status.plan]}</p>
               <MTPill tone={unlimited ? 'green' : tone}>{unlimited ? 'Ilimitado' : `${status.remaining} restantes`}</MTPill>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-sm text-slate-500">Unidades consumidas</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+            <p className="text-sm text-[var(--mt-muted)]">Unidades consumidas</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--mt-text)]">
               {unlimited ? status.used : `${status.used}/${status.limit}`}
             </p>
           </div>
@@ -158,7 +158,7 @@ function UsageBand({ status }: { status: AiUsageStatus }) {
           />
         )}
 
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-[var(--mt-muted)]">
           Corte iniciado el {new Date(status.period.starts_at).toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })}.
         </p>
       </div>
@@ -182,23 +182,23 @@ function EventRow({
       type="button"
       onClick={() => onOpen(event)}
       className={cn(
-        'flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100',
-        !last && 'border-b border-slate-100',
+        'flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-[var(--mt-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mt-primary-mist)]',
+        !last && 'border-b border-[var(--mt-border)]',
       )}
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--mt-elevated)] text-[var(--mt-muted)]">
         <Sparkles size={16} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="truncate text-sm font-semibold text-slate-900">{FEATURE_LABELS[event.feature]}</p>
+          <p className="truncate text-sm font-semibold text-[var(--mt-text)]">{FEATURE_LABELS[event.feature]}</p>
           <MTPill tone="slate">{event.units} unidad{event.units !== 1 ? 'es' : ''}</MTPill>
         </div>
-        <p className="mt-0.5 truncate text-xs text-slate-400">
+        <p className="mt-0.5 truncate text-xs text-[var(--mt-muted)]">
           {event.provider} · {event.model} · {cost}
         </p>
       </div>
-      <time className="shrink-0 text-xs text-slate-400">{formatDate(event.created_at)}</time>
+      <time className="shrink-0 text-xs text-[var(--mt-muted)]">{formatDate(event.created_at)}</time>
     </button>
   )
 }
@@ -263,17 +263,17 @@ function PatientAiHistory({
   const copilotEvents = events.filter(event => event.feature === 'CLINICAL_COPILOT')
 
   return (
-    <div className="border-t border-slate-100 pt-3">
+    <div className="border-t border-[var(--mt-border)] pt-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900">Historial de IA del paciente</p>
-          <p className="text-xs text-slate-500">Registro de preguntas y usos previos del copiloto.</p>
+          <p className="text-sm font-semibold text-[var(--mt-text)]">Historial de IA del paciente</p>
+          <p className="text-xs text-[var(--mt-muted)]">Registro de preguntas y usos previos del copiloto.</p>
         </div>
         <MTPill tone="slate">{copilotEvents.length}</MTPill>
       </div>
 
       {copilotEvents.length === 0 ? (
-        <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-400">
+        <p className="rounded-lg bg-[var(--mt-elevated)] px-3 py-3 text-sm text-[var(--mt-muted)]">
           Sin interacciones previas de IA para este paciente.
         </p>
       ) : (
@@ -285,19 +285,19 @@ function PatientAiHistory({
                 key={event.id}
                 type="button"
                 onClick={() => onOpen(event)}
-                className="w-full min-w-0 overflow-hidden rounded-lg border border-slate-100 px-3 py-2 text-left transition hover:border-blue-100 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                className="w-full min-w-0 overflow-hidden rounded-lg border border-[var(--mt-border)] px-3 py-2 text-left transition hover:border-[var(--mt-primary-mist)] hover:bg-[var(--mt-primary-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mt-primary-mist)]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <p className="truncate text-sm font-semibold text-slate-900">{getAiEventMode(event)}</p>
+                    <p className="truncate text-sm font-semibold text-[var(--mt-text)]">{getAiEventMode(event)}</p>
                     <MTPill tone={event.metadata?.model_tier === 'premium' ? 'green' : 'blue'}>
                       {event.model}
                     </MTPill>
                     <MTPill tone="slate">{event.units} u</MTPill>
                   </div>
-                  <time className="shrink-0 text-xs text-slate-400">{formatDate(event.created_at)}</time>
+                  <time className="shrink-0 text-xs text-[var(--mt-muted)]">{formatDate(event.created_at)}</time>
                 </div>
-                <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-slate-500">
+                <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-[var(--mt-muted)]">
                   {question ?? 'Uso del copiloto sin pregunta libre registrada.'}
                 </p>
               </button>
@@ -372,43 +372,40 @@ function CopilotResultPanel({ result }: { result: ClinicalCopilotResponse }) {
     })
 
   return (
-    <div className="mt-3 border-t border-slate-100 pt-3">
-      {/* Meta: modelo + validación */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 py-2">
+    <div className="mt-3 border-t border-[var(--mt-border)] pt-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--mt-border)] py-2">
         <MTPill tone="blue">{result.model}</MTPill>
         {result.model_tier === 'premium' && <MTPill tone="green">Premium</MTPill>}
         <MTPill tone="amber">Requiere validación médica</MTPill>
       </div>
 
-      {/* Alertas clínicas — colapsables, fondo rojo siempre visible */}
       {result.soft_alerts.length > 0 && (
-        <div className="mt-2 overflow-hidden rounded-lg border border-red-100 bg-red-50">
+        <div className="mt-2 overflow-hidden rounded-lg border border-[#fecaca] bg-[var(--mt-danger-subtle)]">
           <button
             type="button"
             onClick={() => setShowAlerts(v => !v)}
             className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left focus-visible:outline-none"
           >
-            <div className="flex items-center gap-2 text-sm font-semibold text-red-800">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--mt-danger)]">
               <AlertTriangle size={15} className="shrink-0" />
               Alertas clínicas
             </div>
             <ChevronDown
               size={13}
-              className={cn('shrink-0 text-red-400 transition-transform duration-200', showAlerts && 'rotate-180')}
+              className={cn('shrink-0 text-[var(--mt-danger)] opacity-60 transition-transform duration-200', showAlerts && 'rotate-180')}
             />
           </button>
           {showAlerts && (
             <div className="space-y-1.5 px-3 pb-3">
               {result.soft_alerts.slice(0, 4).map(alert => (
-                <p key={alert} className="break-words text-sm leading-5 text-red-700">{alert}</p>
+                <p key={alert} className="break-words text-sm leading-5 text-[var(--mt-danger)]">{alert}</p>
               ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Secciones colapsables */}
-      <div className="divide-y divide-slate-100 pb-2 pt-1">
+      <div className="divide-y divide-[var(--mt-border)] pb-2 pt-1">
         {sections.map(section => {
           const expanded = expandedSections.has(section.title)
           return (
@@ -418,22 +415,22 @@ function CopilotResultPanel({ result }: { result: ClinicalCopilotResponse }) {
                 onClick={() => toggleSection(section.title)}
                 className="flex w-full items-center justify-between gap-2 py-2.5 text-left focus-visible:outline-none"
               >
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{section.title}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">{section.title}</p>
                 <ChevronDown
                   size={13}
-                  className={cn('shrink-0 text-slate-400 transition-transform duration-200', expanded && 'rotate-180')}
+                  className={cn('shrink-0 text-[var(--mt-muted)] transition-transform duration-200', expanded && 'rotate-180')}
                 />
               </button>
               {expanded && (
                 <div className="pb-2">
                   {section.body.map(line => (
-                    <p key={line} className="break-words text-sm leading-6 text-slate-700">{line}</p>
+                    <p key={line} className="break-words text-sm leading-6 text-[var(--mt-text-2)]">{line}</p>
                   ))}
                   {section.items.length > 0 && (
                     <div className="mt-1.5 space-y-2">
                       {section.items.map(item => (
-                        <div key={item} className="flex gap-2 text-sm leading-5 text-slate-700">
-                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                        <div key={item} className="flex gap-2 text-sm leading-5 text-[var(--mt-text-2)]">
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--mt-primary)]" />
                           <span className="break-words">{item}</span>
                         </div>
                       ))}
@@ -452,16 +449,16 @@ function CopilotResultPanel({ result }: { result: ClinicalCopilotResponse }) {
               onClick={() => setShowSuggested(v => !v)}
               className="flex w-full items-center justify-between gap-2 py-2.5 text-left focus-visible:outline-none"
             >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Preguntas sugeridas</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Preguntas sugeridas</p>
               <ChevronDown
                 size={13}
-                className={cn('shrink-0 text-slate-400 transition-transform duration-200', showSuggested && 'rotate-180')}
+                className={cn('shrink-0 text-[var(--mt-muted)] transition-transform duration-200', showSuggested && 'rotate-180')}
               />
             </button>
             {showSuggested && (
               <div className="space-y-2 pb-2">
                 {result.suggested_questions.slice(0, 5).map(question => (
-                  <p key={question} className="break-words rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                  <p key={question} className="break-words rounded-lg bg-[var(--mt-primary-subtle)] px-3 py-2 text-sm text-[var(--mt-primary-deep)]">
                     {question}
                   </p>
                 ))}
@@ -477,16 +474,16 @@ function CopilotResultPanel({ result }: { result: ClinicalCopilotResponse }) {
               onClick={() => setShowGaps(v => !v)}
               className="flex w-full items-center justify-between gap-2 py-2.5 text-left focus-visible:outline-none"
             >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Vacíos clínicos</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Vacíos clínicos</p>
               <ChevronDown
                 size={13}
-                className={cn('shrink-0 text-slate-400 transition-transform duration-200', showGaps && 'rotate-180')}
+                className={cn('shrink-0 text-[var(--mt-muted)] transition-transform duration-200', showGaps && 'rotate-180')}
               />
             </button>
             {showGaps && (
               <div className="space-y-2 pb-2">
                 {result.clinical_gaps.slice(0, 5).map(gap => (
-                  <p key={gap} className="break-words rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <p key={gap} className="break-words rounded-lg px-3 py-2 text-sm" style={{ background: '#FFFBEB', color: '#92400E' }}>
                     {gap}
                   </p>
                 ))}
@@ -513,25 +510,25 @@ function AiEventDetailModal({
   const cost = event.estimated_cost_cents > 0 ? `$${(event.estimated_cost_cents / 100).toFixed(2)}` : 'sin costo externo'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6">
-      <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6" style={{ background: 'rgba(2,6,23,.4)' }}>
+      <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-[var(--mt-surface)] shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--mt-border)] px-5 py-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-primary)]">
               Conversación de IA
             </p>
-            <h3 className="mt-1 text-lg font-bold text-slate-900">{getAiEventMode(event)}</h3>
+            <h3 className="mt-1 text-lg font-bold text-[var(--mt-text)]">{getAiEventMode(event)}</h3>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <MTPill tone="blue">{event.model}</MTPill>
               {tier === 'premium' && <MTPill tone="green">Premium</MTPill>}
               <MTPill tone="slate">{event.units} unidad{event.units !== 1 ? 'es' : ''}</MTPill>
-              <span className="text-xs text-slate-400">{formatDate(event.created_at)} · {cost}</span>
+              <span className="text-xs text-[var(--mt-muted)]">{formatDate(event.created_at)} · {cost}</span>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--mt-muted)] transition hover:bg-[var(--mt-elevated)] hover:text-[var(--mt-text-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mt-primary-mist)]"
             aria-label="Cerrar conversación"
           >
             <XCircle size={20} />
@@ -539,29 +536,29 @@ function AiEventDetailModal({
         </div>
 
         <div className="max-h-[calc(88vh-92px)] overflow-y-auto px-5 py-4">
-          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Pregunta</p>
-            <p className="mt-2 text-sm leading-6 text-slate-700">
+          <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Pregunta</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--mt-text-2)]">
               {question ?? 'Esta interacción no registró una pregunta libre.'}
             </p>
           </div>
 
           {!snapshot ? (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+            <div className="mt-4 rounded-xl border px-4 py-3 text-sm leading-6" style={{ borderColor: '#FDE68A', background: '#FFFBEB', color: '#92400E' }}>
               Esta interacción fue registrada antes de archivar respuestas completas. Se conserva la pregunta,
               modelo y consumo; vuelve a ejecutar la pregunta para guardar una conversación consultable.
             </div>
           ) : (
             <div className="mt-4 space-y-4">
               {snapshot.soft_alerts.length > 0 && (
-                <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-800">
+                <div className="rounded-xl border border-[#fecaca] bg-[var(--mt-danger-subtle)] px-4 py-3">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--mt-danger)]">
                     <AlertTriangle size={15} />
                     Alertas clínicas
                   </div>
                   <div className="space-y-1.5">
                     {snapshot.soft_alerts.slice(0, 4).map(alert => (
-                      <p key={alert} className="text-sm leading-5 text-red-700">{alert}</p>
+                      <p key={alert} className="text-sm leading-5 text-[var(--mt-danger)]">{alert}</p>
                     ))}
                   </div>
                 </div>
@@ -569,16 +566,16 @@ function AiEventDetailModal({
 
               <div className="grid gap-3 lg:grid-cols-2">
                 {sections.map(section => (
-                  <div key={section.title} className="min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-white px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{section.title}</p>
+                  <div key={section.title} className="min-w-0 overflow-hidden rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">{section.title}</p>
                     {section.body.map(line => (
-                      <p key={line} className="mt-2 break-words text-sm leading-6 text-slate-700">{line}</p>
+                      <p key={line} className="mt-2 break-words text-sm leading-6 text-[var(--mt-text-2)]">{line}</p>
                     ))}
                     {section.items.length > 0 && (
                       <div className="mt-2 space-y-2">
                         {section.items.map(item => (
-                          <div key={item} className="flex gap-2 text-sm leading-5 text-slate-700">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                          <div key={item} className="flex gap-2 text-sm leading-5 text-[var(--mt-text-2)]">
+                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--mt-primary)]" />
                             <span className="break-words">{item}</span>
                           </div>
                         ))}
@@ -590,10 +587,10 @@ function AiEventDetailModal({
 
               {snapshot.suggested_questions.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Preguntas sugeridas</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Preguntas sugeridas</p>
                   <div className="space-y-2">
                     {snapshot.suggested_questions.slice(0, 5).map(item => (
-                      <p key={item} className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">{item}</p>
+                      <p key={item} className="rounded-lg bg-[var(--mt-primary-subtle)] px-3 py-2 text-sm text-[var(--mt-primary-deep)]">{item}</p>
                     ))}
                   </div>
                 </div>
@@ -601,17 +598,17 @@ function AiEventDetailModal({
 
               {snapshot.clinical_gaps.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Vacíos clínicos</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Vacíos clínicos</p>
                   <div className="space-y-2">
                     {snapshot.clinical_gaps.slice(0, 5).map(item => (
-                      <p key={item} className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{item}</p>
+                      <p key={item} className="rounded-lg px-3 py-2 text-sm" style={{ background: '#FFFBEB', color: '#92400E' }}>{item}</p>
                     ))}
                   </div>
                 </div>
               )}
 
               {snapshot.safety_notice && (
-                <p className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
+                <p className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-4 py-3 text-xs leading-5 text-[var(--mt-muted)]">
                   {snapshot.safety_notice}
                 </p>
               )}
@@ -681,22 +678,22 @@ function PatientWorkspace({
     <ClinicalPanel title="Trabajar con paciente" icon={UserRound} accent="blue" padBody>
       <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
         <div className="space-y-3">
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <label className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">
             Buscar paciente
           </label>
           <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--mt-muted)]" />
             <input
               value={query}
               onChange={event => onQueryChange(event.target.value)}
               placeholder="Nombre, apellido o documento..."
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="h-10 w-full rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] pl-9 pr-3 text-sm text-[var(--mt-text)] outline-none transition focus:border-[var(--mt-primary)] focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
             />
           </div>
 
-          <div className="rounded-xl border border-slate-100 bg-white">
+          <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)]">
             {loadingResults ? (
-              <div className="flex items-center gap-2 px-4 py-4 text-sm text-slate-400">
+              <div className="flex items-center gap-2 px-4 py-4 text-sm text-[var(--mt-muted)]">
                 <Loader2 size={15} className="animate-spin" />
                 Buscando pacientes...
               </div>
@@ -711,26 +708,26 @@ function PatientWorkspace({
                       type="button"
                       onClick={() => onSelectPatient(patient)}
                       className={cn(
-                        'flex w-full min-w-0 items-center gap-3 overflow-hidden border-b border-slate-50 px-4 py-3 text-left transition last:border-b-0 hover:bg-slate-50',
-                        selected && 'bg-blue-50',
+                        'flex w-full min-w-0 items-center gap-3 overflow-hidden border-b border-[var(--mt-border)] px-4 py-3 text-left transition last:border-b-0 hover:bg-[var(--mt-elevated)]',
+                        selected && 'bg-[var(--mt-primary-subtle)]',
                       )}
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--mt-elevated)] text-[var(--mt-muted)]">
                         <UserRound size={16} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900">{name}</p>
-                        <p className="truncate text-xs text-slate-400">
+                        <p className="truncate text-sm font-semibold text-[var(--mt-text)]">{name}</p>
+                        <p className="truncate text-xs text-[var(--mt-muted)]">
                           {patient.id_number ?? patient.email ?? patient.phone ?? 'Sin identificador visible'}
                         </p>
                       </div>
-                      {selected && <CheckCircle2 size={15} className="shrink-0 text-blue-600" />}
+                      {selected && <CheckCircle2 size={15} className="shrink-0 text-[var(--mt-primary)]" />}
                     </button>
                   )
                 })}
               </div>
             ) : (
-              <div className="px-4 py-5 text-sm leading-6 text-slate-400">
+              <div className="px-4 py-5 text-sm leading-6 text-[var(--mt-muted)]">
                 {query.trim().length >= 2
                   ? 'No encontré pacientes con esa búsqueda.'
                   : 'Escribe al menos 2 caracteres para cargar pacientes.'}
@@ -741,7 +738,7 @@ function PatientWorkspace({
 
         <div className="min-h-72 min-w-0">
           {error && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <div className="mb-4 rounded-lg border border-[#fecaca] bg-[var(--mt-danger-subtle)] px-3 py-2 text-sm text-[var(--mt-danger)]">
               {error}
             </div>
           )}
@@ -753,7 +750,7 @@ function PatientWorkspace({
               description="Aquí cargaremos su resumen clínico, problemas activos, documentos y pendientes para trabajar con IA sobre su expediente."
             />
           ) : loadingSummary ? (
-            <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-slate-400">
+            <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-[var(--mt-muted)]">
               <Loader2 size={18} className="animate-spin" />
               Cargando contexto clínico...
             </div>
@@ -761,9 +758,9 @@ function PatientWorkspace({
             <div className="space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Paciente seleccionado</p>
-                  <h2 className="mt-1 truncate text-xl font-bold text-slate-900">{patientName}</h2>
-                  <p className="mt-1 truncate text-sm text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-primary)]">Paciente seleccionado</p>
+                  <h2 className="mt-1 truncate text-xl font-bold text-[var(--mt-text)]">{patientName}</h2>
+                  <p className="mt-1 truncate text-sm text-[var(--mt-muted)]">
                     {summary.patient.phone ?? summary.patient.email ?? 'Sin contacto registrado'}
                   </p>
                 </div>
@@ -780,20 +777,20 @@ function PatientWorkspace({
                   ['Docs.', summary.latest_documents.length],
                   ['Pend.', summary.pending_review_items.length],
                 ].map(([label, value]) => (
-                  <div key={label} className="rounded-lg bg-slate-50 px-2 py-2 text-center">
-                    <p className="text-xs text-slate-400">{label}</p>
-                    <p className="mt-0.5 text-base font-bold tabular-nums text-slate-900">{value}</p>
+                  <div key={label} className="rounded-lg bg-[var(--mt-elevated)] px-2 py-2 text-center">
+                    <p className="text-xs text-[var(--mt-muted)]">{label}</p>
+                    <p className="mt-0.5 text-base font-bold tabular-nums text-[var(--mt-text)]">{value}</p>
                   </div>
                 ))}
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="min-w-0">
-                  <p className="mb-2 text-sm font-semibold text-slate-800">Problemas activos</p>
+                  <p className="mb-2 text-sm font-semibold text-[var(--mt-text-2)]">Problemas activos</p>
                   {activeProblems.length === 0 ? (
-                    <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-400">Sin problemas activos registrados.</p>
+                    <p className="rounded-lg bg-[var(--mt-elevated)] px-3 py-3 text-sm text-[var(--mt-muted)]">Sin problemas activos registrados.</p>
                   ) : (
-                    <div className="divide-y divide-slate-100">
+                    <div className="divide-y divide-[var(--mt-border)]">
                       {activeProblems.slice(0, 4).map(problem => {
                         const cardId = `problem-${problem.id}`
                         const expanded = expandedCards.has(cardId)
@@ -802,22 +799,22 @@ function PatientWorkspace({
                             key={problem.id}
                             type="button"
                             onClick={() => toggleCard(cardId)}
-                            className="w-full overflow-hidden py-2.5 text-left transition hover:bg-blue-50/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                            className="w-full overflow-hidden py-2.5 text-left transition hover:bg-[var(--mt-primary-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mt-primary-mist)]"
                           >
                             <div className="flex min-w-0 items-center gap-2">
                               <MTPill tone={problem.status === 'CHRONIC' ? 'amber' : 'green'}>
                                 #{problem.problem_number}
                               </MTPill>
-                              <p className={cn('min-w-0 flex-1 text-sm font-semibold text-slate-900', expanded ? 'break-words' : 'truncate')}>
+                              <p className={cn('min-w-0 flex-1 text-sm font-semibold text-[var(--mt-text)]', expanded ? 'break-words' : 'truncate')}>
                                 {problem.title}
                               </p>
                               <ChevronDown
                                 size={13}
-                                className={cn('shrink-0 text-slate-400 transition-transform duration-200', expanded && 'rotate-180')}
+                                className={cn('shrink-0 text-[var(--mt-muted)] transition-transform duration-200', expanded && 'rotate-180')}
                               />
                             </div>
                             {problem.description && (
-                              <p className={cn('mt-1 text-xs leading-5 text-slate-500', expanded ? 'break-words' : 'line-clamp-1')}>
+                              <p className={cn('mt-1 text-xs leading-5 text-[var(--mt-muted)]', expanded ? 'break-words' : 'line-clamp-1')}>
                                 {problem.description}
                               </p>
                             )}
@@ -829,8 +826,8 @@ function PatientWorkspace({
                 </div>
 
                 <div className="min-w-0">
-                  <p className="mb-2 text-sm font-semibold text-slate-800">Última información</p>
-                  <div className="divide-y divide-slate-100">
+                  <p className="mb-2 text-sm font-semibold text-[var(--mt-text-2)]">Última información</p>
+                  <div className="divide-y divide-[var(--mt-border)]">
                     {([
                       {
                         id: 'encounter',
@@ -857,16 +854,16 @@ function PatientWorkspace({
                           key={id}
                           type="button"
                           onClick={() => toggleCard(cardId)}
-                          className="w-full overflow-hidden py-2.5 text-left transition hover:bg-blue-50/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                          className="w-full overflow-hidden py-2.5 text-left transition hover:bg-[var(--mt-primary-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mt-primary-mist)]"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-slate-400">{label}</p>
+                            <p className="text-xs text-[var(--mt-muted)]">{label}</p>
                             <ChevronDown
                               size={12}
-                              className={cn('shrink-0 text-slate-300 transition-transform duration-200', expanded && 'rotate-180')}
+                              className={cn('shrink-0 text-[var(--mt-muted)] opacity-50 transition-transform duration-200', expanded && 'rotate-180')}
                             />
                           </div>
-                          <p className={cn('mt-1 text-sm text-slate-700', expanded ? 'break-words' : 'truncate')}>
+                          <p className={cn('mt-1 text-sm text-[var(--mt-text-2)]', expanded ? 'break-words' : 'truncate')}>
                             {text}
                           </p>
                         </button>
@@ -876,18 +873,17 @@ function PatientWorkspace({
                 </div>
               </div>
 
-              <div className="rounded-xl bg-blue-50/50 p-3">
-                {/* Fila 1: ícono + título / Fila 2: subtítulo + toggle (alineados al texto) */}
+              <div className="rounded-xl bg-[var(--mt-primary-subtle)] p-3">
                 <div className="mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--mt-surface)] text-[var(--mt-primary)]">
                       <MessageSquareText size={16} />
                     </div>
-                    <p className="text-sm font-semibold text-slate-900">Preguntar a la IA</p>
+                    <p className="text-sm font-semibold text-[var(--mt-text)]">Preguntar a la IA</p>
                   </div>
                   <div className="mt-1.5 flex items-center justify-between gap-2 pl-10">
-                    <p className="min-w-0 truncate text-xs text-slate-500">Responde usando el expediente seleccionado.</p>
-                    <div className="flex shrink-0 rounded-lg border border-slate-200 bg-white p-0.5">
+                    <p className="min-w-0 truncate text-xs text-[var(--mt-muted)]">Responde usando el expediente seleccionado.</p>
+                    <div className="flex shrink-0 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-0.5">
                       {[
                         ['standard', 'Base'],
                         ['premium', 'Premium'],
@@ -900,8 +896,8 @@ function PatientWorkspace({
                           className={cn(
                             'h-7 rounded-md px-2.5 text-xs font-semibold transition',
                             copilotModelTier === value
-                              ? 'bg-blue-600 text-white shadow-sm'
-                              : 'text-slate-500 hover:bg-slate-50',
+                              ? 'bg-[var(--mt-primary)] text-white shadow-sm'
+                              : 'text-[var(--mt-muted)] hover:bg-[var(--mt-elevated)]',
                           )}
                         >
                           {label}
@@ -911,7 +907,6 @@ function PatientWorkspace({
                   </div>
                 </div>
 
-                {/* Fila 2: acciones rápidas con scroll horizontal en móvil */}
                 <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
                   <div className="shrink-0">
                     <ClinicalButton
@@ -955,14 +950,13 @@ function PatientWorkspace({
                   </div>
                 </div>
 
-                {/* Fila 3: textarea + botón */}
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                   <textarea
                     value={copilotQuestion}
                     onChange={event => onCopilotQuestionChange(event.target.value)}
                     placeholder="Ej. ¿Qué debería revisar antes de la próxima consulta?"
                     rows={3}
-                    className="min-h-20 w-full flex-1 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    className="min-h-20 w-full flex-1 resize-none rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-sm leading-6 text-[var(--mt-text)] outline-none transition focus:border-[var(--mt-primary)] focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
                   />
                   <div className="w-full sm:w-auto">
                     <ClinicalButton
@@ -1005,45 +999,43 @@ function ReviewItemRow({
   const confidence = item.confidence != null ? `${Math.round(item.confidence * 100)}%` : null
 
   return (
-    <div className="border-b border-slate-100 last:border-b-0">
-      {/* Header row — always visible, click to expand */}
+    <div className="border-b border-[var(--mt-border)] last:border-b-0">
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus-visible:outline-none"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[var(--mt-elevated)] focus-visible:outline-none"
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: '#FEF3C7', color: '#D97706' }}>
           <ClipboardCheck size={15} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <MTPill tone={PRIORITY_TONES[item.priority]}>{PRIORITY_LABELS[item.priority]}</MTPill>
-            <p className={cn('min-w-0 flex-1 text-sm font-semibold text-slate-900', expanded ? 'break-words' : 'truncate')}>
+            <p className={cn('min-w-0 flex-1 text-sm font-semibold text-[var(--mt-text)]', expanded ? 'break-words' : 'truncate')}>
               {item.title}
             </p>
           </div>
           {!expanded && (
-            <p className="mt-0.5 truncate text-xs text-slate-400">
+            <p className="mt-0.5 truncate text-xs text-[var(--mt-muted)]">
               {patientName} · {formatDate(item.created_at)}
             </p>
           )}
         </div>
         <ChevronDown
           size={13}
-          className={cn('shrink-0 text-slate-400 transition-transform duration-200', expanded && 'rotate-180')}
+          className={cn('shrink-0 text-[var(--mt-muted)] transition-transform duration-200', expanded && 'rotate-180')}
         />
       </button>
 
-      {/* Expanded detail + actions */}
       {expanded && (
         <div className="px-4 pb-3">
           {item.summary && (
-            <p className="mb-2 break-words text-sm leading-6 text-slate-500">{item.summary}</p>
+            <p className="mb-2 break-words text-sm leading-6 text-[var(--mt-muted)]">{item.summary}</p>
           )}
-          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--mt-muted)]">
             <Link
               href={`/patients/${item.patient_id}`}
-              className="font-medium text-blue-600 hover:text-blue-700"
+              className="font-medium text-[var(--mt-primary)] hover:text-[var(--mt-primary-deep)]"
               onClick={e => e.stopPropagation()}
             >
               {patientName}
@@ -1295,18 +1287,18 @@ export default function ClinicalIntelligencePage() {
           <ClinicalPanel title="Estado operativo" icon={CheckCircle2} accent="green" padBody collapsible defaultOpen={false}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">Eventos del mes</span>
-                <span className="text-lg font-bold tabular-nums text-slate-900">{status.event_count}</span>
+                <span className="text-sm text-[var(--mt-muted)]">Eventos del mes</span>
+                <span className="text-lg font-bold tabular-nums text-[var(--mt-text)]">{status.event_count}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">Eventos cargados</span>
-                <span className="text-lg font-bold tabular-nums text-slate-900">{events.length}</span>
+                <span className="text-sm text-[var(--mt-muted)]">Eventos cargados</span>
+                <span className="text-lg font-bold tabular-nums text-[var(--mt-text)]">{events.length}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">Pendientes clínicos</span>
-                <span className="text-lg font-bold tabular-nums text-slate-900">{reviewItems.length}</span>
+                <span className="text-sm text-[var(--mt-muted)]">Pendientes clínicos</span>
+                <span className="text-lg font-bold tabular-nums text-[var(--mt-text)]">{reviewItems.length}</span>
               </div>
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+              <div className="rounded-lg border px-3 py-2 text-xs leading-5" style={{ borderColor: '#FDE68A', background: '#FFFBEB', color: '#92400E' }}>
                 Las sugerencias de IA son apoyo clínico: el dato final sigue requiriendo validación del médico.
               </div>
             </div>
@@ -1314,23 +1306,23 @@ export default function ClinicalIntelligencePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-xl border border-slate-100 bg-white">
+      <div className="grid grid-cols-3 divide-x divide-[var(--mt-border)] rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)]">
         <div className="flex flex-col items-center px-2 py-3 text-center">
-          <Sparkles size={15} className="text-blue-500" />
-          <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{totalUnits}</p>
-          <p className="mt-0.5 text-xs leading-4 text-slate-400">Unidades IA</p>
+          <Sparkles size={15} color="var(--mt-primary)" />
+          <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--mt-text)]">{totalUnits}</p>
+          <p className="mt-0.5 text-xs leading-4 text-[var(--mt-muted)]">Unidades IA</p>
         </div>
         <div className="flex flex-col items-center px-2 py-3 text-center">
-          <Stethoscope size={15} className="text-green-500" />
-          <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{copilotEvents}</p>
-          <p className="mt-0.5 text-xs leading-4 text-slate-400">Copiloto</p>
+          <Stethoscope size={15} color="var(--mt-success)" />
+          <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--mt-text)]">{copilotEvents}</p>
+          <p className="mt-0.5 text-xs leading-4 text-[var(--mt-muted)]">Copiloto</p>
         </div>
         <div className="flex flex-col items-center px-2 py-3 text-center">
-          <ClipboardCheck size={15} className={highPriorityReview ? 'text-red-500' : 'text-amber-500'} />
-          <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{reviewItems.length}</p>
-          <p className="mt-0.5 text-xs leading-4 text-slate-400">Pendientes</p>
+          <ClipboardCheck size={15} color={highPriorityReview ? 'var(--mt-danger)' : '#D97706'} />
+          <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--mt-text)]">{reviewItems.length}</p>
+          <p className="mt-0.5 text-xs leading-4 text-[var(--mt-muted)]">Pendientes</p>
           {highPriorityReview > 0 && (
-            <p className="mt-0.5 text-xs font-medium text-red-500">{highPriorityReview} alta</p>
+            <p className="mt-0.5 text-xs font-medium text-[var(--mt-danger)]">{highPriorityReview} alta</p>
           )}
         </div>
       </div>
@@ -1341,15 +1333,15 @@ export default function ClinicalIntelligencePage() {
             const Icon = item.icon
             return (
               <div key={item.title} className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--mt-elevated)] text-[var(--mt-muted)]">
                   <Icon size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-sm font-semibold text-slate-900">{item.title}</h3>
+                    <h3 className="text-sm font-semibold text-[var(--mt-text)]">{item.title}</h3>
                     <MTPill tone={item.tone}>{item.status}</MTPill>
                   </div>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">{item.description}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--mt-muted)]">{item.description}</p>
                 </div>
               </div>
             )

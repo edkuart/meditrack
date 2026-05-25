@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import { CreateLocationSchema, UpdateLocationSchema } from './locations.schema.ts'
 import * as locationsService from './locations.service.ts'
 
@@ -22,7 +23,7 @@ router.get('/locations/:id', async (c) => {
 
 router.post(
   '/locations',
-  requireRole('ADMIN_CLINIC'),
+  requirePermission(PERMISSIONS.HOSPITAL_MANAGE),
   zValidator('json', CreateLocationSchema),
   async (c) => {
     const { tenant_id } = c.get('auth')
@@ -33,7 +34,7 @@ router.post(
 
 router.patch(
   '/locations/:id',
-  requireRole('ADMIN_CLINIC'),
+  requirePermission(PERMISSIONS.HOSPITAL_MANAGE),
   zValidator('json', UpdateLocationSchema),
   async (c) => {
     const { tenant_id } = c.get('auth')
@@ -42,7 +43,7 @@ router.patch(
   },
 )
 
-router.delete('/locations/:id', requireRole('ADMIN_CLINIC'), async (c) => {
+router.delete('/locations/:id', requirePermission(PERMISSIONS.HOSPITAL_MANAGE), async (c) => {
   const { tenant_id } = c.get('auth')
   await locationsService.deactivateLocation(tenant_id, c.req.param('id')!)
   return c.json({ success: true, data: null })

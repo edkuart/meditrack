@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { UserCircle, Lock, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { UserCircle, Lock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   ClinicalButton, ClinicalHeader, ClinicalPage, MTPanel,
@@ -20,19 +20,14 @@ async function patchMe(token: string, data: Record<string, string>) {
   return json.data
 }
 
-async function changePassword(token: string, currentPassword: string, newPassword: string) {
-  // Re-login with current password to verify, then use forgot-password flow is not ideal.
-  // Instead we call PATCH /auth/me with a dedicated password_change flow — but since our
-  // backend updateProfile doesn't handle password, we do it via reset-password token flow.
-  // Simpler: expose a dedicated endpoint. For now we'll skip the current-password check
-  // and directly patch — the session is authenticated so we trust the user.
-  const res = await fetch(`${API}/auth/me/password`, {
-    method: 'PATCH',
+async function requestPasswordHelp(token: string, message: string) {
+  const res = await fetch(`${API}/auth/me/password-help`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    body: JSON.stringify({ message: message.trim() || undefined }),
   })
   const json = await res.json()
-  if (!json.success) throw new Error(json.error?.message ?? 'Error al cambiar contraseña')
+  if (!json.success) throw new Error(json.error?.message ?? 'Error al enviar solicitud')
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -112,11 +107,8 @@ export default function ProfileSettingsPage() {
   const [saving, setSaving]           = useState(false)
   const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null)
 
-  const [showPw, setShowPw]           = useState(false)
-  const [currentPw, setCurrentPw]     = useState('')
-  const [newPw, setNewPw]             = useState('')
-  const [confirmPw, setConfirmPw]     = useState('')
-  const [changingPw, setChangingPw]   = useState(false)
+  const [passwordMessage, setPasswordMessage] = useState('')
+  const [requestingPw, setRequestingPw] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -151,19 +143,17 @@ export default function ProfileSettingsPage() {
     }
   }
 
-  async function handleChangePassword() {
+  async function handlePasswordHelp() {
     if (!token) return
-    if (newPw !== confirmPw) { toast$('Las contraseñas no coinciden', false); return }
-    if (newPw.length < 8)    { toast$('Mínimo 8 caracteres', false); return }
-    setChangingPw(true)
+    setRequestingPw(true)
     try {
-      await changePassword(token, currentPw, newPw)
-      setCurrentPw(''); setNewPw(''); setConfirmPw('')
-      toast$('Contraseña actualizada. Las demás sesiones han sido cerradas.')
+      await requestPasswordHelp(token, passwordMessage)
+      setPasswordMessage('')
+      toast$('Solicitud enviada al administrador de Meditrack')
     } catch (e) {
-      toast$(e instanceof Error ? e.message : 'Error al cambiar contraseña', false)
+      toast$(e instanceof Error ? e.message : 'Error al enviar solicitud', false)
     } finally {
-      setChangingPw(false)
+      setRequestingPw(false)
     }
   }
 
@@ -217,49 +207,39 @@ export default function ProfileSettingsPage() {
           </div>
         </MTPanel>
 
-        {/* Password change */}
-        <MTPanel title="Cambiar contraseña" icon={Lock} accent="slate">
+        {/* Password help */}
+        <MTPanel title="Contraseña" icon={Lock} accent="slate">
           <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--mt-text-2)' }}>Contraseña actual</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  value={currentPw}
-                  onChange={e => setCurrentPw(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  style={{
-                    width: '100%', border: '1px solid var(--mt-border)', borderRadius: 8,
-                    padding: '8px 38px 8px 12px', fontSize: 13, color: 'var(--mt-text)',
-                    background: 'var(--mt-surface)', outline: 'none', boxSizing: 'border-box',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(v => !v)}
-                  style={{
-                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mt-muted)',
-                    display: 'flex', padding: 0,
-                  }}
-                >
-                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
+            <div style={{
+              border: '1px solid var(--mt-border)', borderRadius: 8,
+              background: 'var(--mt-elevated)', padding: '12px 14px',
+              color: 'var(--mt-text-2)', fontSize: 13, lineHeight: 1.5,
+            }}>
+              Por seguridad, los cambios de contraseña los revisa el administrador de Meditrack. Tu solicitud no se envía al administrador médico del hospital.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Nueva contraseña" value={newPw} onChange={setNewPw} type={showPw ? 'text' : 'password'} placeholder="Mín. 8 caracteres" />
-              <Field label="Confirmar contraseña" value={confirmPw} onChange={setConfirmPw} type={showPw ? 'text' : 'password'} placeholder="Repite la nueva contraseña" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--mt-text-2)' }}>Mensaje para soporte</label>
+              <textarea
+                value={passwordMessage}
+                onChange={e => setPasswordMessage(e.target.value)}
+                placeholder="Describe brevemente por qué necesitas ayuda con tu contraseña."
+                maxLength={1000}
+                style={{
+                  minHeight: 84, resize: 'vertical', border: '1px solid var(--mt-border)',
+                  borderRadius: 8, padding: '10px 12px', fontSize: 13,
+                  color: 'var(--mt-text)', background: 'var(--mt-surface)', outline: 'none',
+                  fontFamily: 'inherit',
+                }}
+              />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <ClinicalButton
                 variant="solid" size="sm"
-                onClick={handleChangePassword}
-                disabled={changingPw || !currentPw || !newPw || !confirmPw}
+                onClick={handlePasswordHelp}
+                disabled={requestingPw}
               >
-                {changingPw ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : null}
-                Cambiar contraseña
+                {requestingPw ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+                Enviar solicitud
               </ClinicalButton>
             </div>
           </div>

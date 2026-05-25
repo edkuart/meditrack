@@ -172,6 +172,7 @@ export async function getPatientById(
   patientId: string,
   actorId: string,
   actorEmail: string,
+  includeSensitive = false,
 ) {
   const patient = await db.query.patients.findFirst({
     where: and(
@@ -209,6 +210,27 @@ export async function getPatientById(
     resource_type: 'PATIENT',
     resource_id: patientId,
   })
+
+  if (!includeSensitive) {
+    return {
+      id: patient.id,
+      tenant_id: patient.tenant_id,
+      mrn: patient.mrn,
+      first_name: patient.first_name,
+      last_name: patient.last_name,
+      date_of_birth: patient.date_of_birth,
+      sex: patient.sex,
+      phone: patient.phone,
+      email: patient.email,
+      id_number: patient.id_number,
+      tags: patient.tags,
+      is_active: patient.is_active,
+      anonymized_at: patient.anonymized_at,
+      created_at: patient.created_at,
+      updated_at: patient.updated_at,
+      _access_notice: 'El historial clinico completo solo esta disponible para roles medicos autorizados.',
+    }
+  }
 
   return {
     ...patient,

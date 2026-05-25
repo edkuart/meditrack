@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
+import { ArrowRight, Building2, Hash, User, Mail, Lock, Stethoscope, IdCard, Loader2 } from 'lucide-react'
 import { register } from '@/lib/doctor/api'
+import { MTInput, MTButton, MTLogo } from '@/components/doctor/clinical-ui'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -32,14 +33,13 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
     try {
-      const result = await register({
+      await register({
         ...form,
         specialty: form.specialty || undefined,
         professional_id: form.professional_id || undefined,
       })
-      localStorage.setItem('meditrack_doctor_token', result.access_token)
-      localStorage.setItem('meditrack_doctor_refresh_token', result.refresh_token)
-      // New accounts land on the pending-verification screen until an admin approves
+      localStorage.removeItem('meditrack_doctor_token')
+      localStorage.removeItem('meditrack_doctor_refresh_token')
       router.replace('/pending-verification')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrarse')
@@ -48,82 +48,109 @@ export default function RegisterPage() {
     }
   }
 
-  const optional = new Set(['specialty', 'professional_id'])
-
-  const field = (label: string, name: string, type = 'text', placeholder = '') => (
-    <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-600 font-medium">
-        {label}{optional.has(name) && <span className="text-slate-400 font-normal"> (opcional)</span>}
-      </label>
-      <input
-        type={type}
-        required={!optional.has(name)}
-        value={form[name as keyof typeof form]}
-        onChange={set(name)}
-        placeholder={placeholder}
-        className="border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-      />
-    </div>
-  )
-
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-800">meditrack</h1>
-          <p className="text-slate-500 mt-1 text-sm">Registra tu clínica o consultorio</p>
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '48px 16px', background: 'var(--mt-bg)', fontFamily: 'var(--mt-font)',
+    }}>
+      <div style={{ width: '100%', maxWidth: 440 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+            <MTLogo size={20} />
+          </div>
+          <p style={{ color: 'var(--mt-muted)', fontSize: 13, margin: 0 }}>
+            Registra tu clínica o consultorio
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col gap-4">
+        <form onSubmit={handleSubmit} style={{
+          background: 'var(--mt-surface)',
+          borderRadius: 16,
+          border: '1px solid var(--mt-border)',
+          boxShadow: 'var(--mt-shadow-sm)',
+          padding: 24,
+          display: 'flex', flexDirection: 'column', gap: 16,
+        }}>
 
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Clínica / consultorio</p>
-          {field('Nombre de la clínica', 'clinic_name', 'text', 'Consultorio Dr. García')}
-          {field('Slug (identificador único)', 'clinic_slug', 'text', 'dr-garcia')}
+          <SectionLabel>Clínica / consultorio</SectionLabel>
+          <MTInput name="clinic_name" label="Nombre de la clínica" icon={Building2}
+            required value={form.clinic_name} onChange={set('clinic_name')}
+            placeholder="Consultorio Dr. García" />
+          <MTInput name="clinic_slug" label="Slug (identificador único)" icon={Hash}
+            required value={form.clinic_slug} onChange={set('clinic_slug')}
+            placeholder="dr-garcia" />
 
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-2">Médico responsable</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-sm text-slate-600 font-medium">Nombre</label>
-              <input type="text" required value={form.first_name} onChange={set('first_name')} className="border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-sm text-slate-600 font-medium">Apellido</label>
-              <input type="text" required value={form.last_name} onChange={set('last_name')} className="border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-            </div>
+          <SectionLabel>Médico responsable</SectionLabel>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <MTInput name="first_name" label="Nombre" icon={User}
+              required value={form.first_name} onChange={set('first_name')} />
+            <MTInput name="last_name" label="Apellido" icon={User}
+              required value={form.last_name} onChange={set('last_name')} />
           </div>
-          {field('Correo electrónico', 'email', 'email', 'doctor@ejemplo.com')}
-          {field('Contraseña', 'password', 'password', '••••••••')}
+          <MTInput name="email" label="Correo electrónico" icon={Mail}
+            type="email" required value={form.email} onChange={set('email')}
+            placeholder="doctor@ejemplo.com" />
+          <MTInput name="password" label="Contraseña" icon={Lock}
+            type="password" required minLength={15}
+            value={form.password} onChange={set('password')}
+            placeholder="Mínimo 15 caracteres" autoComplete="new-password" />
 
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-2">Credenciales profesionales</p>
-          {field('Número de colegiado', 'colegiado_number', 'text', 'CMCGT-12345')}
-          {field('Especialidad', 'specialty', 'text', 'Cardiología')}
-          {field('Cédula / matrícula profesional', 'professional_id', 'text', '12345678')}
+          <SectionLabel>Credenciales profesionales</SectionLabel>
+          <MTInput name="colegiado_number" label="Número de colegiado" icon={IdCard}
+            required value={form.colegiado_number} onChange={set('colegiado_number')}
+            placeholder="CMCGT-12345" />
+          <MTInput name="specialty" label="Especialidad (opcional)" icon={Stethoscope}
+            value={form.specialty} onChange={set('specialty')} placeholder="Cardiología" />
+          <MTInput name="professional_id" label="Cédula / matrícula (opcional)" icon={IdCard}
+            value={form.professional_id} onChange={set('professional_id')} placeholder="12345678" />
 
-          <p className="text-xs text-slate-400 bg-slate-50 rounded-lg px-3 py-2 leading-relaxed">
+          <p style={{
+            fontSize: 12, color: 'var(--mt-muted)',
+            background: 'var(--mt-elevated)', borderRadius: 8,
+            padding: '10px 12px', lineHeight: 1.5, margin: 0,
+          }}>
             Tu cuenta será revisada por el equipo de Meditrack antes de activarse.
             Recibirás un correo cuando sea aprobada (generalmente en menos de 24 h).
           </p>
 
           {error && (
-            <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{error}</p>
+            <p style={{
+              fontSize: 13, color: 'var(--mt-danger)',
+              background: 'var(--mt-danger-subtle)',
+              borderRadius: 8, padding: '8px 12px', margin: 0,
+              border: '1px solid #fecaca',
+            }}>{error}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-500 text-white font-medium text-sm disabled:opacity-60 hover:bg-blue-600 transition-colors"
+          <MTButton
+            type="submit" variant="solid" size="lg" disabled={loading}
+            icon={loading ? Loader2 : undefined}
+            iconRight={loading ? undefined : ArrowRight}
+            style={{ width: '100%', height: 44 }}
           >
-            {loading ? <><Loader2 size={16} className="animate-spin" /> Registrando...</> : 'Solicitar acceso'}
-          </button>
+            {loading ? 'Registrando...' : 'Solicitar acceso'}
+          </MTButton>
 
-          <p className="text-center text-sm text-slate-500">
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--mt-text-2)', margin: 0 }}>
             ¿Ya tienes cuenta?{' '}
-            <Link href="/login" className="text-blue-600 font-medium hover:underline">
+            <Link href="/login" style={{ color: 'var(--mt-purple)', fontWeight: 500 }}>
               Iniciar sesión
             </Link>
           </p>
         </form>
       </div>
     </div>
+  )
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontSize: 11, fontWeight: 600, color: 'var(--mt-muted)',
+      textTransform: 'uppercase', letterSpacing: '0.08em',
+      margin: '4px 0 -4px',
+    }}>
+      {children}
+    </p>
   )
 }

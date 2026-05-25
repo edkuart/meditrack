@@ -4,14 +4,26 @@ import { useEffect, useState } from 'react'
 import { ShieldCheck, Download, Loader2, CheckCircle2, AlertTriangle, Clock } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import { getLegalStatus, acceptLegal, type LegalStatus } from '@/lib/doctor/compliance-api'
+import { MTButton } from '@/components/doctor/clinical-ui'
 
-// Current policy effective dates — bump these when policies update to force re-acceptance
 const TOS_EFFECTIVE = '2025-01-01'
 const PRIVACY_EFFECTIVE = '2025-01-01'
 
 function needsAcceptance(acceptedAt: string | null, effectiveDate: string): boolean {
   if (!acceptedAt) return true
   return new Date(acceptedAt) < new Date(effectiveDate)
+}
+
+function Section({ title, icon: Icon, children }: { title: string; icon: typeof ShieldCheck; children: React.ReactNode }) {
+  return (
+    <div style={{ borderRadius: 16, border: '1px solid var(--mt-border)', background: 'var(--mt-surface)', overflow: 'hidden', boxShadow: 'var(--mt-shadow-sm)' }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--mt-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icon size={16} color="var(--mt-muted)" />
+        <h2 style={{ fontWeight: 600, fontSize: 14, color: 'var(--mt-text)', margin: 0 }}>{title}</h2>
+      </div>
+      {children}
+    </div>
+  )
 }
 
 export default function ComplianceSettingsPage() {
@@ -22,9 +34,7 @@ export default function ComplianceSettingsPage() {
 
   useEffect(() => {
     if (!token) return
-    getLegalStatus(token)
-      .then(setStatus)
-      .finally(() => setLoading(false))
+    getLegalStatus(token).then(setStatus).finally(() => setLoading(false))
   }, [token])
 
   async function handleAccept(type: 'tos' | 'privacy') {
@@ -32,23 +42,18 @@ export default function ComplianceSettingsPage() {
     setAccepting(type)
     try {
       const result = await acceptLegal(token, type)
-      setStatus(prev => prev
-        ? {
-            ...prev,
-            tos_accepted_at: type === 'tos' ? result.accepted_at : prev.tos_accepted_at,
-            privacy_policy_accepted_at: type === 'privacy' ? result.accepted_at : prev.privacy_policy_accepted_at,
-          }
-        : null,
-      )
-    } finally {
-      setAccepting(null)
-    }
+      setStatus(prev => prev ? {
+        ...prev,
+        tos_accepted_at: type === 'tos' ? result.accepted_at : prev.tos_accepted_at,
+        privacy_policy_accepted_at: type === 'privacy' ? result.accepted_at : prev.privacy_policy_accepted_at,
+      } : null)
+    } finally { setAccepting(null) }
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="animate-spin text-slate-400" size={24} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
+        <Loader2 size={24} color="var(--mt-muted)" style={{ animation: 'spin 1s linear infinite' }} />
       </div>
     )
   }
@@ -56,132 +61,121 @@ export default function ComplianceSettingsPage() {
   const tosPending = status ? needsAcceptance(status.tos_accepted_at, TOS_EFFECTIVE) : true
   const privacyPending = status ? needsAcceptance(status.privacy_policy_accepted_at, PRIVACY_EFFECTIVE) : true
 
+  const policies = [
+    {
+      key: 'tos' as const,
+      label: 'Términos de Servicio',
+      acceptedAt: status?.tos_accepted_at,
+      pending: tosPending,
+    },
+    {
+      key: 'privacy' as const,
+      label: 'Política de Privacidad',
+      acceptedAt: status?.privacy_policy_accepted_at,
+      pending: privacyPending,
+    },
+  ]
+
+  const retention = [
+    { label: 'Registros clínicos', value: '10 años', note: 'Historia clínica obligatoria' },
+    { label: 'Logs de auditoría', value: '5 años', note: 'Trazabilidad regulatoria' },
+    { label: 'Consentimientos', value: 'Indefinido', note: 'Hasta retiro o erasure' },
+    { label: 'Sesiones inactivas', value: '30 días', note: 'Expiración automática' },
+  ]
+
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-6">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="p-2 bg-green-50 rounded-xl">
-          <ShieldCheck size={20} className="text-green-600" />
+    <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24, fontFamily: 'var(--mt-font)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+          background: 'var(--mt-success-subtle)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <ShieldCheck size={20} color="var(--mt-success)" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Cumplimiento & Legal</h1>
-          <p className="text-sm text-slate-500">Aceptación de políticas y estado de cumplimiento normativo</p>
+          <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>Cumplimiento & Legal</h1>
+          <p style={{ fontSize: 13, color: 'var(--mt-muted)', margin: 0 }}>Aceptación de políticas y estado de cumplimiento normativo</p>
         </div>
       </div>
 
-      {/* Legal acceptance */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800">Políticas legales</h2>
-        </div>
-        <div className="divide-y divide-slate-50">
-          {/* ToS */}
-          <div className="px-5 py-4 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-800">Términos de Servicio</p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {status?.tos_accepted_at
-                  ? `Aceptado el ${new Date(status.tos_accepted_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                  : 'No aceptado aún'}
-              </p>
+      <Section title="Políticas legales" icon={ShieldCheck}>
+        <div>
+          {policies.map((policy, i) => (
+            <div key={policy.key} style={{
+              padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+              borderTop: i > 0 ? '1px solid var(--mt-border)' : 'none',
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)', margin: 0 }}>{policy.label}</p>
+                <p style={{ fontSize: 11, color: 'var(--mt-muted)', margin: '3px 0 0' }}>
+                  {policy.acceptedAt
+                    ? `Aceptado el ${new Date(policy.acceptedAt).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    : 'No aceptado aún'}
+                </p>
+              </div>
+              {policy.pending ? (
+                <MTButton
+                  variant="solid" size="sm"
+                  icon={accepting === policy.key ? Loader2 : undefined}
+                  disabled={accepting === policy.key}
+                  onClick={() => handleAccept(policy.key)}
+                  style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                >
+                  Aceptar
+                </MTButton>
+              ) : (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--mt-success)', fontWeight: 500, flexShrink: 0 }}>
+                  <CheckCircle2 size={14} /> Al día
+                </span>
+              )}
             </div>
-            {tosPending ? (
-              <button
-                onClick={() => handleAccept('tos')}
-                disabled={accepting === 'tos'}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-60 transition-colors whitespace-nowrap"
-              >
-                {accepting === 'tos' ? <Loader2 size={13} className="animate-spin" /> : null}
-                Aceptar
-              </button>
-            ) : (
-              <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                <CheckCircle2 size={14} /> Al día
-              </span>
-            )}
-          </div>
+          ))}
+        </div>
+      </Section>
 
-          {/* Privacy */}
-          <div className="px-5 py-4 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-800">Política de Privacidad</p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {status?.privacy_policy_accepted_at
-                  ? `Aceptado el ${new Date(status.privacy_policy_accepted_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                  : 'No aceptado aún'}
-              </p>
-            </div>
-            {privacyPending ? (
-              <button
-                onClick={() => handleAccept('privacy')}
-                disabled={accepting === 'privacy'}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-60 transition-colors whitespace-nowrap"
-              >
-                {accepting === 'privacy' ? <Loader2 size={13} className="animate-spin" /> : null}
-                Aceptar
-              </button>
-            ) : (
-              <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                <CheckCircle2 size={14} /> Al día
-              </span>
-            )}
+      <Section title="Retención de datos" icon={Clock}>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {retention.map(r => (
+              <div key={r.label} style={{ borderRadius: 10, background: 'var(--mt-elevated)', padding: 14 }}>
+                <p style={{ fontSize: 11, color: 'var(--mt-muted)', margin: '0 0 4px' }}>{r.label}</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--mt-text)', margin: '0 0 4px' }}>{r.value}</p>
+                <p style={{ fontSize: 11, color: 'var(--mt-muted)', margin: 0 }}>{r.note}</p>
+              </div>
+            ))}
           </div>
-        </div>
-      </div>
-
-      {/* Data retention info */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-            <Clock size={16} className="text-slate-500" />
-            Retención de datos
-          </h2>
-        </div>
-        <div className="px-5 py-5 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs text-slate-400 mb-1">Registros clínicos</p>
-              <p className="font-semibold text-slate-800">10 años</p>
-              <p className="text-xs text-slate-400 mt-1">Historia clínica obligatoria</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs text-slate-400 mb-1">Logs de auditoría</p>
-              <p className="font-semibold text-slate-800">5 años</p>
-              <p className="text-xs text-slate-400 mt-1">Trazabilidad regulatoria</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs text-slate-400 mb-1">Consentimientos</p>
-              <p className="font-semibold text-slate-800">Indefinido</p>
-              <p className="text-xs text-slate-400 mt-1">Hasta retiro o erasure</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs text-slate-400 mb-1">Sesiones inactivas</p>
-              <p className="font-semibold text-slate-800">30 días</p>
-              <p className="text-xs text-slate-400 mt-1">Expiración automática</p>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400">
+          <p style={{ fontSize: 12, color: 'var(--mt-muted)', margin: 0 }}>
             Los periodos de retención siguen las obligaciones legales de registros médicos aplicables.
             Para solicitar eliminación de datos fuera de estos periodos, contacta con soporte.
           </p>
         </div>
-      </div>
+      </Section>
 
-      {/* GDPR rights */}
-      <div className="bg-amber-50 border border-amber-100 rounded-2xl px-5 py-4 flex gap-3">
-        <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+      <div style={{
+        borderRadius: 14, border: '1px solid #FDE68A',
+        background: '#FFFBEB', padding: '16px 20px',
+        display: 'flex', gap: 14,
+      }}>
+        <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0, marginTop: 2 }} />
         <div>
-          <p className="text-sm font-medium text-amber-800 mb-1">Derechos RGPD de pacientes</p>
-          <p className="text-xs text-amber-700">
-            Los pacientes pueden ejercer el derecho de portabilidad (exportar datos) y el derecho al olvido (anonimización de datos personales)
-            desde la pestaña <strong>Cumplimiento</strong> en su expediente clínico. Los datos médicos se conservan según obligación legal aunque se aplique la anonimización.
+          <p style={{ fontSize: 13, fontWeight: 500, color: '#92400E', margin: '0 0 6px' }}>Derechos RGPD de pacientes</p>
+          <p style={{ fontSize: 12, color: '#B45309', margin: '0 0 12px', lineHeight: 1.5 }}>
+            Los pacientes pueden ejercer el derecho de portabilidad (exportar datos) y el derecho al olvido (anonimización) desde la pestaña <strong>Cumplimiento</strong> en su expediente clínico. Los datos médicos se conservan según obligación legal aunque se aplique la anonimización.
           </p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <span className="text-xs bg-white border border-amber-200 text-amber-700 rounded-lg px-2.5 py-1 flex items-center gap-1">
-              <Download size={11} /> Portabilidad: exportar datos
-            </span>
-            <span className="text-xs bg-white border border-amber-200 text-amber-700 rounded-lg px-2.5 py-1 flex items-center gap-1">
-              <ShieldCheck size={11} /> Erasure: anonimización PII
-            </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {[
+              { icon: Download, label: 'Portabilidad: exportar datos' },
+              { icon: ShieldCheck, label: 'Erasure: anonimización PII' },
+            ].map(({ icon: Icon, label }) => (
+              <span key={label} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11,
+                background: '#fff', border: '1px solid #FDE68A', color: '#92400E',
+                borderRadius: 8, padding: '4px 10px',
+              }}>
+                <Icon size={11} /> {label}
+              </span>
+            ))}
           </div>
         </div>
       </div>

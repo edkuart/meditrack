@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import { grantDepartmentAccess, revokeDepartmentAccess, listPatientAccess } from './access.service.ts'
 
 const GrantAccessSchema = z.object({
@@ -18,7 +19,7 @@ router.use('*', requireAuth)
 // GET /patients/:patientId/access
 router.get(
   '/patients/:patientId/access',
-  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  requirePermission(PERMISSIONS.PATIENT_ACCESS_MANAGE),
   async (c) => {
     const { tenant_id } = c.get('auth')
     const grants = await listPatientAccess(tenant_id, c.req.param('patientId')!)
@@ -29,7 +30,7 @@ router.get(
 // POST /patients/:patientId/access
 router.post(
   '/patients/:patientId/access',
-  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  requirePermission(PERMISSIONS.PATIENT_ACCESS_MANAGE),
   zValidator('json', GrantAccessSchema),
   async (c) => {
     const { tenant_id, sub, email } = c.get('auth')
@@ -53,7 +54,7 @@ router.post(
 // DELETE /patients/:patientId/access/:departmentId
 router.delete(
   '/patients/:patientId/access/:departmentId',
-  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  requirePermission(PERMISSIONS.PATIENT_ACCESS_MANAGE),
   async (c) => {
     const { tenant_id, sub, email } = c.get('auth')
     await revokeDepartmentAccess(

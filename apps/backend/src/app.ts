@@ -51,7 +51,7 @@ export function createApp() {
   app.use('*', cors({
     origin: (origin) => allowedOrigins.has(origin) ? origin : undefined,
     credentials: true,
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }))
 
@@ -105,7 +105,7 @@ export function createApp() {
   // Public and admin routes are exempt from both checks.
   app.use('/api/v1/*', async (c, next) => {
     const path = c.req.path
-    const exempt = ['/api/v1/auth', '/api/v1/portal', '/api/v1/stripe', '/api/v1/admin']
+    const exempt = ['/api/v1/auth', '/api/v1/portal', '/api/v1/stripe', '/api/v1/admin', '/api/v1/billing/webhook']
     if (exempt.some(p => path.startsWith(p))) return next()
     return requireAuth(c, () => requireVerified(c, next))
   })

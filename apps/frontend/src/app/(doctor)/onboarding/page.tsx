@@ -4,16 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  CheckCircle2,
-  ChevronRight,
-  CreditCard,
-  Loader2,
-  Stethoscope,
-  Users,
-  Activity,
-  ClipboardList,
-  UserCog,
-  PartyPopper,
+  CheckCircle2, ChevronRight, CreditCard, Loader2,
+  Stethoscope, Users, Activity, ClipboardList, UserCog, PartyPopper,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import { getOnboardingStatus, type OnboardingStatus } from '@/lib/doctor/onboarding-api'
@@ -30,86 +22,85 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    key: 'has_patient',
-    icon: Users,
+    key: 'has_patient', icon: Users,
     title: 'Agrega tu primer paciente',
     description: 'Crea el expediente del primer paciente de tu clínica con sus datos básicos.',
-    action: 'Agregar paciente',
-    href: '/patients/new',
-    required: true,
+    action: 'Agregar paciente', href: '/patients/new', required: true,
   },
   {
-    key: 'has_encounter',
-    icon: Stethoscope,
+    key: 'has_encounter', icon: Stethoscope,
     title: 'Abre una consulta clínica',
     description: 'Registra la primera consulta de un paciente para documentar el motivo y tus notas clínicas.',
-    action: 'Ver pacientes',
-    href: '/patients',
-    required: true,
+    action: 'Ver pacientes', href: '/patients', required: true,
   },
   {
-    key: 'has_treatment',
-    icon: ClipboardList,
+    key: 'has_treatment', icon: ClipboardList,
     title: 'Prescribe un plan de tratamiento',
     description: 'Crea un plan con medicamentos, dosis y frecuencia para que el paciente haga seguimiento desde el portal.',
-    action: 'Ver pacientes',
-    href: '/patients',
-    required: true,
+    action: 'Ver pacientes', href: '/patients', required: true,
   },
   {
-    key: 'has_staff',
-    icon: UserCog,
+    key: 'has_staff', icon: UserCog,
     title: 'Invita a tu equipo',
     description: 'Añade enfermeras, asistentes o médicos colaboradores para que accedan a la plataforma.',
-    action: 'Gestionar equipo',
-    href: '/staff',
-    required: false,
+    action: 'Gestionar equipo', href: '/staff', required: false,
   },
   {
-    key: 'has_billing',
-    icon: CreditCard,
+    key: 'has_billing', icon: CreditCard,
     title: 'Configura tu suscripción',
     description: 'Actualiza al plan Pro para desbloquear más pacientes, equipo y funciones avanzadas.',
-    action: 'Ver planes',
-    href: '/settings/billing',
-    required: false,
+    action: 'Ver planes', href: '/settings/billing', required: false,
   },
 ]
 
 function StepCard({ step, done, index }: { step: Step; done: boolean; index: number }) {
   const Icon = step.icon
-
   return (
-    <div className={`flex gap-4 rounded-2xl border p-5 transition-colors ${
-      done
-        ? 'border-emerald-100 bg-emerald-50/50 opacity-70'
-        : 'border-slate-200 bg-white hover:border-blue-100 hover:bg-blue-50/30'
-    }`}>
-      {/* Step number / checkmark */}
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
-        done
-          ? 'bg-emerald-100 text-emerald-600'
-          : 'bg-blue-50 text-blue-600'
-      }`}>
+    <div style={{
+      display: 'flex', gap: 16, borderRadius: 16, padding: 20,
+      border: `1px solid ${done ? 'var(--mt-success-subtle)' : 'var(--mt-border)'}`,
+      background: done ? 'var(--mt-success-subtle)' : 'var(--mt-surface)',
+      opacity: done ? 0.7 : 1,
+      transition: 'border-color .2s, background .2s',
+    }}>
+      <div style={{
+        width: 40, height: 40, flexShrink: 0, borderRadius: 12,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 14, fontWeight: 700,
+        background: done ? 'rgba(16,185,129,.15)' : 'var(--mt-primary-subtle)',
+        color: done ? 'var(--mt-success)' : 'var(--mt-primary)',
+      }}>
         {done ? <CheckCircle2 size={18} /> : index + 1}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className={`font-semibold ${done ? 'text-emerald-700 line-through' : 'text-slate-900'}`}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <p style={{
+            fontWeight: 600, margin: 0, fontSize: 14,
+            color: done ? 'var(--mt-success)' : 'var(--mt-text)',
+            textDecoration: done ? 'line-through' : 'none',
+          }}>
             {step.title}
           </p>
           {!step.required && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Opcional</span>
+            <span style={{
+              borderRadius: 999, background: 'var(--mt-elevated)',
+              padding: '2px 8px', fontSize: 11, color: 'var(--mt-muted)',
+            }}>Opcional</span>
           )}
         </div>
-        <p className="mt-1 text-sm text-slate-500">{step.description}</p>
-
+        <p style={{ marginTop: 4, fontSize: 13, color: 'var(--mt-text-2)', marginBottom: done ? 0 : 12 }}>
+          {step.description}
+        </p>
         {!done && (
-          <Link
-            href={step.href}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
-          >
+          <Link href={step.href} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            borderRadius: 8, padding: '6px 14px',
+            background: 'var(--mt-gradient-primary)',
+            color: '#fff', fontSize: 12, fontWeight: 600,
+            textDecoration: 'none',
+            boxShadow: '0 1px 3px rgba(37,99,235,.25)',
+          }}>
             <Icon size={13} />
             {step.action}
             <ChevronRight size={13} />
@@ -136,8 +127,8 @@ export default function OnboardingPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 size={22} className="animate-spin text-slate-400" />
+      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={22} color="var(--mt-muted)" style={{ animation: 'spin 1s linear infinite' }} />
       </div>
     )
   }
@@ -146,39 +137,44 @@ export default function OnboardingPage() {
     ? STEPS.filter(s => s.required).every(s => status.steps[s.key])
     : false
 
+  const pct = status ? Math.round((status.completed_count / status.total_count) * 100) : 0
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-      {/* Header */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 16px', display: 'flex', flexDirection: 'column', gap: 24, fontFamily: 'var(--mt-font)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--mt-purple)', fontWeight: 500 }}>
           <Activity size={15} />
           Configuración inicial
         </div>
-        <h1 className="text-2xl font-bold text-slate-900">Configura tu clínica</h1>
-        <p className="text-slate-500 text-sm">
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--mt-text)', margin: 0 }}>
+          Configura tu clínica
+        </h1>
+        <p style={{ fontSize: 13, color: 'var(--mt-text-2)', margin: 0 }}>
           Completa estos pasos para empezar a usar meditrack con tus pacientes.
         </p>
       </div>
 
-      {/* Progress */}
       {status && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-medium text-slate-700">Progreso general</span>
-            <span className="font-bold text-slate-900 tabular-nums">
+        <div style={{
+          borderRadius: 16, border: '1px solid var(--mt-border)',
+          background: 'var(--mt-surface)', padding: 20,
+          display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
+            <span style={{ fontWeight: 500, color: 'var(--mt-text-2)' }}>Progreso general</span>
+            <span style={{ fontWeight: 700, color: 'var(--mt-text)', fontVariantNumeric: 'tabular-nums' }}>
               {status.completed_count}/{status.total_count}
             </span>
           </div>
-          <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                requiredDone ? 'bg-emerald-500' : 'bg-blue-500'
-              }`}
-              style={{ width: `${Math.round((status.completed_count / status.total_count) * 100)}%` }}
-            />
+          <div style={{ height: 8, width: '100%', borderRadius: 999, background: 'var(--mt-elevated)', overflow: 'hidden' }}>
+            <div style={{
+              width: `${pct}%`, height: '100%', borderRadius: 999,
+              background: requiredDone ? '#34D399' : 'var(--mt-gradient-accent)',
+              transition: 'width .6s cubic-bezier(0,0,.2,1)',
+            }} />
           </div>
           {requiredDone && (
-            <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--mt-success)', fontWeight: 500 }}>
               <PartyPopper size={15} />
               ¡Los pasos esenciales están completos! Ya puedes usar meditrack al 100%.
             </div>
@@ -186,25 +182,18 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* Steps */}
       {status && (
-        <div className="space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {STEPS.map((step, i) => (
-            <StepCard
-              key={step.key}
-              step={step}
-              done={status.steps[step.key]}
-              index={i}
-            />
+            <StepCard key={step.key} step={step} done={status.steps[step.key]} index={i} />
           ))}
         </div>
       )}
 
-      {/* Back to dashboard */}
-      <div className="pt-2">
+      <div style={{ paddingTop: 8 }}>
         <button
           onClick={() => router.push('/dashboard')}
-          className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+          style={{ fontSize: 13, color: 'var(--mt-muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color .15s' }}
         >
           ← Volver al panel
         </button>

@@ -15,10 +15,8 @@ import {
 import { listStaff, type StaffMember } from '@/lib/doctor/staff-api'
 import {
   ClinicalButton, ClinicalHeader, ClinicalPage, ClinicalPanel,
-  EmptyClinicalState, LoadingState, StatusPill, type Tone,
+  EmptyClinicalState, LoadingState, StatusPill, MTButton, type Tone,
 } from '@/components/doctor/clinical-ui'
-
-// ─── Config ───────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<ReferralStatus, { label: string; tone: Tone }> = {
   PENDING:   { label: 'Pendiente',  tone: 'amber'  },
@@ -28,28 +26,33 @@ const STATUS_CONFIG: Record<ReferralStatus, { label: string; tone: Tone }> = {
   CANCELLED: { label: 'Cancelada',  tone: 'slate'  },
 }
 
-const PRIORITY_CONFIG = {
-  ROUTINE:   { label: 'Rutina',     bg: 'bg-slate-100',  fg: 'text-slate-600' },
-  URGENT:    { label: 'Urgente',    bg: 'bg-amber-100',  fg: 'text-amber-700' },
-  EMERGENCY: { label: 'Emergencia', bg: 'bg-red-100',    fg: 'text-red-700'   },
+const PRIORITY_STYLES: Record<string, { label: string; bg: string; color: string }> = {
+  ROUTINE:   { label: 'Rutina',     bg: 'var(--mt-elevated)', color: 'var(--mt-text-2)' },
+  URGENT:    { label: 'Urgente',    bg: '#FEF3C7',            color: '#92400E' },
+  EMERGENCY: { label: 'Emergencia', bg: 'var(--mt-danger-subtle)', color: 'var(--mt-danger)' },
 }
 
-// ─── Referral card ─────────────────────────────────────────────────────────────
+const inputStyle: React.CSSProperties = {
+  width: '100%', border: '1px solid var(--mt-border)', borderRadius: 8,
+  padding: '8px 12px', fontSize: 13, color: 'var(--mt-text)',
+  background: 'var(--mt-surface)', outline: 'none',
+  fontFamily: 'var(--mt-font)', boxSizing: 'border-box',
+}
 
-function ReferralCard({
-  referral,
-  isIncoming,
-  onAction,
-}: {
-  referral: Referral
-  isIncoming: boolean
-  onAction: () => void
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--mt-text-2)', marginBottom: 5,
+}
+
+function ReferralCard({ referral, isIncoming, onAction }: {
+  referral: Referral; isIncoming: boolean; onAction: () => void
 }) {
   const [loading, setLoading] = useState(false)
   const { token, user } = useAuth()
   const isHospital = user?.tenant_type === 'HOSPITAL'
   const cfg = STATUS_CONFIG[referral.status]
-  const prio = PRIORITY_CONFIG[referral.priority]
+  const prio = PRIORITY_STYLES[referral.priority]
+  const doctor = isIncoming ? referral.from_doctor : referral.to_doctor
+  const doctorLabel = isIncoming ? 'De' : 'Para'
 
   async function act(action: 'accept' | 'reject' | 'complete' | 'cancel') {
     if (!token) return
@@ -60,100 +63,80 @@ function ReferralCard({
       if (action === 'complete') await completeReferral(token, referral.id)
       if (action === 'cancel')   await cancelReferral(token, referral.id)
       onAction()
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
-  const doctor = isIncoming ? referral.from_doctor : referral.to_doctor
-  const doctorLabel = isIncoming ? 'De' : 'Para'
-
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 hover:shadow-sm transition-shadow">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
+    <div style={{
+      background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+      borderRadius: 12, padding: 16,
+      display: 'flex', flexDirection: 'column', gap: 12,
+      boxShadow: 'var(--mt-shadow-sm)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           {referral.patient && (
-            <Link
-              href={`/patients/${referral.patient_id}`}
-              className="font-semibold text-slate-900 hover:text-blue-600 transition-colors text-sm"
+            <Link href={`/patients/${referral.patient_id}`} style={{ fontWeight: 600, color: 'var(--mt-text)', fontSize: 13, textDecoration: 'none' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--mt-primary)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--mt-text)')}
             >
               {referral.patient.first_name} {referral.patient.last_name}
               {referral.patient.mrn && (
-                <span className="ml-2 font-mono text-xs text-blue-500">{referral.patient.mrn}</span>
+                <span style={{ marginLeft: 8, fontFamily: 'monospace', fontSize: 11, color: 'var(--mt-primary)' }}>{referral.patient.mrn}</span>
               )}
             </Link>
           )}
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p style={{ fontSize: 11, color: 'var(--mt-muted)', margin: '4px 0 0' }}>
             {doctorLabel}: {doctor ? `Dr. ${doctor.first_name} ${doctor.last_name}` : referral.to_department?.name ?? '—'}
-            {doctor?.specialty && <span className="ml-1 text-slate-300">· {doctor.specialty}</span>}
+            {doctor?.specialty && <span style={{ marginLeft: 6, color: 'var(--mt-border)' }}>· {doctor.specialty}</span>}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${prio.bg} ${prio.fg}`}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: prio.bg, color: prio.color }}>
             {prio.label}
           </span>
           <StatusPill tone={cfg.tone}>{cfg.label}</StatusPill>
         </div>
       </div>
 
-      <p className="text-sm text-slate-700 leading-relaxed line-clamp-2">{referral.reason}</p>
+      <p style={{ fontSize: 13, color: 'var(--mt-text-2)', lineHeight: 1.5, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+        {referral.reason}
+      </p>
 
       {referral.response_notes && (
-        <p className="text-xs text-slate-500 italic border-l-2 border-slate-200 pl-2">
+        <p style={{ fontSize: 12, color: 'var(--mt-muted)', fontStyle: 'italic', margin: 0, paddingLeft: 10, borderLeft: '2px solid var(--mt-border)' }}>
           {referral.response_notes}
         </p>
       )}
 
-      <div className="flex items-center justify-between pt-1">
-        <span className="text-xs text-slate-400">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
+        <span style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
           {new Date(referral.created_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
         </span>
 
         {loading ? (
-          <Loader2 size={16} className="animate-spin text-slate-400" />
+          <Loader2 size={16} color="var(--mt-muted)" style={{ animation: 'spin 1s linear infinite' }} />
         ) : (
-          <div className="flex gap-2 flex-wrap justify-end">
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {isIncoming && referral.status === 'PENDING' && (
               <>
-                <button
-                  onClick={() => act('accept')}
-                  className="flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-800 transition-colors"
-                >
-                  <CheckCircle size={13} /> Aceptar
-                </button>
-                <button
-                  onClick={() => act('reject')}
-                  className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
-                >
-                  <XCircle size={13} /> Rechazar
-                </button>
+                <ActBtn onClick={() => act('accept')} color="var(--mt-success)" icon={<CheckCircle size={13} />}>Aceptar</ActBtn>
+                <ActBtn onClick={() => act('reject')} color="var(--mt-danger)" icon={<XCircle size={13} />}>Rechazar</ActBtn>
               </>
             )}
             {isIncoming && referral.status === 'ACCEPTED' && (
               <>
-                <button
-                  onClick={() => act('complete')}
-                  className="flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-800 transition-colors"
-                >
-                  <CheckCircle size={13} /> Completar
-                </button>
+                <ActBtn onClick={() => act('complete')} color="var(--mt-primary)" icon={<CheckCircle size={13} />}>Completar</ActBtn>
                 {isHospital && referral.patient_id && (
-                  <Link
-                    href={`/patients/${referral.patient_id}?openTab=admissions&referralId=${referral.id}`}
-                    className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
-                  >
+                  <Link href={`/patients/${referral.patient_id}?openTab=admissions&referralId=${referral.id}`}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 500, color: 'var(--mt-purple)', textDecoration: 'none' }}>
                     <BedDouble size={13} /> Internar
                   </Link>
                 )}
               </>
             )}
             {!isIncoming && ['PENDING', 'ACCEPTED'].includes(referral.status) && (
-              <button
-                onClick={() => act('cancel')}
-                className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
-              >
-                <XCircle size={13} /> Cancelar
-              </button>
+              <ActBtn onClick={() => act('cancel')} color="var(--mt-muted)" icon={<XCircle size={13} />}>Cancelar</ActBtn>
             )}
           </div>
         )}
@@ -162,53 +145,46 @@ function ReferralCard({
   )
 }
 
-// ─── New referral modal ────────────────────────────────────────────────────────
+function ActBtn({ onClick, color, icon, children }: { onClick: () => void; color: string; icon: React.ReactNode; children: string }) {
+  return (
+    <button onClick={onClick} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 12, fontWeight: 500, color, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+    }}>
+      {icon} {children}
+    </button>
+  )
+}
 
 function NewReferralModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { token } = useAuth()
-
-  // Patient search
   const [patientQ, setPatientQ] = useState('')
   const [patients, setPatients] = useState<Array<{ id: string; first_name: string; last_name: string; mrn: string | null }>>([])
   const [patientLoading, setPatientLoading] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<{ id: string; first_name: string; last_name: string } | null>(null)
   const patientTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Doctor list
   const [doctors, setDoctors] = useState<StaffMember[]>([])
   const [toDoctorId, setToDoctorId] = useState('')
-
-  // Form fields
   const [reason, setReason] = useState('')
   const [notes, setNotes] = useState('')
   const [priority, setPriority] = useState<ReferralPriority>('ROUTINE')
-
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Load doctors on mount
   useEffect(() => {
     if (!token) return
     listStaff(token).then(res => {
-      const eligible = res.staff.filter(m =>
-        (m.role === 'DOCTOR' || m.role === 'ADMIN_CLINIC') && m.is_active && m.is_verified
-      )
-      setDoctors(eligible)
+      setDoctors(res.staff.filter(m => (m.role === 'DOCTOR' || m.role === 'ADMIN_CLINIC') && m.is_active && m.is_verified))
     }).catch(() => {})
   }, [token])
 
-  // Debounced patient search
   useEffect(() => {
     if (!token || patientQ.length < 2) { setPatients([]); return }
     if (patientTimer.current) clearTimeout(patientTimer.current)
     patientTimer.current = setTimeout(async () => {
       setPatientLoading(true)
-      try {
-        const res = await listPatients(token, patientQ, 1, 8)
-        setPatients(res.patients)
-      } finally {
-        setPatientLoading(false)
-      }
+      try { setPatients((await listPatients(token, patientQ, 1, 8)).patients) }
+      finally { setPatientLoading(false) }
     }, 300)
   }, [patientQ, token])
 
@@ -218,89 +194,70 @@ function NewReferralModal({ onClose, onCreated }: { onClose: () => void; onCreat
     setSubmitting(true)
     setError(null)
     try {
-      await createReferral(token, selectedPatient.id, {
-        to_doctor_id: toDoctorId,
-        reason: reason.trim(),
-        notes: notes.trim() || undefined,
-        priority,
-      })
-      onCreated()
-      onClose()
+      await createReferral(token, selectedPatient.id, { to_doctor_id: toDoctorId, reason: reason.trim(), notes: notes.trim() || undefined, priority })
+      onCreated(); onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear la referencia')
-    } finally {
-      setSubmitting(false)
-    }
+    } finally { setSubmitting(false) }
   }
 
   const canSubmit = !!selectedPatient && !!toDoctorId && reason.trim().length > 0
 
+  const PRIO_ACTIVE: Record<string, { bg: string; color: string }> = {
+    ROUTINE:   { bg: 'var(--mt-text)', color: '#fff' },
+    URGENT:    { bg: '#F59E0B', color: '#fff' },
+    EMERGENCY: { bg: 'var(--mt-danger)', color: '#fff' },
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(15,23,42,.5)', backdropFilter: 'blur(4px)' }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(15,23,42,.5)', backdropFilter: 'blur(4px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg" style={{ maxHeight: '90dvh', overflowY: 'auto' }}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+      <div style={{ background: 'var(--mt-surface)', borderRadius: 16, boxShadow: '0 20px 60px rgba(15,23,42,.3)', width: '100%', maxWidth: 520, maxHeight: '90dvh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid var(--mt-border)' }}>
           <div>
-            <h2 className="text-base font-semibold text-slate-900">Nueva referencia médica</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Envía un paciente a otro médico</p>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>Nueva referencia médica</h2>
+            <p style={{ fontSize: 11, color: 'var(--mt-muted)', margin: '3px 0 0' }}>Envía un paciente a otro médico</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-            <X size={18} className="text-slate-500" />
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mt-muted)', display: 'flex', padding: 6, borderRadius: 8 }}>
+            <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Patient search */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">Paciente *</label>
+            <label style={labelStyle}>Paciente *</label>
             {selectedPatient ? (
-              <div className="flex items-center justify-between px-3 py-2.5 border border-blue-200 bg-blue-50 rounded-lg">
-                <span className="text-sm font-medium text-blue-800">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--mt-primary-mist)', background: 'var(--mt-primary-subtle)', borderRadius: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-primary-deep)' }}>
                   {selectedPatient.first_name} {selectedPatient.last_name}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => { setSelectedPatient(null); setPatientQ('') }}
-                  className="text-blue-400 hover:text-blue-600"
-                >
+                <button type="button" onClick={() => { setSelectedPatient(null); setPatientQ('') }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mt-primary)', display: 'flex' }}>
                   <X size={14} />
                 </button>
               </div>
             ) : (
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre..."
-                  value={patientQ}
-                  onChange={e => setPatientQ(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoFocus
-                />
-                {patientLoading && (
-                  <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
-                )}
+              <div style={{ position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--mt-muted)', pointerEvents: 'none' }} />
+                <input type="text" placeholder="Buscar por nombre..." value={patientQ} onChange={e => setPatientQ(e.target.value)}
+                  style={{ ...inputStyle, paddingLeft: 32 }} autoFocus />
+                {patientLoading && <Loader2 size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', animation: 'spin 1s linear infinite', color: 'var(--mt-muted)' }} />}
                 {patients.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 overflow-hidden">
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: 'var(--mt-surface)', border: '1px solid var(--mt-border)', borderRadius: 10, boxShadow: '0 8px 24px rgba(15,23,42,.12)', zIndex: 10, overflow: 'hidden' }}>
                     {patients.map(p => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => { setSelectedPatient(p); setPatients([]); setPatientQ('') }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors"
+                      <button key={p.id} type="button" onClick={() => { setSelectedPatient(p); setPatients([]); setPatientQ('') }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background .1s' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--mt-elevated)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '')}
                       >
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                          <span className="text-xs font-semibold text-blue-600">
-                            {p.first_name[0]}{p.last_name[0]}
-                          </span>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--mt-primary-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--mt-primary)' }}>{p.first_name[0]}{p.last_name[0]}</span>
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-slate-900">{p.first_name} {p.last_name}</div>
-                          {p.mrn && <div className="text-xs text-slate-400 font-mono">{p.mrn}</div>}
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)' }}>{p.first_name} {p.last_name}</div>
+                          {p.mrn && <div style={{ fontSize: 11, color: 'var(--mt-muted)', fontFamily: 'monospace' }}>{p.mrn}</div>}
                         </div>
                       </button>
                     ))}
@@ -312,105 +269,72 @@ function NewReferralModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
           {/* Doctor selector */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">Referir a *</label>
-            <select
-              value={toDoctorId}
-              onChange={e => setToDoctorId(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              required
-            >
+            <label style={labelStyle}>Referir a *</label>
+            <select value={toDoctorId} onChange={e => setToDoctorId(e.target.value)} required
+              style={{ ...inputStyle }}>
               <option value="">Selecciona un médico...</option>
               {doctors.map(d => (
-                <option key={d.id} value={d.id}>
-                  Dr. {d.first_name} {d.last_name}{d.specialty ? ` — ${d.specialty}` : ''}
-                </option>
+                <option key={d.id} value={d.id}>Dr. {d.first_name} {d.last_name}{d.specialty ? ` — ${d.specialty}` : ''}</option>
               ))}
             </select>
-            {doctors.length === 0 && (
-              <p className="text-xs text-slate-400 mt-1">No hay otros médicos activos en tu clínica.</p>
-            )}
+            {doctors.length === 0 && <p style={{ fontSize: 11, color: 'var(--mt-muted)', marginTop: 4 }}>No hay otros médicos activos en tu clínica.</p>}
           </div>
 
           {/* Priority */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">Prioridad</label>
-            <div className="flex gap-2">
-              {(['ROUTINE', 'URGENT', 'EMERGENCY'] as const).map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPriority(p)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${
-                    priority === p
-                      ? p === 'ROUTINE'   ? 'bg-slate-700 text-white border-slate-700'
-                      : p === 'URGENT'    ? 'bg-amber-500 text-white border-amber-500'
-                                         : 'bg-red-500 text-white border-red-500'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {PRIORITY_CONFIG[p].label}
-                </button>
-              ))}
+            <label style={labelStyle}>Prioridad</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['ROUTINE', 'URGENT', 'EMERGENCY'] as const).map(p => {
+                const active = priority === p
+                const as = PRIO_ACTIVE[p]
+                return (
+                  <button key={p} type="button" onClick={() => setPriority(p)} style={{
+                    flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all .15s',
+                    background: active ? as.bg : 'transparent',
+                    color: active ? as.color : 'var(--mt-text-2)',
+                    border: `1px solid ${active ? as.bg : 'var(--mt-border)'}`,
+                  }}>
+                    {PRIORITY_STYLES[p].label}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           {/* Reason */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">Motivo de la referencia *</label>
-            <textarea
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              placeholder="Describe el motivo clínico de la referencia..."
-              rows={3}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              required
-            />
+            <label style={labelStyle}>Motivo de la referencia *</label>
+            <textarea value={reason} onChange={e => setReason(e.target.value)}
+              placeholder="Describe el motivo clínico de la referencia..." rows={3} required
+              style={{ ...inputStyle, height: 'auto', resize: 'none' }} />
           </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">Notas adicionales</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Información adicional para el médico receptor (opcional)..."
-              rows={2}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
+            <label style={labelStyle}>Notas adicionales</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="Información adicional (opcional)..." rows={2}
+              style={{ ...inputStyle, height: 'auto', resize: 'none' }} />
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertTriangle size={14} className="text-red-500 shrink-0" />
-              <p className="text-xs text-red-700">{error}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--mt-danger-subtle)', border: '1px solid #fecaca', borderRadius: 8 }}>
+              <AlertTriangle size={14} color="var(--mt-danger)" style={{ flexShrink: 0 }} />
+              <p style={{ fontSize: 12, color: 'var(--mt-danger)', margin: 0 }}>{error}</p>
             </div>
           )}
 
-          <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={!canSubmit || submitting}
-              className="flex-1 py-2.5 rounded-lg text-sm font-medium text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: canSubmit && !submitting ? 'var(--mt-primary)' : undefined, backgroundColor: (!canSubmit || submitting) ? '#94a3b8' : undefined }}
-            >
-              {submitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+            <MTButton type="button" variant="outline" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Cancelar</MTButton>
+            <MTButton type="submit" variant="solid" icon={submitting ? Loader2 : Send} disabled={!canSubmit || submitting} style={{ flex: 1, justifyContent: 'center' }}>
               Enviar referencia
-            </button>
+            </MTButton>
           </div>
         </form>
       </div>
     </div>
   )
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 type Tab = 'incoming' | 'outgoing'
 
@@ -424,66 +348,50 @@ export default function ReferralsPage() {
 
   const load = useCallback(async () => {
     if (!token) return
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await listDoctorReferrals(token, tab)
-      setReferrals(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error cargando referencias')
-    } finally {
-      setLoading(false)
-    }
+    setLoading(true); setError(null)
+    try { setReferrals(await listDoctorReferrals(token, tab)) }
+    catch (e) { setError(e instanceof Error ? e.message : 'Error cargando referencias') }
+    finally { setLoading(false) }
   }, [token, tab])
 
   useEffect(() => { load() }, [load])
-
   const pendingCount = referrals.filter(r => r.status === 'PENDING').length
 
   return (
     <ClinicalPage>
-      {modalOpen && (
-        <NewReferralModal
-          onClose={() => setModalOpen(false)}
-          onCreated={() => { setTab('outgoing'); load() }}
-        />
-      )}
+      {modalOpen && <NewReferralModal onClose={() => setModalOpen(false)} onCreated={() => { setTab('outgoing'); load() }} />}
 
       <ClinicalHeader
         title="Referencias médicas"
         subtitle="Envía y recibe referencias entre médicos de tu clínica"
         icon={ArrowUpDown}
         actions={
-          <div className="flex gap-2">
-            <ClinicalButton icon={RefreshCw} variant="outline" tone="slate" onClick={load}>
-              Actualizar
-            </ClinicalButton>
-            <ClinicalButton icon={Plus} variant="solid" tone="blue" onClick={() => setModalOpen(true)}>
-              Nueva referencia
-            </ClinicalButton>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ClinicalButton icon={RefreshCw} variant="outline" tone="slate" onClick={load}>Actualizar</ClinicalButton>
+            <ClinicalButton icon={Plus} variant="solid" tone="blue" onClick={() => setModalOpen(true)}>Nueva referencia</ClinicalButton>
           </div>
         }
       />
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--mt-elevated)', borderRadius: 10, width: 'fit-content' }}>
         {([
           { key: 'incoming', label: 'Recibidas', icon: Inbox },
           { key: 'outgoing', label: 'Enviadas',  icon: Send  },
         ] as const).map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              tab === key
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
+          <button key={key} onClick={() => setTab(key)} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 16px', borderRadius: 7, border: 'none',
+            background: tab === key ? 'var(--mt-surface)' : 'transparent',
+            color: tab === key ? 'var(--mt-text)' : 'var(--mt-muted)',
+            fontSize: 13, fontWeight: tab === key ? 500 : 400,
+            cursor: 'pointer', transition: 'all .15s',
+            boxShadow: tab === key ? 'var(--mt-shadow-sm)' : 'none',
+          }}>
             <Icon size={15} />
             {label}
             {key === 'incoming' && pendingCount > 0 && !loading && (
-              <span className="bg-amber-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              <span style={{ background: '#F59E0B', color: '#fff', fontSize: 11, borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>
                 {pendingCount}
               </span>
             )}
@@ -495,30 +403,21 @@ export default function ReferralsPage() {
         {loading ? (
           <LoadingState label="Cargando referencias..." />
         ) : error ? (
-          <div className="flex flex-col items-center gap-3 py-12">
-            <AlertTriangle size={32} className="text-red-400" />
-            <p className="text-sm text-slate-500">{error}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '48px 0' }}>
+            <AlertTriangle size={32} color="var(--mt-danger)" />
+            <p style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>{error}</p>
             <ClinicalButton variant="outline" tone="slate" onClick={load}>Reintentar</ClinicalButton>
           </div>
         ) : referrals.length === 0 ? (
           <EmptyClinicalState
             icon={tab === 'incoming' ? Inbox : Send}
             title={tab === 'incoming' ? 'Sin referencias recibidas' : 'Sin referencias enviadas'}
-            description={
-              tab === 'incoming'
-                ? 'Aquí aparecerán las referencias que otros médicos te envíen.'
-                : 'Las referencias que envíes a otros médicos aparecerán aquí.'
-            }
+            description={tab === 'incoming' ? 'Aquí aparecerán las referencias que otros médicos te envíen.' : 'Las referencias que envíes a otros médicos aparecerán aquí.'}
           />
         ) : (
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16 }}>
             {referrals.map(r => (
-              <ReferralCard
-                key={r.id}
-                referral={r}
-                isIncoming={tab === 'incoming'}
-                onAction={load}
-              />
+              <ReferralCard key={r.id} referral={r} isIncoming={tab === 'incoming'} onAction={load} />
             ))}
           </div>
         )}

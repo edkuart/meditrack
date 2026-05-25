@@ -11,6 +11,7 @@ import {
   Ruler, Scale, X, ArrowUpDown, CheckCircle, XCircle, Send, BedDouble, LogOut,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
+import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
 import {
   getPatient, listEncounters, createEncounter, listDocuments,
   generatePortalAccess, getPatientFhirBundle, listPatientTreatments,
@@ -63,11 +64,11 @@ const ENC_LABELS: Record<string, string> = {
   EMERGENCY: 'Urgencia',
 }
 
-const ENC_STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-500',
-  OPEN: 'bg-green-100 text-green-700',
-  CLOSED: 'bg-slate-100 text-slate-500',
-  ARCHIVED: 'bg-slate-50 text-slate-400',
+const ENC_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  DRAFT:    { bg: 'var(--mt-elevated)',       color: 'var(--mt-muted)'   },
+  OPEN:     { bg: 'var(--mt-success-subtle)', color: 'var(--mt-success)' },
+  CLOSED:   { bg: 'var(--mt-elevated)',       color: 'var(--mt-muted)'   },
+  ARCHIVED: { bg: 'var(--mt-elevated)',       color: 'var(--mt-muted)'   },
 }
 
 const TREATMENT_STATUS: Record<TreatmentPlan['status'], { label: string; tone: Tone }> = {
@@ -131,10 +132,10 @@ function withFreshPortalSession(url: string) {
 }
 
 // ─── Shared form field classes ─────────────────────────────────────────────────
-const fieldClass = 'border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white w-full'
-const labelClass = 'text-xs font-medium text-slate-500'
-const submitBtnClass = 'w-full sm:w-auto sm:self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium disabled:opacity-60 hover:bg-blue-600 transition-colors'
-const panelToggleClass = 'inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors'
+const fieldClass = 'border border-[var(--mt-border)] rounded-lg px-3 py-2 text-sm text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)] bg-[var(--mt-surface)] w-full'
+const labelClass = 'text-xs font-medium text-[var(--mt-muted)]'
+const submitBtnClass = 'w-full sm:w-auto sm:self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--mt-primary)] text-white text-sm font-medium disabled:opacity-60 hover:bg-[var(--mt-primary-deep)] transition-colors'
+const panelToggleClass = 'inline-flex items-center gap-1.5 text-sm font-medium text-[var(--mt-primary)] hover:text-[var(--mt-primary-deep)] transition-colors'
 
 // ─── TreatmentCard ─────────────────────────────────────────────────────────────
 function TreatmentCard({ treatment }: { treatment: TreatmentPlan }) {
@@ -142,27 +143,27 @@ function TreatmentCard({ treatment }: { treatment: TreatmentPlan }) {
   return (
     <Link
       href={`/patients/${treatment.patient_id}/encounters/${treatment.encounter_id}`}
-      className="block rounded-lg border border-slate-100 bg-white p-4 shadow-sm transition-all hover:border-blue-200 hover:shadow-md"
+      className="block rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4 shadow-sm transition-all hover:border-[var(--mt-primary-mist)] hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <p className="truncate text-sm font-semibold text-slate-900">{treatment.name}</p>
+            <p className="truncate text-sm font-semibold text-[var(--mt-text)]">{treatment.name}</p>
             <StatusPill tone={status.tone}>{status.label}</StatusPill>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-[var(--mt-muted)]">
             Desde {new Date(treatment.start_date).toLocaleDateString('es')}
             {treatment.end_date ? ` hasta ${new Date(treatment.end_date).toLocaleDateString('es')}` : ''}
           </p>
         </div>
-        <Pill size={18} className="shrink-0 text-blue-500" />
+        <Pill size={18} className="shrink-0 text-[var(--mt-primary)]" />
       </div>
 
       <div className="mt-3 flex flex-col gap-2">
         {treatment.medications.slice(0, 3).map(med => (
-          <div key={med.id} className="rounded-lg bg-slate-50 px-3 py-2">
-            <p className="text-xs font-medium text-slate-700">{med.drug_name}</p>
-            <p className="mt-0.5 text-xs text-slate-400">
+          <div key={med.id} className="rounded-lg bg-[var(--mt-elevated)] px-3 py-2">
+            <p className="text-xs font-medium text-[var(--mt-text-2)]">{med.drug_name}</p>
+            <p className="mt-0.5 text-xs text-[var(--mt-muted)]">
               {med.dose_amount} {med.dose_unit}
               {med.route ? ` · ${med.route}` : ''}
               {med.times_per_day && med.times_per_day.length > 0 ? ` · ${med.times_per_day.join(', ')}` : ''}
@@ -170,17 +171,17 @@ function TreatmentCard({ treatment }: { treatment: TreatmentPlan }) {
           </div>
         ))}
         {treatment.medications.length > 3 && (
-          <p className="text-xs text-slate-400">+{treatment.medications.length - 3} medicamentos más</p>
+          <p className="text-xs text-[var(--mt-muted)]">+{treatment.medications.length - 3} medicamentos más</p>
         )}
         {(treatment.interventions ?? []).slice(0, 2).map(iv => (
-          <div key={iv.id} className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
-            <Activity size={12} className="shrink-0 text-emerald-600" />
-            <p className="text-xs font-medium text-slate-700">{iv.title}</p>
-            {iv.frequency && <p className="text-xs text-slate-400">· {iv.frequency}</p>}
+          <div key={iv.id} className="flex items-center gap-2 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-success-subtle)] px-3 py-2">
+            <Activity size={12} className="shrink-0 text-[var(--mt-success)]" />
+            <p className="text-xs font-medium text-[var(--mt-text-2)]">{iv.title}</p>
+            {iv.frequency && <p className="text-xs text-[var(--mt-muted)]">· {iv.frequency}</p>}
           </div>
         ))}
         {(treatment.interventions ?? []).length > 2 && (
-          <p className="text-xs text-slate-400">+{(treatment.interventions ?? []).length - 2} indicaciones más</p>
+          <p className="text-xs text-[var(--mt-muted)]">+{(treatment.interventions ?? []).length - 2} indicaciones más</p>
         )}
       </div>
     </Link>
@@ -277,13 +278,13 @@ function PortalAccessSection({
     <ClinicalPanel title="Acceso al portal del paciente" icon={Link2} accent="green" collapsible defaultOpen={false}>
       <div className="flex flex-col gap-4 p-5">
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Tratamientos activos</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{activeTreatments.length}</p>
+          <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--mt-muted)]">Tratamientos activos</p>
+            <p className="mt-1 text-2xl font-semibold text-[var(--mt-text)]">{activeTreatments.length}</p>
           </div>
-          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 md:col-span-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Estado del acceso</p>
-            <p className="mt-1 text-sm text-slate-700">
+          <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-4 py-3 md:col-span-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--mt-muted)]">Estado del acceso</p>
+            <p className="mt-1 text-sm text-[var(--mt-text-2)]">
               {result
                 ? `Link disponible hasta ${new Date(result.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`
                 : 'Genera un enlace directo, QR o WhatsApp con link y PIN de respaldo.'}
@@ -301,7 +302,7 @@ function PortalAccessSection({
               key={channel}
               onClick={() => generate(channel)}
               disabled={!!loading}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-600 disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-medium text-[var(--mt-text-2)] transition-colors hover:border-[var(--mt-primary-mist)] hover:text-[var(--mt-primary)] disabled:opacity-50"
             >
               {loading === channel ? <Loader2 size={14} className="animate-spin" /> : icon}
               {label}
@@ -309,21 +310,21 @@ function PortalAccessSection({
           ))}
         </div>
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+        {error && <p className="rounded-lg bg-[var(--mt-danger-subtle)] px-3 py-2 text-sm text-[var(--mt-danger)]">{error}</p>}
 
         {result && (
-          <div className="rounded-xl border border-green-100 bg-green-50/60 p-4">
+          <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-success-subtle)] p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase text-green-700">
+              <p className="text-xs font-medium uppercase text-[var(--mt-success)]">
                 {result.channel === 'whatsapp' ? 'WhatsApp enviado al paciente' : 'Link directo listo para entregar'}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--mt-muted)]">
                 Expira: {new Date(result.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             </div>
             <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
               {qrDataUrl && (
-                <div className="flex justify-center rounded-xl border border-green-100 bg-white p-3">
+                <div className="flex justify-center rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3">
                   <img src={qrDataUrl} alt="QR de acceso directo al portal" className="h-48 w-48 rounded-lg" />
                 </div>
               )}
@@ -332,11 +333,11 @@ function PortalAccessSection({
                   <input
                     readOnly
                     value={withFreshPortalSession(result.access_url)}
-                    className="min-w-0 flex-1 rounded-lg border border-green-100 bg-white px-3 py-2 text-xs text-slate-700"
+                    className="min-w-0 flex-1 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-xs text-[var(--mt-text-2)]"
                   />
                   <button
                     onClick={copyLink}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-medium text-[var(--mt-text-2)] transition-colors hover:border-[var(--mt-border)] hover:bg-[var(--mt-elevated)]"
                   >
                     <Copy size={14} />
                     {copied ? 'Copiado' : 'Copiar'}
@@ -344,19 +345,19 @@ function PortalAccessSection({
                   <button
                     type="button"
                     onClick={openAccessLink}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-green-100 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-green-200 hover:bg-green-50"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-medium text-[var(--mt-text-2)] transition-colors hover:border-[var(--mt-border)] hover:bg-[var(--mt-elevated)]"
                   >
                     <ExternalLink size={14} />
                     Probar acceso
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[var(--mt-muted)]">
                   {result.channel === 'whatsapp'
                     ? 'El mensaje incluye este link directo y un PIN de respaldo para el paciente.'
                     : 'El paciente entra con este link sin escribir ID ni PIN.'}
                 </p>
                 {result.pin && (
-                  <p className="text-xs font-medium text-green-700">PIN enviado: {result.pin}</p>
+                  <p className="text-xs font-medium text-[var(--mt-success)]">PIN enviado: {result.pin}</p>
                 )}
               </div>
             </div>
@@ -563,7 +564,7 @@ function PatientBiometricsSection({
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+                <thead className="border-b border-[var(--mt-border)] bg-[var(--mt-elevated)] text-xs uppercase tracking-wide text-[var(--mt-muted)]">
                   <tr>
                     <th className="px-4 py-3 font-medium">Fecha</th>
                     <th className="px-4 py-3 font-medium">PA</th>
@@ -576,8 +577,8 @@ function PatientBiometricsSection({
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {records.slice(0, 12).map(record => (
-                    <tr key={record.id} className="text-slate-600">
-                      <td className="px-4 py-3 text-xs text-slate-400">{formatVitalDate(record.recorded_at)}</td>
+                    <tr key={record.id} className="text-[var(--mt-text-2)]">
+                      <td className="px-4 py-3 text-xs text-[var(--mt-muted)]">{formatVitalDate(record.recorded_at)}</td>
                       <td className="px-4 py-3 tabular-nums">
                         {record.blood_pressure_systolic && record.blood_pressure_diastolic
                           ? `${record.blood_pressure_systolic}/${record.blood_pressure_diastolic}`
@@ -603,14 +604,14 @@ function PatientBiometricsSection({
 
       <ClinicalPanel title="Registrar datos físicos y signos" icon={Plus} accent="green" collapsible defaultOpen={false}>
         <form onSubmit={submit} className="flex min-w-0 flex-col gap-4 p-4">
-          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-3 text-sm leading-6 text-blue-900">
+          <div className="rounded-lg border border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)] px-3 py-3 text-sm leading-6 text-[var(--mt-primary-deep)]">
             <p className="font-semibold">Nueva observación biométrica</p>
-            <p className="mt-1 text-xs leading-5 text-blue-700">
+            <p className="mt-1 text-xs leading-5 text-[var(--mt-primary)]">
               Guarda solo los datos disponibles. No reemplaza mediciones previas y puede quedar asociada a la consulta activa.
             </p>
           </div>
-          <section className="rounded-lg border border-slate-100 bg-white p-3">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Contexto</p>
+          <section className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Contexto</p>
             <div className="grid gap-3">
               <div className="flex flex-col gap-1">
                 <label className={labelClass}>Consulta asociada</label>
@@ -629,8 +630,8 @@ function PatientBiometricsSection({
               </div>
             </div>
           </section>
-          <section className="rounded-lg border border-slate-100 bg-white p-3">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Presión arterial</p>
+          <section className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Presión arterial</p>
             <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <label className={labelClass}>Sistólica</label>
@@ -642,8 +643,8 @@ function PatientBiometricsSection({
             </div>
             </div>
           </section>
-          <section className="rounded-lg border border-slate-100 bg-white p-3">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Medidas corporales</p>
+          <section className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Medidas corporales</p>
             <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <label className={labelClass}>Peso kg</label>
@@ -655,8 +656,8 @@ function PatientBiometricsSection({
             </div>
             </div>
           </section>
-          <section className="rounded-lg border border-slate-100 bg-white p-3">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Signos y glucosa</p>
+          <section className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--mt-muted)]">Signos y glucosa</p>
             <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <label className={labelClass}>FC lpm</label>
@@ -680,8 +681,8 @@ function PatientBiometricsSection({
             </div>
             </div>
           </section>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          {savedNotice && <p className="rounded-lg bg-green-50 px-3 py-2 text-xs font-medium text-green-700">{savedNotice}</p>}
+          {error && <p className="text-xs text-[var(--mt-danger)]">{error}</p>}
+          {savedNotice && <p className="rounded-lg bg-[var(--mt-success-subtle)] px-3 py-2 text-xs font-medium text-[var(--mt-success)]">{savedNotice}</p>}
           <button type="submit" disabled={saving} className={`${submitBtnClass} min-w-0`}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : null}
             Guardar biometría
@@ -726,9 +727,10 @@ export default function PatientProfilePage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const patientId = params.id as string
   const isNewPatientFlow = searchParams.get('flow') === 'new'
+  const canViewSensitive = hasPermission(user?.role, PERMISSIONS.PATIENT_SENSITIVE_READ, user?.permissions)
 
   function dismissNewPatientFlow() {
     if (!isNewPatientFlow) return
@@ -829,7 +831,7 @@ export default function PatientProfilePage() {
     try {
       const [p, encs, plans, docs, adh, checks, cons, orders, probs, bg, bgHistory, vitals, workspace, refs, staffList, adms, depts] = await Promise.all([
         getPatient(token, patientId),
-        listEncounters(token, patientId),
+        listEncounters(token, patientId).catch(() => []),
         listPatientTreatments(token, patientId).catch(() => []),
         listDocuments(token, patientId).catch(() => []),
         getPatientAdherence(token, patientId, 30).catch(() => null),
@@ -1385,7 +1387,7 @@ export default function PatientProfilePage() {
         icon={UserRound}
         meta={
           <>
-            {patient.mrn && <span className="font-mono font-semibold text-blue-700">{patient.mrn}</span>}
+            {patient.mrn && <span className="font-mono font-semibold text-[var(--mt-primary-deep)]">{patient.mrn}</span>}
             {age !== null && <span>{age} años</span>}
             {patient.sex && <span>{{ male: 'Masculino', female: 'Femenino', other: 'Otro' }[patient.sex]}</span>}
             {patient.id_number && <span>CI: {patient.id_number}</span>}
@@ -1398,18 +1400,29 @@ export default function PatientProfilePage() {
             <ClinicalButton href="/patients" icon={ArrowLeft} variant="outline" tone="slate">
               Pacientes
             </ClinicalButton>
-            <ClinicalButton
-              icon={exportingFhir ? Loader2 : Download}
-              onClick={handleExportFhir}
-              disabled={exportingFhir}
-              variant="outline"
-              tone="blue"
-            >
-              FHIR
-            </ClinicalButton>
+            {canViewSensitive && (
+              <ClinicalButton
+                icon={exportingFhir ? Loader2 : Download}
+                onClick={handleExportFhir}
+                disabled={exportingFhir}
+                variant="outline"
+                tone="blue"
+              >
+                FHIR
+              </ClinicalButton>
+            )}
           </>
         }
       />
+
+      {patient._access_notice && (
+        <ClinicalInsight
+          tone="amber"
+          title="Acceso limitado"
+        >
+          {patient._access_notice}
+        </ClinicalInsight>
+      )}
 
       {/* ── Metric chips ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }} className="sm:grid-cols-4">
@@ -1435,27 +1448,27 @@ export default function PatientProfilePage() {
 
       {/* ── Active admission banner ── */}
       {activeAdmission && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+        <div className="rounded-xl border border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)] px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-[var(--mt-primary)] flex items-center justify-center shrink-0">
               <BedDouble size={17} color="#fff" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold text-blue-900">Paciente internado</span>
+                <span className="text-sm font-semibold text-[var(--mt-primary-deep)]">Paciente internado</span>
                 {activeAdmission.bed_code && (
-                  <span className="font-mono text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                  <span className="font-mono text-xs bg-[var(--mt-primary-subtle)] text-[var(--mt-primary)] px-2 py-0.5 rounded">
                     {activeAdmission.bed_code}
                   </span>
                 )}
                 {activeAdmission.department && (
-                  <span className="text-xs text-blue-700">{activeAdmission.department.name}</span>
+                  <span className="text-xs text-[var(--mt-primary)]">{activeAdmission.department.name}</span>
                 )}
-                <span className="text-xs text-blue-600">
+                <span className="text-xs text-[var(--mt-primary)]">
                   · {Math.ceil((Date.now() - new Date(activeAdmission.admitted_at).getTime()) / 86_400_000)} día(s)
                 </span>
               </div>
-              <p className="text-xs text-blue-700 mt-0.5">
+              <p className="text-xs text-[var(--mt-primary)] mt-0.5">
                 Desde {new Date(activeAdmission.admitted_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
                 {activeAdmission.referral ? ' · Por referencia' : ''}
               </p>
@@ -1473,11 +1486,11 @@ export default function PatientProfilePage() {
       )}
 
       {showNewPatientHandoff && (
-        <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <section className="rounded-lg border border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)] p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold text-blue-900">Paciente creado. Elige cómo iniciar la atención.</p>
-              <p className="mt-1 text-sm leading-6 text-blue-800">
+              <p className="text-sm font-semibold text-[var(--mt-primary-deep)]">Paciente creado. Elige cómo iniciar la atención.</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--mt-primary)]">
                 Puedes abrir consulta de una vez, tomar signos primero o completar antecedentes antes de pasar con el doctor.
               </p>
             </div>
@@ -1518,29 +1531,30 @@ export default function PatientProfilePage() {
       )}
 
       {/* ── Clinical workflow ── */}
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4 shadow-sm">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex h-8 items-center gap-2 rounded-md bg-blue-50 px-3 text-sm font-semibold text-blue-700">
+                <span className="inline-flex h-8 items-center gap-2 rounded-md bg-[var(--mt-primary-subtle)] px-3 text-sm font-semibold text-[var(--mt-primary)]">
                   <Stethoscope size={15} />
                   Estado de esta atención
                 </span>
-                <span className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-semibold ${
-                  clinicalWorkspace?.workflow.ready_to_close
-                    ? 'bg-green-50 text-green-700'
-                    : 'bg-amber-50 text-amber-700'
-                }`}>
+                <span
+                  className="inline-flex h-8 items-center rounded-md px-3 text-xs font-semibold"
+                  style={clinicalWorkspace?.workflow.ready_to_close
+                    ? { background: 'var(--mt-success-subtle)', color: 'var(--mt-success)' }
+                    : { background: '#FEF3C7', color: '#B45309' }}
+                >
                   {clinicalWorkspace?.workflow.ready_to_close
                     ? 'Lista para cierre'
                     : `${actionableWorkspaceActions.length} pendiente(s)`}
                 </span>
-                <span className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500">
+                <span className="inline-flex h-8 items-center rounded-md border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-3 text-xs font-medium text-[var(--mt-muted)]">
                   Etapa: {WORKFLOW_STAGE_LABELS[workspaceStage]}
                 </span>
               </div>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--mt-text-2)]">
                 Este resumen evalúa la consulta activa. La biometría del perfil puede estar completa, pero “signos de esta atención” solo queda listo cuando esos datos están asociados o son recientes para esta consulta.
               </p>
             </div>
@@ -1603,20 +1617,20 @@ export default function PatientProfilePage() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             {workspaceReadinessCards.map(item => {
               const Icon = item.icon
-              const toneClasses = item.tone === 'green'
-                ? 'border-green-100 bg-green-50 text-green-900'
+              const cardStyle = item.tone === 'green'
+                ? { border: '1px solid var(--mt-border)', background: 'var(--mt-success-subtle)', color: 'var(--mt-success)' }
                 : item.tone === 'amber'
-                  ? 'border-amber-100 bg-amber-50 text-amber-900'
-                  : 'border-slate-200 bg-slate-50 text-slate-700'
-              const iconClasses = item.tone === 'green'
-                ? 'bg-green-100 text-green-700'
+                  ? { border: '1px solid #FDE68A', background: '#FEF3C7', color: '#92400E' }
+                  : { border: '1px solid var(--mt-border)', background: 'var(--mt-elevated)', color: 'var(--mt-text-2)' }
+              const iconStyle = item.tone === 'green'
+                ? { background: 'var(--mt-success-subtle)', color: 'var(--mt-success)' }
                 : item.tone === 'amber'
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-slate-100 text-slate-500'
+                  ? { background: '#FDE68A', color: '#B45309' }
+                  : { background: 'var(--mt-elevated)', color: 'var(--mt-muted)' }
               return (
-                <details key={item.key} className={`group overflow-hidden rounded-lg border ${toneClasses}`}>
+                <details key={item.key} className="group overflow-hidden rounded-lg" style={cardStyle}>
                   <summary className="flex cursor-pointer list-none items-start gap-3 p-3">
-                    <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconClasses}`}>
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={iconStyle}>
                       <Icon size={15} />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -1634,17 +1648,17 @@ export default function PatientProfilePage() {
           </div>
 
           {visibleWorkspaceActions.length > 0 && (
-            <details className="group overflow-hidden rounded-lg border border-blue-100 bg-blue-50">
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-blue-900">
+            <details className="group overflow-hidden rounded-lg border border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)]">
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[var(--mt-primary-deep)]">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Siguientes pasos sugeridos</p>
-                  <p className="mt-0.5 text-xs text-blue-700">{visibleWorkspaceActions.length} pendiente(s) priorizado(s)</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mt-primary)]">Siguientes pasos sugeridos</p>
+                  <p className="mt-0.5 text-xs text-[var(--mt-primary)]">{visibleWorkspaceActions.length} pendiente(s) priorizado(s)</p>
                 </div>
-                <ChevronDown size={15} className="shrink-0 text-blue-700 transition-transform group-open:rotate-180" />
+                <ChevronDown size={15} className="shrink-0 text-[var(--mt-primary)] transition-transform group-open:rotate-180" />
               </summary>
-              <div className="grid gap-2 border-t border-blue-100 px-4 pb-4 pt-2 md:grid-cols-2">
+              <div className="grid gap-2 border-t border-[var(--mt-primary-mist)] px-4 pb-4 pt-2 md:grid-cols-2">
                 {visibleWorkspaceActions.map(action => (
-                  <p key={action.key} className="text-sm leading-6 text-blue-900">
+                  <p key={action.key} className="text-sm leading-6 text-[var(--mt-primary-deep)]">
                     {action.label}
                   </p>
                 ))}
@@ -1656,7 +1670,7 @@ export default function PatientProfilePage() {
 
 
       {/* ── Tab bar ── */}
-      <div className="sticky top-0 z-20 -mx-4 overflow-x-auto border-y border-slate-100 bg-white/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="sticky top-0 z-20 -mx-4 overflow-x-auto border-y border-[var(--mt-border)] bg-[var(--mt-surface)]/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex min-w-max gap-1">
           {TABS.map(tab => {
             const Icon = tab.icon
@@ -1673,7 +1687,7 @@ export default function PatientProfilePage() {
                   setActiveTab(tab.id)
                 }}
                 className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
-                  selected ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                  selected ? 'bg-[var(--mt-primary-subtle)] text-[var(--mt-primary)]' : 'text-[var(--mt-muted)] hover:bg-[var(--mt-elevated)] hover:text-[var(--mt-text)]'
                 }`}
               >
                 <Icon size={16} />
@@ -1717,7 +1731,7 @@ export default function PatientProfilePage() {
                       </ClinicalInsight>
                     )}
                     {latestCheckIn.notes && (
-                      <p className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      <p className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-3 py-2 text-sm text-[var(--mt-text-2)]">
                         {latestCheckIn.notes}
                       </p>
                     )}
@@ -1787,10 +1801,10 @@ export default function PatientProfilePage() {
             }
           >
             {showNewProblem && (
-              <form onSubmit={handleCreateProblem} className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
+              <form onSubmit={handleCreateProblem} className="flex flex-col gap-3 border-b border-[var(--mt-border)] bg-[var(--mt-elevated)] px-5 py-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="flex flex-col gap-1 sm:col-span-2">
-                    <label className={labelClass}>Título del problema <span className="text-red-400">*</span></label>
+                    <label className={labelClass}>Título del problema <span className="text-[var(--mt-danger)]">*</span></label>
                     <input
                       value={newProblemTitle}
                       onChange={e => setNewProblemTitle(e.target.value)}
@@ -1822,7 +1836,7 @@ export default function PatientProfilePage() {
                     />
                   </div>
                 </div>
-                {problemError && <p className="text-xs text-red-500">{problemError}</p>}
+                {problemError && <p className="text-xs text-[var(--mt-danger)]">{problemError}</p>}
                 <button type="submit" disabled={creatingProblem || !newProblemTitle.trim()} className={submitBtnClass}>
                   {creatingProblem ? <Loader2 size={14} className="animate-spin" /> : null}
                   Agregar problema
@@ -1842,20 +1856,20 @@ export default function PatientProfilePage() {
                 }
               />
             ) : (
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-[var(--mt-border)]">
                 {problems.map(p => {
                   const cfg = PROBLEM_STATUS[p.status]
                   return (
                     <div key={p.id} className="flex items-start gap-4 px-5 py-3.5">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--mt-elevated)] text-xs font-bold text-[var(--mt-text-2)]">
                         #{p.problem_number}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium text-slate-800">{p.title}</p>
+                          <p className="text-sm font-medium text-[var(--mt-text)]">{p.title}</p>
                           <StatusPill tone={cfg.tone}>{cfg.label}</StatusPill>
                         </div>
-                        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
+                        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[var(--mt-muted)]">
                           {p.icd10_code && <span>ICD-10: {p.icd10_code}{p.icd10_description ? ` · ${p.icd10_description}` : ''}</span>}
                           {p.onset_date && <span>Desde: {new Date(p.onset_date).toLocaleDateString('es')}</span>}
                           {p.resolved_date && <span>Resuelto: {new Date(p.resolved_date).toLocaleDateString('es')}</span>}
@@ -1892,7 +1906,7 @@ export default function PatientProfilePage() {
               </div>
             }
           >
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-[var(--mt-border)]">
               {BG_CATEGORY_ORDER.map(category => {
                 const cfg = BG_LABELS[category]
                 const record = background.find(b => b.category === category)
@@ -1912,20 +1926,20 @@ export default function PatientProfilePage() {
                     <button
                       type="button"
                       onClick={toggleCategory}
-                      className="flex w-full items-center justify-between gap-2 px-5 py-3.5 text-left hover:bg-slate-50 transition-colors"
+                      className="flex w-full items-center justify-between gap-2 px-5 py-3.5 text-left hover:bg-[var(--mt-elevated)] transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <StatusPill tone={cfg.tone}>{category}</StatusPill>
-                        <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
+                        <span className="text-xs font-medium text-[var(--mt-text-2)]">{cfg.label}</span>
                         {record?.content && !isExpanded && (
-                          <span className="text-xs text-slate-400 italic truncate max-w-[140px]">
+                          <span className="text-xs text-[var(--mt-muted)] italic truncate max-w-[140px]">
                             {record.content.slice(0, 40)}{record.content.length > 40 ? '…' : ''}
                           </span>
                         )}
                       </div>
                       <ChevronDown
                         size={14}
-                        className="shrink-0 text-slate-400 transition-transform"
+                        className="shrink-0 text-[var(--mt-muted)] transition-transform"
                         style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }}
                       />
                     </button>
@@ -1936,7 +1950,7 @@ export default function PatientProfilePage() {
                           <div className="mb-2 flex items-center gap-2">
                             <button
                               onClick={(e) => { e.stopPropagation(); startEditBg(category) }}
-                              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+                              className="inline-flex items-center gap-1 text-xs text-[var(--mt-muted)] hover:text-[var(--mt-primary)] transition-colors"
                             >
                               {record?.content ? <Pencil size={12} /> : <Plus size={12} />}
                               {record?.content ? 'Editar' : 'Agregar'}
@@ -1945,7 +1959,7 @@ export default function PatientProfilePage() {
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleRetireBackground(category) }}
                                 disabled={retiringBg === category}
-                                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600 disabled:opacity-60 transition-colors"
+                                className="inline-flex items-center gap-1 text-xs text-[var(--mt-muted)] hover:text-[var(--mt-danger)] disabled:opacity-60 transition-colors"
                               >
                                 {retiringBg === category ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                                 Retirar
@@ -1961,31 +1975,31 @@ export default function PatientProfilePage() {
                               onChange={e => setEditContent(e.target.value)}
                               rows={4}
                               placeholder={BG_HELP_TEXT[category]}
-                              className="w-full resize-none rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                              className="w-full resize-none rounded-lg border border-[var(--mt-primary-mist)] bg-[var(--mt-surface)] px-3 py-2 text-sm text-[var(--mt-text)] focus:outline-none focus:ring-2 focus:ring-[var(--mt-primary-mist)]"
                             />
-                            <p className="text-xs leading-relaxed text-slate-400">{BG_HELP_TEXT[category]}</p>
-                            {bgError && <p className="text-xs text-red-500">{bgError}</p>}
+                            <p className="text-xs leading-relaxed text-[var(--mt-muted)]">{BG_HELP_TEXT[category]}</p>
+                            {bgError && <p className="text-xs text-[var(--mt-danger)]">{bgError}</p>}
                             <div className="flex gap-2">
                               <button
                                 onClick={handleSaveBackground}
                                 disabled={savingBg || !editContent.trim()}
-                                className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-60 transition-colors"
+                                className="flex items-center gap-1.5 rounded-lg bg-[var(--mt-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--mt-primary-deep)] disabled:opacity-60 transition-colors"
                               >
                                 {savingBg ? <Loader2 size={11} className="animate-spin" /> : null}
                                 Guardar
                               </button>
                               <button
                                 onClick={() => { setEditingCategory(null) }}
-                                className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 transition-colors"
+                                className="rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--mt-muted)] hover:bg-[var(--mt-elevated)] transition-colors"
                               >
                                 Cancelar
                               </button>
                             </div>
                           </div>
                         ) : record?.content ? (
-                          <p className="text-sm text-slate-600 leading-relaxed">{record.content}</p>
+                          <p className="text-sm text-[var(--mt-text-2)] leading-relaxed">{record.content}</p>
                         ) : (
-                          <p className="text-xs italic text-slate-300">Sin registro — toca Agregar para documentar.</p>
+                          <p className="text-xs italic text-[var(--mt-border)]">Sin registro — toca Agregar para documentar.</p>
                         )}
                       </div>
                     )}
@@ -1998,44 +2012,44 @@ export default function PatientProfilePage() {
       )}
 
       {showBackgroundHistory && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/35 px-3 py-4 backdrop-blur-sm sm:items-center">
-          <div className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+        <div className="fixed inset-0 z-50 flex items-end justify-center px-3 py-4 backdrop-blur-sm sm:items-center" style={{ background: 'rgba(2,6,23,.35)' }}>
+          <div className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)] shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--mt-border)] px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: '#F3E8FF', color: '#9333EA' }}>
                   <ClipboardList size={17} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">Historial de antecedentes</p>
-                  <p className="text-xs text-slate-400">{backgroundHistory.length} cambios registrados</p>
+                  <p className="text-sm font-semibold text-[var(--mt-text)]">Historial de antecedentes</p>
+                  <p className="text-xs text-[var(--mt-muted)]">{backgroundHistory.length} cambios registrados</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowBackgroundHistory(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--mt-muted)] transition-colors hover:bg-[var(--mt-elevated)] hover:text-[var(--mt-text-2)]"
                 aria-label="Cerrar historial"
               >
                 <X size={16} />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--mt-elevated)] p-4">
               {backgroundHistory.length === 0 ? (
-                <p className="rounded-lg border border-slate-100 bg-white p-4 text-sm text-slate-400">Sin cambios registrados todavía.</p>
+                <p className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] p-4 text-sm text-[var(--mt-muted)]">Sin cambios registrados todavía.</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {backgroundHistory.map(item => {
                     const cfg = BG_LABELS[item.category]
                     return (
-                      <div key={item.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2.5 shadow-sm">
+                      <div key={item.id} className="rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2.5 shadow-sm">
                         <div className="mb-1.5 flex flex-wrap items-center gap-2">
                           <StatusPill tone={cfg.tone}>{item.category}</StatusPill>
-                          <span className="text-xs font-medium text-slate-600">{cfg.label}</span>
-                          <span className={item.is_current ? 'rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700' : 'rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500'}>
+                          <span className="text-xs font-medium text-[var(--mt-text-2)]">{cfg.label}</span>
+                          <span className={item.is_current ? 'rounded-full bg-[var(--mt-success-subtle)] px-2 py-0.5 text-xs text-[var(--mt-success)]' : 'rounded-full bg-[var(--mt-elevated)] px-2 py-0.5 text-xs text-[var(--mt-muted)]'}>
                             {item.is_current ? 'Vigente' : 'Retirado'}
                           </span>
-                          <span className="ml-auto text-xs text-slate-400">{formatVitalDate(item.recorded_at ?? item.created_at)}</span>
+                          <span className="ml-auto text-xs text-[var(--mt-muted)]">{formatVitalDate(item.recorded_at ?? item.created_at)}</span>
                         </div>
-                        <p className="text-xs leading-relaxed text-slate-600">{item.content}</p>
+                        <p className="text-xs leading-relaxed text-[var(--mt-text-2)]">{item.content}</p>
                       </div>
                     )
                   })}
@@ -2079,7 +2093,7 @@ export default function PatientProfilePage() {
           }
         >
           {showNewEnc && (
-            <form onSubmit={handleCreateEncounter} className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
+            <form onSubmit={handleCreateEncounter} className="flex flex-col gap-3 border-b border-[var(--mt-border)] bg-[var(--mt-elevated)] px-5 py-4">
               <div className="flex flex-col gap-1">
                 <label className={labelClass}>Tipo de consulta</label>
                 <select
@@ -2108,7 +2122,7 @@ export default function PatientProfilePage() {
                   className={`${fieldClass} resize-none`}
                 />
               </div>
-              {encError && <p className="text-xs text-red-500">{encError}</p>}
+              {encError && <p className="text-xs text-[var(--mt-danger)]">{encError}</p>}
               <button type="submit" disabled={creatingEnc} className={submitBtnClass}>
                 {creatingEnc ? <Loader2 size={14} className="animate-spin" /> : null}
                 Abrir consulta
@@ -2116,7 +2130,7 @@ export default function PatientProfilePage() {
             </form>
           )}
 
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-[var(--mt-border)]">
             {encounters.length === 0 && !showNewEnc && (
               <EmptyClinicalState
                 icon={Stethoscope}
@@ -2133,27 +2147,27 @@ export default function PatientProfilePage() {
               <Link
                 key={enc.id}
                 href={`/patients/${patientId}/encounters/${enc.id}`}
-                className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
+                className="flex items-center gap-4 px-5 py-3.5 hover:bg-[var(--mt-elevated)] transition-colors group"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-sm font-medium text-slate-800">
+                    <span className="text-sm font-medium text-[var(--mt-text)]">
                       {ENC_LABELS[enc.encounter_type] ?? enc.encounter_type}
                     </span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${ENC_STATUS_COLORS[enc.status]}`}>
+                    <span className="text-xs px-1.5 py-0.5 rounded-md font-medium" style={{ background: ENC_STATUS_COLORS[enc.status]?.bg ?? 'var(--mt-elevated)', color: ENC_STATUS_COLORS[enc.status]?.color ?? 'var(--mt-muted)' }}>
                       {enc.status === 'OPEN' ? 'Abierta' : enc.status === 'CLOSED' ? 'Cerrada' : enc.status}
                     </span>
                   </div>
                   {enc.chief_complaint && (
-                    <p className="text-xs text-slate-500 truncate">{enc.chief_complaint}</p>
+                    <p className="text-xs text-[var(--mt-muted)] truncate">{enc.chief_complaint}</p>
                   )}
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-[var(--mt-muted)]">
                     {new Date(enc.opened_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 </div>
-                <ExternalLink size={14} className="text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" />
+                <ExternalLink size={14} className="text-[var(--mt-border)] group-hover:text-[var(--mt-muted)] transition-colors shrink-0" />
               </Link>
             ))}
           </div>
@@ -2206,10 +2220,10 @@ export default function PatientProfilePage() {
                 streak={adherence.streak}
                 overallScore={adherence.overall_score}
               />
-              <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
-                <span>Confirmadas: <strong className="text-slate-700">{adherence.confirmed}</strong></span>
-                <span>Perdidas: <strong className="text-slate-700">{adherence.missed}</strong></span>
-                <span>Total: <strong className="text-slate-700">{adherence.total}</strong></span>
+              <div className="mt-4 flex flex-wrap gap-4 text-xs text-[var(--mt-muted)]">
+                <span>Confirmadas: <strong className="text-[var(--mt-text-2)]">{adherence.confirmed}</strong></span>
+                <span>Perdidas: <strong className="text-[var(--mt-text-2)]">{adherence.missed}</strong></span>
+                <span>Total: <strong className="text-[var(--mt-text-2)]">{adherence.total}</strong></span>
               </div>
               {adherence.overall_score < 70 && (
                 <div className="mt-4">
@@ -2249,7 +2263,7 @@ export default function PatientProfilePage() {
           }
         >
           {showUploader && token && (
-            <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+            <div className="border-b border-[var(--mt-border)] bg-[var(--mt-elevated)] px-5 py-4">
               <DocumentUploader token={token} patientId={patientId} onUploaded={handleUploaded} />
             </div>
           )}
@@ -2307,7 +2321,7 @@ export default function PatientProfilePage() {
               }
             />
           ) : (
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-[var(--mt-border)]">
               {labOrders.map(order => {
                 const cfg = ORDER_STATUS_CONFIG[order.status]
                 const critical = order.results.filter(r => r.status === 'CRITICAL_HIGH' || r.status === 'CRITICAL_LOW').length
@@ -2316,11 +2330,11 @@ export default function PatientProfilePage() {
                   <Link
                     key={order.id}
                     href={`/lab/${order.id}`}
-                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
+                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-[var(--mt-elevated)] transition-colors group"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-medium text-slate-800">
+                        <span className="text-sm font-medium text-[var(--mt-text)]">
                           {new Date(order.ordered_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
                         </span>
                         <span
@@ -2331,15 +2345,15 @@ export default function PatientProfilePage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-400">{order.results.length} parámetro{order.results.length !== 1 ? 's' : ''}</span>
-                        {critical > 0 && <span className="font-bold text-red-600">{critical} crítico{critical > 1 ? 's' : ''}</span>}
-                        {critical === 0 && abnormal > 0 && <span className="font-semibold text-amber-600">{abnormal} fuera de rango</span>}
+                        <span className="text-[var(--mt-muted)]">{order.results.length} parámetro{order.results.length !== 1 ? 's' : ''}</span>
+                        {critical > 0 && <span className="font-bold text-[var(--mt-danger)]">{critical} crítico{critical > 1 ? 's' : ''}</span>}
+                        {critical === 0 && abnormal > 0 && <span className="font-semibold" style={{ color: '#D97706' }}>{abnormal} fuera de rango</span>}
                         {critical === 0 && abnormal === 0 && order.results.length > 0 && order.results.every(r => r.status === 'NORMAL') && (
-                          <span className="text-emerald-600">Todos normales</span>
+                          <span className="text-[var(--mt-success)]">Todos normales</span>
                         )}
                       </div>
                     </div>
-                    <ExternalLink size={14} className="text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" />
+                    <ExternalLink size={14} className="text-[var(--mt-border)] group-hover:text-[var(--mt-muted)] transition-colors shrink-0" />
                   </Link>
                 )
               })}
@@ -2368,10 +2382,10 @@ export default function PatientProfilePage() {
           }
         >
           {showNewReferral && (
-            <form onSubmit={handleCreateReferral} className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
+            <form onSubmit={handleCreateReferral} className="flex flex-col gap-3 border-b border-[var(--mt-border)] bg-[var(--mt-elevated)] px-5 py-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1 sm:col-span-2">
-                  <label className={labelClass}>Médico receptor <span className="text-red-400">*</span></label>
+                  <label className={labelClass}>Médico receptor <span className="text-[var(--mt-danger)]">*</span></label>
                   <select
                     value={refToDoctorId}
                     onChange={e => setRefToDoctorId(e.target.value)}
@@ -2400,7 +2414,7 @@ export default function PatientProfilePage() {
                 </div>
               </div>
               <div className="flex flex-col gap-1">
-                <label className={labelClass}>Motivo de referencia <span className="text-red-400">*</span></label>
+                <label className={labelClass}>Motivo de referencia <span className="text-[var(--mt-danger)]">*</span></label>
                 <textarea
                   value={refReason}
                   onChange={e => setRefReason(e.target.value)}
@@ -2419,7 +2433,7 @@ export default function PatientProfilePage() {
                   className={`${fieldClass} resize-none`}
                 />
               </div>
-              {refError && <p className="text-xs text-red-500">{refError}</p>}
+              {refError && <p className="text-xs text-[var(--mt-danger)]">{refError}</p>}
               <button
                 type="submit"
                 disabled={creatingRef || !refToDoctorId || !refReason.trim()}
@@ -2438,7 +2452,7 @@ export default function PatientProfilePage() {
               description="Las referencias enviadas y recibidas para este paciente aparecerán aquí."
             />
           ) : (
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-[var(--mt-border)]">
               {referrals.map(ref => {
                 const STATUS_LABEL: Record<string, { label: string; tone: Tone }> = {
                   PENDING:   { label: 'Pendiente',  tone: 'amber' },
@@ -2450,10 +2464,10 @@ export default function PatientProfilePage() {
                 const PRIO_LABEL: Record<string, string> = {
                   ROUTINE: 'Rutina', URGENT: 'Urgente', EMERGENCY: 'Emergencia',
                 }
-                const PRIO_CLASS: Record<string, string> = {
-                  ROUTINE: 'bg-slate-100 text-slate-600',
-                  URGENT: 'bg-amber-100 text-amber-700',
-                  EMERGENCY: 'bg-red-100 text-red-700',
+                const PRIO_STYLE: Record<string, React.CSSProperties> = {
+                  ROUTINE:   { background: 'var(--mt-elevated)', color: 'var(--mt-text-2)' },
+                  URGENT:    { background: '#FDE68A', color: '#B45309' },
+                  EMERGENCY: { background: 'var(--mt-danger-subtle)', color: 'var(--mt-danger)' },
                 }
                 const cfg = STATUS_LABEL[ref.status] ?? { label: ref.status, tone: 'slate' as Tone }
                 return (
@@ -2462,39 +2476,39 @@ export default function PatientProfilePage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           {ref.from_doctor && (
-                            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                            <span className="inline-flex items-center gap-1 text-xs text-[var(--mt-muted)]">
                               <Send size={11} />
                               Dr. {ref.from_doctor.first_name} {ref.from_doctor.last_name}
                             </span>
                           )}
                           {ref.to_doctor && (
-                            <span className="text-xs text-slate-400">→ Dr. {ref.to_doctor.first_name} {ref.to_doctor.last_name}{ref.to_doctor.specialty ? ` (${ref.to_doctor.specialty})` : ''}</span>
+                            <span className="text-xs text-[var(--mt-muted)]">→ Dr. {ref.to_doctor.first_name} {ref.to_doctor.last_name}{ref.to_doctor.specialty ? ` (${ref.to_doctor.specialty})` : ''}</span>
                           )}
                           {ref.to_department && (
-                            <span className="text-xs text-slate-400">→ {ref.to_department.name}</span>
+                            <span className="text-xs text-[var(--mt-muted)]">→ {ref.to_department.name}</span>
                           )}
                         </div>
-                        <p className="text-sm text-slate-700 mt-1 leading-relaxed line-clamp-2">{ref.reason}</p>
+                        <p className="text-sm text-[var(--mt-text-2)] mt-1 leading-relaxed line-clamp-2">{ref.reason}</p>
                         {ref.response_notes && (
-                          <p className="text-xs text-slate-500 italic border-l-2 border-slate-200 pl-2 mt-1">{ref.response_notes}</p>
+                          <p className="text-xs text-[var(--mt-muted)] italic border-l-2 border-[var(--mt-border)] pl-2 mt-1">{ref.response_notes}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${PRIO_CLASS[ref.priority]}`}>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={PRIO_STYLE[ref.priority] ?? PRIO_STYLE.ROUTINE}>
                           {PRIO_LABEL[ref.priority]}
                         </span>
                         <StatusPill tone={cfg.tone}>{cfg.label}</StatusPill>
                       </div>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-[var(--mt-muted)]">
                         {new Date(ref.created_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
                         {ref.responded_at && ` · Respondida: ${new Date(ref.responded_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })}`}
                       </p>
                       {ref.status === 'ACCEPTED' && canCreateAdmission && (
                         <button
                           onClick={() => openAdmissionsSection({ referralId: ref.id })}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-[var(--mt-primary)] hover:text-[var(--mt-primary-deep)] transition-colors"
                         >
                           <BedDouble size={12} /> Internar desde referencia
                         </button>
@@ -2529,11 +2543,11 @@ export default function PatientProfilePage() {
             }
           >
             {canCreateAdmission && !showNewAdmission && admissions.length > 0 && (
-              <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+              <div className="border-b border-[var(--mt-border)] bg-[var(--mt-elevated)] px-5 py-4">
                 <button
                   type="button"
                   onClick={() => setShowNewAdmission(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--mt-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--mt-primary-deep)]"
                 >
                   <Plus size={14} />
                   Registrar nuevo internamiento
@@ -2541,10 +2555,10 @@ export default function PatientProfilePage() {
               </div>
             )}
             {canCreateAdmission && (showNewAdmission || admissions.length === 0) && (
-              <form onSubmit={handleAdmitPatient} className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50 px-5 py-4">
-                <div className="rounded-lg border border-blue-100 bg-white px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-900">Registrar internamiento</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
+              <form onSubmit={handleAdmitPatient} className="flex flex-col gap-4 border-b border-[var(--mt-border)] bg-[var(--mt-elevated)] px-5 py-4">
+                <div className="rounded-lg border border-[var(--mt-primary-mist)] bg-[var(--mt-surface)] px-4 py-3">
+                  <p className="text-sm font-semibold text-[var(--mt-text)]">Registrar internamiento</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--mt-text-2)]">
                     Usa esta sección cuando el paciente queda hospitalizado, en observación o asignado a una cama/sala. Solo puede existir un internamiento activo por paciente.
                   </p>
                 </div>
@@ -2600,9 +2614,9 @@ export default function PatientProfilePage() {
                     className={`${fieldClass} resize-none`}
                   />
                 </div>
-                {admError && <p className="text-xs text-red-500">{admError}</p>}
+                {admError && <p className="text-xs text-[var(--mt-danger)]">{admError}</p>}
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs leading-5 text-slate-500">
+                  <p className="text-xs leading-5 text-[var(--mt-muted)]">
                     Departamento y cama son opcionales; puedes asignarlos después si aún no están definidos.
                   </p>
                   <button type="submit" disabled={creatingAdm} className={submitBtnClass}>
@@ -2614,13 +2628,13 @@ export default function PatientProfilePage() {
             )}
 
             {activeAdmission && (
-              <div className="border-b border-blue-100 bg-blue-50 px-5 py-3 text-sm leading-6 text-blue-800">
+              <div className="border-b border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)] px-5 py-3 text-sm leading-6 text-[var(--mt-primary-deep)]">
                 Este paciente ya tiene un internamiento activo. Para registrar uno nuevo, primero confirma el alta del internamiento actual.
               </div>
             )}
 
             {admissions.length > 0 && (
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-[var(--mt-border)]">
                 {admissions.map(adm => {
                   const isActive = adm.status === 'ACTIVE'
                   const days = Math.ceil((Date.now() - new Date(adm.admitted_at).getTime()) / 86_400_000)
@@ -2633,21 +2647,21 @@ export default function PatientProfilePage() {
                               {isActive ? 'Internado' : 'Alta'}
                             </StatusPill>
                             {adm.bed_code && (
-                              <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                              <span className="font-mono text-xs bg-[var(--mt-elevated)] text-[var(--mt-text-2)] px-2 py-0.5 rounded">
                                 {adm.bed_code}
                               </span>
                             )}
                             {adm.department && (
-                              <span className="text-xs text-slate-400">{adm.department.name}</span>
+                              <span className="text-xs text-[var(--mt-muted)]">{adm.department.name}</span>
                             )}
                           </div>
                           {adm.admission_notes && (
-                            <p className="text-sm text-slate-700 leading-relaxed line-clamp-2">{adm.admission_notes}</p>
+                            <p className="text-sm text-[var(--mt-text-2)] leading-relaxed line-clamp-2">{adm.admission_notes}</p>
                           )}
                           {adm.discharge_notes && (
-                            <p className="text-xs text-slate-500 italic border-l-2 border-green-200 pl-2">{adm.discharge_notes}</p>
+                            <p className="text-xs text-[var(--mt-muted)] italic border-l-2 border-[var(--mt-border)] pl-2">{adm.discharge_notes}</p>
                           )}
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-[var(--mt-muted)]">
                             Ingreso: {new Date(adm.admitted_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}
                             {isActive ? ` · ${days} día(s)` : ''}
                             {adm.discharged_at ? ` · Alta: ${new Date(adm.discharged_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}
@@ -2669,13 +2683,13 @@ export default function PatientProfilePage() {
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => handleDischargePatient(adm.id)}
-                                    className="flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-800 transition-colors"
+                                    className="flex items-center gap-1 text-xs font-medium text-[var(--mt-success)] hover:text-[var(--mt-success)] transition-colors"
                                   >
                                     <CheckCircle size={13} /> Confirmar
                                   </button>
                                   <button
                                     onClick={() => { setDischargingId(null); setAdmDischargeNotes('') }}
-                                    className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                                    className="text-xs text-[var(--mt-muted)] hover:text-[var(--mt-text-2)] transition-colors"
                                   >
                                     Cancelar
                                   </button>
@@ -2684,7 +2698,7 @@ export default function PatientProfilePage() {
                             ) : (
                               <button
                                 onClick={() => setDischargingId(adm.id)}
-                                className="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-700 transition-colors"
+                                className="inline-flex items-center gap-1 text-xs font-medium text-[var(--mt-success)] transition-colors"
                               >
                                 <LogOut size={13} /> Dar alta
                               </button>
@@ -2729,7 +2743,7 @@ export default function PatientProfilePage() {
             }
           >
             {showConsentForm && (
-              <form onSubmit={handleRecordConsent} className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
+              <form onSubmit={handleRecordConsent} className="flex flex-col gap-3 border-b border-[var(--mt-border)] bg-[var(--mt-elevated)] px-5 py-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="flex flex-col gap-1">
                     <label className={labelClass}>Tipo</label>
@@ -2773,7 +2787,7 @@ export default function PatientProfilePage() {
                     className={`${fieldClass} resize-none`}
                   />
                 </div>
-                {consentError && <p className="text-xs text-red-500">{consentError}</p>}
+                {consentError && <p className="text-xs text-[var(--mt-danger)]">{consentError}</p>}
                 <button type="submit" disabled={savingConsent} className={submitBtnClass}>
                   {savingConsent ? <Loader2 size={14} className="animate-spin" /> : null}
                   Guardar consentimiento
@@ -2781,7 +2795,7 @@ export default function PatientProfilePage() {
               </form>
             )}
 
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-[var(--mt-border)]">
               {consents.length === 0 && !showConsentForm && (
                 <EmptyClinicalState
                   icon={ShieldCheck}
@@ -2795,11 +2809,11 @@ export default function PatientProfilePage() {
                   <div key={c.id} className="flex items-start justify-between gap-4 px-5 py-3.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-medium text-slate-800">{consentTypeLabel[c.consent_type] ?? c.consent_type}</span>
+                        <span className="text-sm font-medium text-[var(--mt-text)]">{consentTypeLabel[c.consent_type] ?? c.consent_type}</span>
                         <StatusPill tone={isActive ? 'green' : 'slate'}>{isActive ? 'Activo' : 'Retirado'}</StatusPill>
                       </div>
-                      {c.description && <p className="text-xs text-slate-500 mb-0.5">{c.description}</p>}
-                      <p className="text-xs text-slate-400">
+                      {c.description && <p className="text-xs text-[var(--mt-muted)] mb-0.5">{c.description}</p>}
+                      <p className="text-xs text-[var(--mt-muted)]">
                         Consentido: {new Date(c.consented_at).toLocaleDateString('es')}
                         {c.recorded_by_email ? ` · Por: ${c.recorded_by_email}` : ''}
                         {c.withdrawn_at ? ` · Retirado: ${new Date(c.withdrawn_at).toLocaleDateString('es')}` : ''}
@@ -2809,7 +2823,7 @@ export default function PatientProfilePage() {
                       <button
                         onClick={() => handleWithdrawConsent(c.id)}
                         title="Retirar consentimiento"
-                        className="text-slate-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
+                        className="text-[var(--mt-border)] hover:text-[var(--mt-danger)] transition-colors shrink-0 mt-0.5"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -2824,8 +2838,8 @@ export default function PatientProfilePage() {
           <ClinicalPanel title="RGPD / GDPR" icon={Download} accent="red" collapsible defaultOpen={false}>
             <div className="flex flex-col gap-6 px-5 py-5">
               <div>
-                <p className="text-sm font-medium text-slate-700 mb-1">Exportar datos del paciente</p>
-                <p className="text-xs text-slate-400 mb-3">
+                <p className="text-sm font-medium text-[var(--mt-text-2)] mb-1">Exportar datos del paciente</p>
+                <p className="text-xs text-[var(--mt-muted)] mb-3">
                   Descarga un JSON con todos los datos del paciente para cumplir el derecho de portabilidad.
                 </p>
                 <ClinicalButton
@@ -2839,41 +2853,41 @@ export default function PatientProfilePage() {
                 </ClinicalButton>
               </div>
 
-              <hr className="border-slate-100" />
+              <hr className="border-[var(--mt-border)]" />
 
               <div>
-                <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-red-600">
+                <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-[var(--mt-danger)]">
                   <AlertTriangle size={14} /> Anonimizar datos personales
                 </p>
-                <p className="text-xs text-slate-400 mb-3">
+                <p className="text-xs text-[var(--mt-muted)] mb-3">
                   Elimina irreversiblemente nombre, fecha de nacimiento, teléfono, email y número de documento.
                   Los datos médicos se conservan por obligación legal. Esta acción no se puede deshacer.
                 </p>
                 {patient?.anonymized_at ? (
-                  <p className="text-xs text-slate-400 bg-slate-50 rounded-lg px-3 py-2">
+                  <p className="text-xs text-[var(--mt-muted)] bg-[var(--mt-elevated)] rounded-lg px-3 py-2">
                     Paciente anonimizado el {new Date(patient.anonymized_at as unknown as string).toLocaleDateString('es')}
                   </p>
                 ) : !anonymizeConfirm ? (
                   <button
                     onClick={() => setAnonymizeConfirm(true)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--mt-danger-subtle)] text-[var(--mt-danger)] text-sm font-medium hover:bg-[var(--mt-danger-subtle)] transition-colors"
                   >
                     <Trash2 size={14} /> Anonimizar paciente
                   </button>
                 ) : (
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-xs text-red-600 font-medium">¿Confirmar? Esta acción es irreversible.</span>
+                    <span className="text-xs text-[var(--mt-danger)] font-medium">¿Confirmar? Esta acción es irreversible.</span>
                     <button
                       onClick={handleAnonymize}
                       disabled={anonymizing}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 disabled:opacity-60 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--mt-danger)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
                     >
                       {anonymizing ? <Loader2 size={12} className="animate-spin" /> : null}
                       Sí, anonimizar
                     </button>
                     <button
                       onClick={() => setAnonymizeConfirm(false)}
-                      className="text-xs text-slate-500 hover:text-slate-800 transition-colors"
+                      className="text-xs text-[var(--mt-muted)] hover:text-[var(--mt-text)] transition-colors"
                     >
                       Cancelar
                     </button>

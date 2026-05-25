@@ -34,33 +34,52 @@ export function OnboardingBanner() {
   const pct = Math.round((status.completed_count / status.total_count) * 100)
 
   return (
-    <div className="relative rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
+    <div style={{
+      position: 'relative',
+      borderRadius: 12,
+      border: '1px solid var(--mt-primary-mist)',
+      background: 'linear-gradient(135deg, var(--mt-primary-subtle) 0%, var(--mt-purple-subtle) 100%)',
+      padding: 20,
+    }}>
       <button
         onClick={handleDismiss}
-        className="absolute right-4 top-4 rounded-lg p-1 text-slate-400 hover:bg-white hover:text-slate-600 transition-colors"
         aria-label="Cerrar"
+        style={{
+          position: 'absolute', top: 14, right: 14,
+          width: 28, height: 28, borderRadius: 6,
+          border: 'none', background: 'rgba(255,255,255,.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--mt-text-2)', cursor: 'pointer',
+          transition: 'background .15s',
+        }}
       >
-        <X size={16} />
+        <X size={14} />
       </button>
 
-      <div className="flex flex-col gap-3 pr-6">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 24 }}>
         <div>
-          <p className="text-sm font-semibold text-blue-800">Configura tu clínica</p>
-          <p className="text-xs text-blue-600 mt-0.5">
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-primary-deep)', margin: 0 }}>
+            Configura tu clínica
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--mt-primary)', marginTop: 2, marginBottom: 0 }}>
             {status.completed_count} de {status.total_count} pasos completados
           </p>
         </div>
 
         {/* Progress bar */}
-        <div className="h-1.5 w-full rounded-full bg-blue-100 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-blue-500 transition-all"
-            style={{ width: `${pct}%` }}
-          />
+        <div style={{
+          height: 6, width: '100%', borderRadius: 999,
+          background: 'var(--mt-primary-mist)', overflow: 'hidden',
+        }}>
+          <div style={{
+            width: `${pct}%`, height: '100%', borderRadius: 999,
+            background: 'var(--mt-gradient-accent)',
+            transition: 'width .6s cubic-bezier(0,0,.2,1)',
+          }} />
         </div>
 
-        {/* Quick step indicators */}
-        <div className="flex flex-wrap gap-2">
+        {/* Step chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {[
             { key: 'has_patient', label: 'Paciente' },
             { key: 'has_encounter', label: 'Consulta' },
@@ -72,11 +91,16 @@ export function OnboardingBanner() {
             return (
               <span
                 key={step.key}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                  done
-                    ? 'bg-blue-100 text-blue-700 line-through opacity-60'
-                    : 'bg-white border border-blue-100 text-slate-600'
-                }`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  borderRadius: 999, padding: '3px 10px',
+                  fontSize: 12, fontWeight: 500,
+                  background: done ? 'var(--mt-primary-mist)' : '#fff',
+                  color: done ? 'var(--mt-primary-deep)' : 'var(--mt-text-2)',
+                  border: done ? '1px solid var(--mt-primary-mist)' : '1px solid var(--mt-border)',
+                  textDecoration: done ? 'line-through' : 'none',
+                  opacity: done ? 0.65 : 1,
+                }}
               >
                 {done && <CheckCircle2 size={10} />}
                 {step.label}
@@ -87,10 +111,18 @@ export function OnboardingBanner() {
 
         <Link
           href="/onboarding"
-          className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            borderRadius: 8, padding: '7px 14px',
+            background: 'var(--mt-gradient-primary)',
+            color: '#fff', fontSize: 12, fontWeight: 600,
+            textDecoration: 'none', width: 'fit-content',
+            boxShadow: '0 1px 3px rgba(37,99,235,.25)',
+            transition: 'opacity .15s',
+          }}
         >
           Completar configuración
-          <ChevronRight size={14} />
+          <ChevronRight size={13} />
         </Link>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import {
   CreateReferralSchema,
   RespondReferralSchema,
@@ -14,7 +15,7 @@ router.use('*', requireAuth)
 
 // ─── Doctor inbox ─────────────────────────────────────────────────────────────
 
-router.get('/referrals', zValidator('query', ListReferralsSchema), async (c) => {
+router.get('/referrals', requirePermission(PERMISSIONS.REFERRAL_READ), zValidator('query', ListReferralsSchema), async (c) => {
   const { tenant_id, sub } = c.get('auth')
   const { direction } = c.req.valid('query')
   const data = await svc.listDoctorReferrals(tenant_id, sub, direction)
@@ -23,7 +24,7 @@ router.get('/referrals', zValidator('query', ListReferralsSchema), async (c) => 
 
 // ─── Per-patient referrals ────────────────────────────────────────────────────
 
-router.get('/patients/:patientId/referrals', async (c) => {
+router.get('/patients/:patientId/referrals', requirePermission(PERMISSIONS.REFERRAL_READ), async (c) => {
   const { tenant_id } = c.get('auth')
   const data = await svc.listPatientReferrals(tenant_id, c.req.param('patientId')!)
   return c.json({ success: true, data })
@@ -31,7 +32,7 @@ router.get('/patients/:patientId/referrals', async (c) => {
 
 router.post(
   '/patients/:patientId/referrals',
-  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  requirePermission(PERMISSIONS.REFERRAL_WRITE),
   zValidator('json', CreateReferralSchema),
   async (c) => {
     const { tenant_id, sub, email } = c.get('auth')
@@ -43,7 +44,7 @@ router.post(
 
 // ─── Single referral ──────────────────────────────────────────────────────────
 
-router.get('/referrals/:id', async (c) => {
+router.get('/referrals/:id', requirePermission(PERMISSIONS.REFERRAL_READ), async (c) => {
   const { tenant_id, sub } = c.get('auth')
   const data = await svc.getReferral(tenant_id, c.req.param('id')!, sub)
   return c.json({ success: true, data })
@@ -51,25 +52,25 @@ router.get('/referrals/:id', async (c) => {
 
 // ─── State transitions ────────────────────────────────────────────────────────
 
-router.post('/referrals/:id/accept', zValidator('json', RespondReferralSchema), async (c) => {
+router.post('/referrals/:id/accept', requirePermission(PERMISSIONS.REFERRAL_READ), zValidator('json', RespondReferralSchema), async (c) => {
   const { tenant_id, sub, email } = c.get('auth')
   const data = await svc.acceptReferral(tenant_id, c.req.param('id')!, sub, email, c.req.valid('json'))
   return c.json({ success: true, data })
 })
 
-router.post('/referrals/:id/reject', zValidator('json', RespondReferralSchema), async (c) => {
+router.post('/referrals/:id/reject', requirePermission(PERMISSIONS.REFERRAL_READ), zValidator('json', RespondReferralSchema), async (c) => {
   const { tenant_id, sub, email } = c.get('auth')
   const data = await svc.rejectReferral(tenant_id, c.req.param('id')!, sub, email, c.req.valid('json'))
   return c.json({ success: true, data })
 })
 
-router.post('/referrals/:id/complete', zValidator('json', RespondReferralSchema), async (c) => {
+router.post('/referrals/:id/complete', requirePermission(PERMISSIONS.REFERRAL_READ), zValidator('json', RespondReferralSchema), async (c) => {
   const { tenant_id, sub, email } = c.get('auth')
   const data = await svc.completeReferral(tenant_id, c.req.param('id')!, sub, email, c.req.valid('json'))
   return c.json({ success: true, data })
 })
 
-router.post('/referrals/:id/cancel', async (c) => {
+router.post('/referrals/:id/cancel', requirePermission(PERMISSIONS.REFERRAL_WRITE), async (c) => {
   const { tenant_id, sub, email } = c.get('auth')
   const data = await svc.cancelReferral(tenant_id, c.req.param('id')!, sub, email)
   return c.json({ success: true, data })

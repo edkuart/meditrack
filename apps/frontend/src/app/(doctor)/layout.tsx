@@ -46,8 +46,7 @@ import {
   fetchDoctorNotifications, markDoctorNotificationRead, markAllDoctorNotificationsRead,
   type DoctorNotification,
 } from '@/lib/doctor/referral-notifications-api'
-
-const ADMIN_ROLES = new Set(['ADMIN_CLINIC', 'SUPER_ADMIN'])
+import { hasPermission, PERMISSIONS, type Permission } from '@/lib/doctor/permissions'
 
 const ROLE_LABELS: Record<string, string> = {
   DOCTOR:        'Médico/a',
@@ -81,6 +80,22 @@ function NavItem({
 }) {
   const [hover, setHover] = useState(false)
 
+  const bg = active
+    ? 'var(--mt-purple-subtle)'
+    : hover
+      ? 'var(--mt-primary-subtle)'
+      : 'transparent'
+  const color = active
+    ? 'var(--mt-purple-deep)'
+    : hover
+      ? 'var(--mt-primary-deep)'
+      : 'var(--mt-text-2)'
+  const iconColor = active
+    ? 'var(--mt-purple)'
+    : hover
+      ? 'var(--mt-primary)'
+      : 'var(--mt-muted)'
+
   return (
     <Link
       href={href}
@@ -92,33 +107,36 @@ function NavItem({
         display: 'flex', alignItems: 'center', gap: 10,
         minHeight: 38,
         padding: '9px 10px 9px 13px', borderRadius: 8,
-        background: active ? 'var(--mt-primary-subtle)' : hover ? 'var(--mt-elevated)' : 'transparent',
-        color: active ? 'var(--mt-primary)' : hover ? 'var(--mt-text)' : 'var(--mt-text-2)',
-        fontSize: 13, fontWeight: active ? 500 : 400,
+        background: bg,
+        color,
+        fontSize: 13, fontWeight: active ? 600 : 500,
         transition: 'background .2s, color .2s',
         textDecoration: 'none',
+        borderLeft: active ? '3px solid var(--mt-purple)' : '3px solid transparent',
+        paddingLeft: 10,
       }}
     >
       {active && (
         <span style={{
-          position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: 2,
-          background: 'var(--mt-primary)',
+          position: 'absolute', left: -3, top: 6, bottom: 6, width: 3, borderRadius: 2,
+          background: 'var(--mt-purple)',
           animation: 'mt-slide-in-l .2s ease-out',
         }} />
       )}
       <span style={{
         width: 22, height: 22, borderRadius: 6,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: active ? 'rgba(26,86,219,.10)' : 'transparent',
+        background: active ? 'rgba(99,102,241,.10)' : 'transparent',
+        transition: 'background .2s',
       }}>
-        <Icon size={16} color={active ? 'var(--mt-primary)' : 'var(--mt-muted)'} />
+        <Icon size={16} color={iconColor} />
       </span>
       <span style={{ flex: 1 }}>{label}</span>
       {badge && (
         <span style={{
-          fontSize: 11, fontWeight: 500, padding: '1px 7px', borderRadius: 999,
-          background: active ? 'rgba(26,86,219,.15)' : 'var(--mt-elevated)',
-          color: active ? 'var(--mt-primary)' : 'var(--mt-muted)',
+          fontSize: 11, fontWeight: 600, padding: '1px 7px', borderRadius: 999,
+          background: active ? 'rgba(99,102,241,.15)' : 'var(--mt-elevated)',
+          color: active ? 'var(--mt-purple-deep)' : 'var(--mt-muted)',
           fontVariantNumeric: 'tabular-nums',
         }}>{badge}</span>
       )}
@@ -133,30 +151,30 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, logout } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
-  const isAdmin = user && ADMIN_ROLES.has(user.role)
+  const can = (permission: Permission) => hasPermission(user?.role, permission, user?.permissions)
 
   const main = [
-    { href: '/dashboard',  icon: LayoutGrid,   label: 'Panel operativo', match: (p: string) => p === '/dashboard' },
-    { href: '/patients',   icon: Users,         label: 'Pacientes',       match: (p: string) => p.startsWith('/patients') },
-    { href: '/lab',        icon: FlaskConical,  label: 'Laboratorio',     match: (p: string) => p.startsWith('/lab') && !p.startsWith('/lab/external') },
-    { href: '/lab/external', icon: Upload, label: 'Lab externo', match: (p: string) => p.startsWith('/lab/external') },
-    { href: '/referrals',  icon: ArrowUpDown,   label: 'Referencias',     match: (p: string) => p.startsWith('/referrals') },
-    { href: '/hospital',   icon: BedDouble,     label: 'Internados',      match: (p: string) => p.startsWith('/hospital') },
-    { href: '/clinical-intelligence', icon: BrainCircuit, label: 'Inteligencia clínica', match: (p: string) => p.startsWith('/clinical-intelligence') },
-    { href: '/analytics',  icon: TrendingUp,    label: 'Analítica',       match: (p: string) => p.startsWith('/analytics'), adminOnly: true },
-    { href: '/staff',      icon: UserCog,       label: 'Equipo clínico',  match: (p: string) => p === '/staff', adminOnly: true },
+    { href: '/dashboard',  icon: LayoutGrid,   label: 'Panel operativo', match: (p: string) => p === '/dashboard', permission: PERMISSIONS.PATIENT_READ },
+    { href: '/patients',   icon: Users,         label: 'Pacientes',       match: (p: string) => p.startsWith('/patients'), permission: PERMISSIONS.PATIENT_READ },
+    { href: '/lab',        icon: FlaskConical,  label: 'Laboratorio',     match: (p: string) => p.startsWith('/lab') && !p.startsWith('/lab/external'), permission: PERMISSIONS.LAB_ORDER_READ },
+    { href: '/lab/external', icon: Upload, label: 'Lab externo', match: (p: string) => p.startsWith('/lab/external'), permission: PERMISSIONS.LAB_ORDER_READ },
+    { href: '/referrals',  icon: ArrowUpDown,   label: 'Referencias',     match: (p: string) => p.startsWith('/referrals'), permission: PERMISSIONS.REFERRAL_READ },
+    { href: '/hospital',   icon: BedDouble,     label: 'Internados',      match: (p: string) => p.startsWith('/hospital'), permission: PERMISSIONS.HOSPITAL_CENSUS_READ },
+    { href: '/clinical-intelligence', icon: BrainCircuit, label: 'Inteligencia clínica', match: (p: string) => p.startsWith('/clinical-intelligence'), permission: PERMISSIONS.PATIENT_SENSITIVE_READ },
+    { href: '/analytics',  icon: TrendingUp,    label: 'Analítica',       match: (p: string) => p.startsWith('/analytics'), permission: PERMISSIONS.ANALYTICS_READ },
+    { href: '/staff',      icon: UserCog,       label: 'Equipo clínico',  match: (p: string) => p === '/staff', permission: PERMISSIONS.STAFF_MANAGE },
   ]
 
   const config = [
-    { href: '/settings/clinic',    icon: Building2,   label: 'Clínica' },
-    { href: '/settings/hospital',  icon: Building2,   label: 'Config. hospital' },
-    { href: '/settings/staff',     icon: UserCog,     label: 'Personal' },
-    { href: '/settings/locations', icon: MapPin,      label: 'Sedes' },
-    { href: '/settings/protocols', icon: BookOpen,   label: 'Protocolos' },
-    { href: '/settings/billing',   icon: CreditCard,  label: 'Plan y pagos' },
-    { href: '/settings/audit',     icon: ShieldCheck, label: 'Auditoría' },
-    { href: '/settings/sessions',  icon: Monitor,     label: 'Sesiones' },
-    { href: '/settings/compliance',icon: ShieldCheck, label: 'Cumplimiento' },
+    { href: '/settings/clinic',    icon: Building2,   label: 'Clínica', permission: PERMISSIONS.HOSPITAL_MANAGE },
+    { href: '/settings/hospital',  icon: Building2,   label: 'Config. hospital', permission: PERMISSIONS.HOSPITAL_MANAGE },
+    { href: '/settings/staff',     icon: UserCog,     label: 'Personal', permission: PERMISSIONS.STAFF_MANAGE },
+    { href: '/settings/locations', icon: MapPin,      label: 'Sedes', permission: PERMISSIONS.HOSPITAL_MANAGE },
+    { href: '/settings/protocols', icon: BookOpen,   label: 'Protocolos', permission: PERMISSIONS.TREATMENT_WRITE },
+    { href: '/settings/billing',   icon: CreditCard,  label: 'Plan y pagos', permission: PERMISSIONS.HOSPITAL_MANAGE },
+    { href: '/settings/audit',     icon: ShieldCheck, label: 'Auditoría', permission: PERMISSIONS.HOSPITAL_MANAGE },
+    { href: '/settings/sessions',  icon: Monitor,     label: 'Sesiones', permission: PERMISSIONS.PATIENT_READ },
+    { href: '/settings/compliance',icon: ShieldCheck, label: 'Cumplimiento', permission: PERMISSIONS.HOSPITAL_MANAGE },
   ]
 
   const doctorName = user ? `${user.first_name} ${user.last_name}` : ''
@@ -180,7 +198,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         maxHeight: '100dvh',
         background: 'var(--mt-surface)',
         borderRight: '1px solid var(--mt-border)',
-        boxShadow: open ? '8px 0 32px rgba(15,23,42,.18)' : '2px 0 8px rgba(15,23,42,.04)',
+        boxShadow: open ? '8px 0 32px rgba(15,23,42,.18)' : '2px 0 8px rgba(37,99,235,.06)',
       }}
     >
       {/* Logo + mobile close */}
@@ -218,7 +236,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           letterSpacing: '0.1em', textTransform: 'uppercase',
         }}>Clínica</div>
         {main
-          .filter(item => !item.adminOnly || isAdmin)
+          .filter(item => can(item.permission))
           .map(item => (
             <NavItem
               key={item.href}
@@ -230,7 +248,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             />
           ))}
 
-        {isAdmin && (
+        {config.some(item => can(item.permission)) && (
           <>
             <div style={{
               margin: '18px 10px 7px',
@@ -238,7 +256,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
               color: 'var(--mt-muted)',
               letterSpacing: '0.1em', textTransform: 'uppercase',
             }}>Configuración</div>
-            {config.map(item => (
+            {config.filter(item => can(item.permission)).map(item => (
               <NavItem
                 key={item.href}
                 href={item.href}
@@ -274,7 +292,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             <MTAvatar
               name={doctorName || 'Dr'}
               size={34}
-              tone={{ bg: '#dbeafe', fg: '#1a56db' }}
+              tone={{ bg: '#DBEAFE', fg: '#1D4ED8' }}
             />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
@@ -414,15 +432,20 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   }, [panelOpen])
 
   return (
-    <header className="mt-topbar-pad" style={{
-      height: 56,
-      display: 'flex', alignItems: 'center', gap: 12,
-      borderBottom: '1px solid var(--mt-border)',
-      background: 'rgba(255,255,255,.85)',
-      backdropFilter: 'blur(8px)',
-      position: 'sticky', top: 0, zIndex: 10,
-      flexShrink: 0,
-    }}>
+    <header
+      className="mt-topbar-pad"
+      style={{
+        height: 56,
+        display: 'flex', alignItems: 'center', gap: 12,
+        background: 'rgba(248, 250, 252, 0.85)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: '1px solid rgba(226, 232, 240, 0.8)',
+        boxShadow: '0 1px 0 rgba(37, 99, 235, 0.06), 0 4px 16px rgba(15, 23, 42, 0.04)',
+        position: 'sticky', top: 0, zIndex: 10,
+        flexShrink: 0,
+      }}
+    >
       {/* Hamburger — mobile only */}
       <button
         onClick={onMenu}
@@ -444,8 +467,10 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           style={{
             display: 'flex', alignItems: 'center', gap: 8, height: 34, padding: '0 12px',
             border: '1px solid var(--mt-border)', borderRadius: 8, width: '100%',
-            background: 'var(--mt-bg)', fontSize: 13, color: 'var(--mt-muted)',
+            background: 'rgba(255,255,255,.7)', fontSize: 13, color: 'var(--mt-muted)',
             cursor: 'pointer', textAlign: 'left',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
           }}
         >
           <Search size={14} color="var(--mt-muted)" />
@@ -493,10 +518,10 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
             onClick={() => setPanelOpen(v => !v)}
             style={{
               position: 'relative', width: 34, height: 34, borderRadius: 8,
-              border: `1px solid ${panelOpen ? 'var(--mt-primary)' : 'var(--mt-border)'}`,
-              background: panelOpen ? 'var(--mt-primary-subtle)' : 'var(--mt-surface)',
+              border: `1px solid ${panelOpen ? 'var(--mt-purple)' : 'var(--mt-border)'}`,
+              background: panelOpen ? 'var(--mt-purple-subtle)' : 'var(--mt-surface)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: panelOpen ? 'var(--mt-primary)' : 'var(--mt-text-2)',
+              color: panelOpen ? 'var(--mt-purple-deep)' : 'var(--mt-text-2)',
               cursor: 'pointer', transition: 'all .2s',
             }}
           >
@@ -517,7 +542,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
               <span style={{
                 position: 'absolute', top: -4, right: -4,
                 minWidth: 16, height: 16, borderRadius: 999,
-                background: '#1d4ed8', border: '2px solid #fff',
+                background: 'var(--mt-purple)', border: '2px solid #fff',
                 fontSize: 10, fontWeight: 700, color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: '0 3px',
@@ -528,7 +553,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
             {failedCount === 0 && unreadReferralCount === 0 && notifications.length > 0 && (
               <span style={{
                 position: 'absolute', top: 6, right: 6, width: 7, height: 7,
-                borderRadius: '50%', background: 'var(--mt-primary)', border: '2px solid #fff',
+                borderRadius: '50%', background: 'var(--mt-purple)', border: '2px solid #fff',
               }} />
             )}
           </button>
@@ -554,7 +579,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           <div style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>
             {clinicName}{' '}
             {user && (
-              <span style={{ fontWeight: 500, color: 'var(--mt-text)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--mt-text)' }}>
                 {user.first_name} {user.last_name}
               </span>
             )}
@@ -571,18 +596,16 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 function MobileNav() {
   const { user } = useAuth()
   const pathname = usePathname()
+  const can = (permission: Permission) => hasPermission(user?.role, permission, user?.permissions)
 
   const items = [
-    { href: '/dashboard',              label: 'Panel',     icon: LayoutGrid,   active: pathname === '/dashboard' },
-    { href: '/patients',               label: 'Pacientes', icon: Users,        active: pathname.startsWith('/patients') },
-    { href: '/lab',                    label: 'Lab',       icon: FlaskConical, active: pathname.startsWith('/lab') },
-    { href: '/clinical-intelligence',  label: 'Clínica IA', icon: BrainCircuit, active: pathname.startsWith('/clinical-intelligence') },
-  ]
-
-  if (user && ADMIN_ROLES.has(user.role)) {
-    items.push({ href: '/staff',     label: 'Equipo', icon: UserCog,    active: pathname === '/staff' })
-    items.push({ href: '/analytics', label: 'Stats',  icon: TrendingUp, active: pathname.startsWith('/analytics') })
-  }
+    { href: '/dashboard',              label: 'Panel',     icon: LayoutGrid,   active: pathname === '/dashboard', permission: PERMISSIONS.PATIENT_READ },
+    { href: '/patients',               label: 'Pacientes', icon: Users,        active: pathname.startsWith('/patients'), permission: PERMISSIONS.PATIENT_READ },
+    { href: '/lab',                    label: 'Lab',       icon: FlaskConical, active: pathname.startsWith('/lab'), permission: PERMISSIONS.LAB_ORDER_READ },
+    { href: '/clinical-intelligence',  label: 'Clínica IA', icon: BrainCircuit, active: pathname.startsWith('/clinical-intelligence'), permission: PERMISSIONS.PATIENT_SENSITIVE_READ },
+    { href: '/staff',                  label: 'Equipo',    icon: UserCog,      active: pathname === '/staff', permission: PERMISSIONS.STAFF_MANAGE },
+    { href: '/analytics',              label: 'Stats',     icon: TrendingUp,   active: pathname.startsWith('/analytics'), permission: PERMISSIONS.ANALYTICS_READ },
+  ].filter(item => can(item.permission))
 
   return (
     <nav style={{
@@ -606,17 +629,17 @@ function MobileNav() {
               href={item.href}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                textDecoration: 'none', color: item.active ? 'var(--mt-primary)' : 'var(--mt-muted)',
-                fontSize: 11, fontWeight: item.active ? 500 : 400,
+                textDecoration: 'none', color: item.active ? 'var(--mt-purple-deep)' : 'var(--mt-muted)',
+                fontSize: 11, fontWeight: item.active ? 600 : 500,
               }}
             >
               <span style={{
                 padding: '4px 14px', borderRadius: 999,
-                background: item.active ? 'var(--mt-primary-subtle)' : 'transparent',
+                background: item.active ? 'var(--mt-purple-subtle)' : 'transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'background .2s',
               }}>
-                <Icon size={18} color={item.active ? 'var(--mt-primary)' : 'var(--mt-muted)'} />
+                <Icon size={18} color={item.active ? 'var(--mt-purple)' : 'var(--mt-muted)'} />
               </span>
               <span>{item.label}</span>
             </Link>

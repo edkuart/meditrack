@@ -4,12 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Monitor, Loader2, LogOut, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
-import {
-  getSessions,
-  revokeSession,
-  revokeAllSessions,
-  type Session,
-} from '@/lib/doctor/settings-api'
+import { getSessions, revokeSession, revokeAllSessions, type Session } from '@/lib/doctor/settings-api'
+import { MTButton } from '@/components/doctor/clinical-ui'
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -21,30 +17,31 @@ function timeAgo(dateStr: string): string {
   return `Hace ${Math.floor(hours / 24)}d`
 }
 
-function SessionRow({
-  session,
-  onRevoke,
-  revoking,
-}: {
-  session: Session
-  onRevoke: (id: string) => void
-  revoking: boolean
+function SessionRow({ session, onRevoke, revoking }: {
+  session: Session; onRevoke: (id: string) => void; revoking: boolean
 }) {
   const lastActive = session.used_at ?? session.created_at
-  const expiresAt = new Date(session.expires_at)
-  const isExpired = expiresAt < new Date()
+  const isExpired = new Date(session.expires_at) < new Date()
 
   return (
-    <div className="flex items-center gap-4 border-b border-slate-100 px-5 py-4 last:border-b-0">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100">
-        <Monitor size={18} className="text-slate-500" />
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 16,
+      padding: '14px 20px',
+      borderBottom: '1px solid var(--mt-border)',
+    }}>
+      <div style={{
+        width: 40, height: 40, flexShrink: 0, borderRadius: 10,
+        background: 'var(--mt-elevated)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Monitor size={18} color="var(--mt-muted)" />
       </div>
 
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-800 truncate">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {session.device_hint ?? 'Dispositivo desconocido'}
         </p>
-        <p className="text-xs text-slate-400">
+        <p style={{ fontSize: 11, color: 'var(--mt-muted)', margin: '3px 0 0' }}>
           Último uso: {timeAgo(lastActive)}
           {' · '}
           {isExpired
@@ -54,14 +51,15 @@ function SessionRow({
       </div>
 
       {!isExpired && (
-        <button
-          onClick={() => onRevoke(session.id)}
+        <MTButton
+          variant="outline" size="sm"
+          icon={revoking ? Loader2 : LogOut}
           disabled={revoking}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors"
+          onClick={() => onRevoke(session.id)}
+          style={{ color: 'var(--mt-danger)', borderColor: 'var(--mt-danger-subtle)' }}
         >
-          {revoking ? <Loader2 size={12} className="animate-spin" /> : <LogOut size={12} />}
           Revocar
-        </button>
+        </MTButton>
       )}
     </div>
   )
@@ -79,10 +77,7 @@ export default function SessionsPage() {
 
   useEffect(() => {
     if (!token) return
-    getSessions(token)
-      .then(setSessions)
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    getSessions(token).then(setSessions).catch(() => {}).finally(() => setLoading(false))
   }, [token])
 
   async function handleRevoke(id: string) {
@@ -115,87 +110,78 @@ export default function SessionsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 size={22} className="animate-spin text-slate-400" />
+      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={22} color="var(--mt-muted)" style={{ animation: 'spin 1s linear infinite' }} />
       </div>
     )
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center gap-3">
-        <Monitor size={22} className="text-slate-400" />
+    <div style={{ maxWidth: 560, margin: '0 auto', padding: '32px 16px', display: 'flex', flexDirection: 'column', gap: 24, fontFamily: 'var(--mt-font)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Monitor size={22} color="var(--mt-muted)" />
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Sesiones activas</h1>
-          <p className="text-sm text-slate-500">
-            Dispositivos con acceso activo a tu cuenta.
-          </p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--mt-text)', margin: 0 }}>Sesiones activas</h1>
+          <p style={{ fontSize: 13, color: 'var(--mt-muted)', margin: 0 }}>Dispositivos con acceso activo a tu cuenta.</p>
         </div>
       </div>
 
       {feedback && (
-        <div className={`flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm border ${
-          feedback.ok
-            ? 'bg-green-50 text-green-700 border-green-200'
-            : 'bg-red-50 text-red-600 border-red-200'
-        }`}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
+          borderRadius: 10, fontSize: 13,
+          background: feedback.ok ? 'var(--mt-success-subtle)' : 'var(--mt-danger-subtle)',
+          color: feedback.ok ? '#065F46' : 'var(--mt-danger)',
+          border: `1px solid ${feedback.ok ? '#6EE7B7' : '#fecaca'}`,
+        }}>
           {feedback.ok ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
           {feedback.msg}
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div style={{ borderRadius: 16, border: '1px solid var(--mt-border)', background: 'var(--mt-surface)', overflow: 'hidden' }}>
         {sessions.length === 0 ? (
-          <div className="py-12 text-center text-sm text-slate-400">
+          <div style={{ padding: '48px 20px', textAlign: 'center', fontSize: 13, color: 'var(--mt-muted)' }}>
             No hay sesiones activas.
           </div>
         ) : (
-          sessions.map(session => (
-            <SessionRow
-              key={session.id}
-              session={session}
-              onRevoke={handleRevoke}
-              revoking={revokingId === session.id}
-            />
+          sessions.map((session, i) => (
+            <div key={session.id} style={i === sessions.length - 1 ? { borderBottom: 'none' } : {}}>
+              <SessionRow session={session} onRevoke={handleRevoke} revoking={revokingId === session.id} />
+            </div>
           ))
         )}
       </div>
 
       {sessions.length > 0 && (
-        <div className="rounded-2xl border border-red-100 bg-red-50 p-5 space-y-3">
-          <div className="flex items-start gap-2">
-            <AlertTriangle size={16} className="shrink-0 mt-0.5 text-red-500" />
+        <div style={{
+          borderRadius: 14, border: '1px solid #fecaca',
+          background: 'var(--mt-danger-subtle)', padding: 20,
+          display: 'flex', flexDirection: 'column', gap: 14,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <AlertTriangle size={16} color="var(--mt-danger)" style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <p className="text-sm font-semibold text-red-800">Cerrar todas las sesiones</p>
-              <p className="text-xs text-red-600 mt-0.5">
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#7f1d1d', margin: 0 }}>Cerrar todas las sesiones</p>
+              <p style={{ fontSize: 12, color: 'var(--mt-danger)', margin: '4px 0 0' }}>
                 Se cerrará sesión en todos los dispositivos incluido este. Necesitarás volver a iniciar sesión.
               </p>
             </div>
           </div>
 
           {!confirmAll ? (
-            <button
-              onClick={() => setConfirmAll(true)}
-              className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-            >
+            <MTButton variant="outline" onClick={() => setConfirmAll(true)}
+              style={{ color: 'var(--mt-danger)', borderColor: '#fecaca', width: 'fit-content' }}>
               Cerrar todas las sesiones
-            </button>
+            </MTButton>
           ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={handleRevokeAll}
-                disabled={revokingAll}
-                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
-              >
-                {revokingAll && <Loader2 size={13} className="animate-spin" />}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MTButton variant="danger" icon={revokingAll ? Loader2 : undefined} disabled={revokingAll} onClick={handleRevokeAll}>
                 Confirmar
-              </button>
-              <button
-                onClick={() => setConfirmAll(false)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-              >
+              </MTButton>
+              <MTButton variant="outline" onClick={() => setConfirmAll(false)}>
                 Cancelar
-              </button>
+              </MTButton>
             </div>
           )}
         </div>

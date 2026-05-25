@@ -11,12 +11,13 @@ import {
 } from '@/lib/doctor/departments-api'
 import { listLocations, type Location } from '@/lib/doctor/locations-api'
 import { listStaff, type StaffMember } from '@/lib/doctor/staff-api'
+import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
 
 const DEPT_TYPES = Object.entries(DEPARTMENT_TYPE_LABELS)
 
 // ─── Upgrade banner ────────────────────────────────────────────────────────────
 
-function UpgradeBanner({ token, onUpgraded }: { token: string; onUpgraded: () => void }) {
+function UpgradeBanner({ token, onUpgraded }: { token: string; onUpgraded: () => void | Promise<void> }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -25,7 +26,7 @@ function UpgradeBanner({ token, onUpgraded }: { token: string; onUpgraded: () =>
     setLoading(true)
     try {
       await upgradeTenantToHospital(token)
-      onUpgraded()
+      await onUpgraded()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al actualizar')
     } finally {
@@ -499,29 +500,34 @@ function NewDepartmentForm({
 
 export default function HospitalSettingsPage() {
   const { token, user, refreshUser } = useAuth()
-  const [isHospital, setIsHospital] = useState(false)
+  const [isHospital, setIsHospital] = useState(user?.tenant_type === 'HOSPITAL')
   const [depts, setDepts] = useState<Department[]>([])
   const [locs, setLocs] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
 
-  const isAdmin = user?.role === 'ADMIN_CLINIC' || user?.role === 'SUPER_ADMIN'
+  const isAdmin = hasPermission(user?.role, PERMISSIONS.HOSPITAL_MANAGE, user?.permissions)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceHospital = false) => {
     if (!token) return
     setLoading(true)
     try {
-      const [data, locData] = await Promise.all([
-        listDepartments(token),
-        listLocations(token).catch(() => [] as Location[]),
-      ])
-      setDepts(data)
+      const locData = await listLocations(token).catch(() => [] as Location[])
       setLocs(locData)
+
+      if (!forceHospital && user?.tenant_type !== 'HOSPITAL') {
+        setDepts([])
+        setIsHospital(false)
+        return
+      }
+
+      const data = await listDepartments(token)
+      setDepts(data)
       setIsHospital(true)
     } catch (e) {
       // 403 NOT_HOSPITAL means we're still a clinic
       if (e instanceof Error && e.message.includes('hospital')) setIsHospital(false)
     } finally { setLoading(false) }
-  }, [token])
+  }, [token, user?.tenant_type])
 
   useEffect(() => { load() }, [load])
 
@@ -546,7 +552,7 @@ export default function HospitalSettingsPage() {
 
       {!isHospital ? (
         isAdmin
-          ? <UpgradeBanner token={token!} onUpgraded={() => { setIsHospital(true); load(); refreshUser().catch(() => {}) }} />
+          ? <UpgradeBanner token={token!} onUpgraded={async () => { setIsHospital(true); await refreshUser().catch(() => {}); await load(true) }} />
           : (
             <div style={{
               background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',

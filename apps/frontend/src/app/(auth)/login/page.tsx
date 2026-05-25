@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
+import { getDefaultClinicalPath } from '@/lib/doctor/navigation'
 import { MTInput, MTLogo, MTButton } from '@/components/doctor/clinical-ui'
 
 // ─────────────────────────────────────────────
@@ -42,7 +43,7 @@ function BrandedPanel() {
     <div style={{
       width: '100%',
       minHeight: '100%',
-      background: 'linear-gradient(160deg, #1e40af 0%, #1a56db 60%, #2563eb 100%)',
+      background: 'linear-gradient(160deg, #1D4ED8 0%, #2563EB 45%, #6366F1 100%)',
       color: '#fff', position: 'relative', overflow: 'hidden',
       padding: '40px clamp(28px, 4vw, 48px)',
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
@@ -122,7 +123,7 @@ function LoginForm({
       display: 'flex', flexDirection: 'column', gap: 18,
     }}>
       <div>
-        <div className="mt-micro" style={{ color: 'var(--mt-primary)', marginBottom: 8 }}>
+        <div className="mt-micro" style={{ color: 'var(--mt-purple)', marginBottom: 8 }}>
           Acceso clínico
         </div>
         <h1 style={{
@@ -173,7 +174,7 @@ function LoginForm({
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--mt-text-2)' }}>
           <span style={{
             width: 16, height: 16, borderRadius: 4,
-            border: '1.5px solid var(--mt-primary)', background: 'var(--mt-primary)',
+            border: '1.5px solid var(--mt-purple)', background: 'var(--mt-purple)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -182,7 +183,7 @@ function LoginForm({
           </span>
           Mantener sesión
         </label>
-        <Link href="/forgot-password" style={{ color: 'var(--mt-primary)', fontWeight: 500 }}>
+        <Link href="/forgot-password" style={{ color: 'var(--mt-purple)', fontWeight: 500 }}>
           ¿Olvidaste tu contraseña?
         </Link>
       </div>
@@ -196,25 +197,17 @@ function LoginForm({
         </div>
       )}
 
-      <button
+      <MTButton
         type="submit"
+        variant="solid"
+        size="lg"
         disabled={loading}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          height: 44, width: '100%', borderRadius: 8, border: 'none',
-          background: loading ? 'var(--mt-primary-hover)' : 'var(--mt-primary)',
-          color: '#fff', fontSize: 14, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
-          boxShadow: '0 1px 3px rgba(26,86,219,.30)',
-          transition: 'background .2s, box-shadow .2s',
-          opacity: loading ? 0.8 : 1,
-          fontFamily: 'var(--mt-font)',
-        }}
+        icon={loading ? Loader2 : undefined}
+        iconRight={loading ? undefined : ArrowRight}
+        style={{ width: '100%', height: 44 }}
       >
-        {loading
-          ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Ingresando...</>
-          : <><span>Ingresar al panel</span><ArrowRight size={16} /></>
-        }
-      </button>
+        {loading ? 'Ingresando...' : 'Ingresar al panel'}
+      </MTButton>
 
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
@@ -232,7 +225,7 @@ function LoginForm({
 
       <p style={{ fontSize: 13, color: 'var(--mt-text-2)', margin: 0, textAlign: 'center' }}>
         ¿Tu clínica aún no está registrada?{' '}
-        <Link href="/register" style={{ color: 'var(--mt-primary)', fontWeight: 500 }}>
+        <Link href="/register" style={{ color: 'var(--mt-purple)', fontWeight: 500 }}>
           Solicitar acceso →
         </Link>
       </p>
@@ -257,8 +250,8 @@ export default function LoginPage() {
     const email = fd.get('email') as string
     const password = fd.get('password') as string
     try {
-      await login(email, password)
-      router.replace('/patients')
+      const user = await login(email, password)
+      router.replace(getDefaultClinicalPath(user))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
     } finally {

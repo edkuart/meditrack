@@ -15,13 +15,13 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
+import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
 import { listPatients, getPatient, type Patient } from '@/lib/doctor/api'
 import {
   createLabOrder, LAB_PANELS, type LabResultInput, type PanelTemplate,
 } from '@/lib/doctor/lab-api'
 import { ClinicalPage, ClinicalHeader, ClinicalButton } from '@/components/doctor/clinical-ui'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
 
 // ─── Patient Picker ────────────────────────────────────────────────────────────
 
@@ -58,15 +58,19 @@ function PatientPicker({
   }, [query, token])
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} style={{ position: 'relative' }}>
       {value ? (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50">
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-slate-800">
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '12px 16px', borderRadius: 12,
+          border: '1px solid var(--mt-border)', background: 'var(--mt-elevated)',
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)' }}>
               {value.first_name} {value.last_name}
             </div>
             {value.date_of_birth && (
-              <div className="text-xs text-slate-400">
+              <div style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
                 {new Date(value.date_of_birth).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
               </div>
             )}
@@ -74,38 +78,51 @@ function PatientPicker({
           <button
             type="button"
             onClick={() => { onChange(null); setQuery('') }}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mt-muted)', display: 'flex', alignItems: 'center', padding: 2 }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--mt-text-2)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--mt-muted)')}
           >
             <X size={16} />
           </button>
         </div>
       ) : (
         <>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--mt-muted)', pointerEvents: 'none' }} />
             <Input
               placeholder="Buscar paciente por nombre…"
               value={query}
               onChange={e => { setQuery(e.target.value); setOpen(true) }}
               onFocus={() => setOpen(true)}
-              className="pl-8 h-10 text-sm"
+              style={{ paddingLeft: 32, height: 40, fontSize: 13 }}
             />
           </div>
           {open && (results.length > 0 || loading) && (
-            <div className="absolute top-full mt-1 left-0 right-0 z-10 bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
+            <div style={{
+              position: 'absolute', top: '100%', marginTop: 4, left: 0, right: 0, zIndex: 10,
+              background: 'var(--mt-surface)', borderRadius: 12,
+              border: '1px solid var(--mt-border)', boxShadow: 'var(--mt-shadow-md)', overflow: 'hidden',
+            }}>
               {loading ? (
-                <div className="px-4 py-3 text-sm text-slate-400">Buscando…</div>
-              ) : results.map(p => (
+                <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--mt-muted)' }}>Buscando…</div>
+              ) : results.map((p, i) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => { onChange(p); setOpen(false); setQuery('') }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 16px', textAlign: 'left', background: 'transparent',
+                    border: 'none', borderBottom: i < results.length - 1 ? '1px solid var(--mt-border)' : 'none',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--mt-elevated)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   <div>
-                    <div className="text-sm font-medium text-slate-800">{p.first_name} {p.last_name}</div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)' }}>{p.first_name} {p.last_name}</div>
                     {p.date_of_birth && (
-                      <div className="text-xs text-slate-400">
+                      <div style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
                         {new Date(p.date_of_birth).toLocaleDateString('es')}
                       </div>
                     )}
@@ -166,28 +183,44 @@ function PanelSelector({ onAdd }: { onAdd: (panel: PanelTemplate) => void }) {
   const panels = LAB_PANELS.filter(p => p.category === cat)
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} style={{ position: 'relative' }}>
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          borderRadius: 8, background: 'var(--mt-primary)', padding: '8px 12px',
+          fontSize: 13, fontWeight: 600, color: '#fff',
+          border: 'none', cursor: 'pointer',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'var(--mt-primary-deep)')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'var(--mt-primary)')}
         aria-expanded={open}
       >
         <ClipboardList size={14} />
         Panel prearmado
-        <ChevronDown size={12} className={cn('transition-transform', open && 'rotate-180')} />
+        <ChevronDown size={12} style={{ transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-2 w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-          <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+        <div style={{
+          position: 'absolute', right: 0, top: '100%', zIndex: 20, marginTop: 8,
+          width: 'min(640px, calc(100vw - 2rem))', overflow: 'hidden',
+          borderRadius: 16, border: '1px solid var(--mt-border)',
+          background: 'var(--mt-surface)', boxShadow: '0 20px 60px rgba(0,0,0,.15)',
+        }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--mt-border)', background: 'var(--mt-elevated)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{
+                width: 36, height: 36, flexShrink: 0, borderRadius: 10,
+                background: 'var(--mt-primary-subtle)', color: 'var(--mt-primary-deep)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
                 <ClipboardList size={17} />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-800">Selecciona un panel de laboratorio</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>Selecciona un panel de laboratorio</p>
+                <p style={{ marginTop: 4, fontSize: 11, lineHeight: 1.5, color: 'var(--mt-muted)', margin: '4px 0 0' }}>
                   Un panel agrega varios exámenes relacionados en una sola acción. No guarda la orden todavía;
                   primero aparecerá abajo en la vista previa.
                 </p>
@@ -195,76 +228,107 @@ function PanelSelector({ onAdd }: { onAdd: (panel: PanelTemplate) => void }) {
             </div>
           </div>
 
-          <div className="grid max-h-[520px] overflow-y-auto md:grid-cols-[210px_1fr]">
-            <div className="border-b border-slate-100 p-3 md:border-b-0 md:border-r">
-              <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <div style={{ display: 'grid', maxHeight: 520, overflowY: 'auto', gridTemplateColumns: '210px 1fr' }}>
+            <div style={{ borderRight: '1px solid var(--mt-border)', padding: 12 }}>
+              <p style={{ marginBottom: 8, padding: '0 8px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--mt-muted)' }}>
                 Categoría
               </p>
-              <div className="space-y-1">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {CATEGORIES.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setCat(c)}
-                    className={cn(
-                      'w-full rounded-xl px-3 py-2.5 text-left transition-colors',
-                      cat === c
-                        ? 'bg-blue-50 text-blue-800 ring-1 ring-blue-100'
-                        : 'text-slate-600 hover:bg-slate-50',
-                    )}
-                  >
-                    <span className="block text-sm font-semibold">{c}</span>
-                    <span className="mt-0.5 block text-xs leading-4 text-slate-400">
-                      {CATEGORY_HELP[c] ?? 'Exámenes agrupados por área clínica.'}
-                    </span>
-                  </button>
+                  <CatButton key={c} label={c} help={CATEGORY_HELP[c]} active={cat === c} onClick={() => setCat(c)} />
                 ))}
               </div>
             </div>
 
-            <div className="space-y-3 p-3">
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <p className="text-sm font-semibold text-slate-800">{cat}</p>
-                <p className="mt-0.5 text-xs text-slate-400">
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>{cat}</p>
+                <p style={{ marginTop: 2, fontSize: 11, color: 'var(--mt-muted)' }}>
                   Elige el paquete que mejor coincide con lo que quieres pedir.
                 </p>
               </div>
 
               {panels.map(panel => (
-                <div
-                  key={panel.name}
-                  className="rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-800">{panel.name}</p>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-                          {panel.parameters.length} parámetro{panel.parameters.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">
-                        {PANEL_HELP[panel.name] ?? 'Grupo de exámenes frecuentes.'}
-                      </p>
-                      <p className="mt-2 text-xs leading-5 text-slate-400">
-                        Incluye: {panelPreview(panel)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { onAdd(panel); setOpen(false) }}
-                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
-                    >
-                      <Plus size={13} />
-                      Agregar este panel
-                    </button>
-                  </div>
-                </div>
+                <PanelCard key={panel.name} panel={panel} onAdd={() => { onAdd(panel); setOpen(false) }} />
               ))}
             </div>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function CatButton({ label, help, active, onClick }: { label: string; help?: string; active: boolean; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: '100%', borderRadius: 10, padding: '10px 12px', textAlign: 'left',
+        background: active ? 'var(--mt-primary-subtle)' : hov ? 'var(--mt-elevated)' : 'transparent',
+        border: active ? '1px solid var(--mt-primary-mist)' : '1px solid transparent',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: active ? 'var(--mt-primary-deep)' : 'var(--mt-text-2)' }}>{label}</span>
+      {help && <span style={{ marginTop: 2, display: 'block', fontSize: 11, lineHeight: 1.4, color: 'var(--mt-muted)' }}>{help}</span>}
+    </button>
+  )
+}
+
+function PanelCard({ panel, onAdd }: { panel: PanelTemplate; onAdd: () => void }) {
+  const [hov, setHov] = useState(false)
+  const [btnHov, setBtnHov] = useState(false)
+  return (
+    <div
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        borderRadius: 12, padding: 12,
+        border: `1px solid ${hov ? 'var(--mt-primary-mist)' : 'var(--mt-border)'}`,
+        background: hov ? 'var(--mt-primary-subtle)' : 'var(--mt-surface)',
+        transition: 'border-color .1s, background .1s',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>{panel.name}</p>
+            <span style={{
+              borderRadius: 999, background: 'var(--mt-elevated)', padding: '2px 8px',
+              fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)',
+            }}>
+              {panel.parameters.length} parámetro{panel.parameters.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <p style={{ marginTop: 4, fontSize: 11, lineHeight: 1.5, color: 'var(--mt-muted)' }}>
+            {PANEL_HELP[panel.name] ?? 'Grupo de exámenes frecuentes.'}
+          </p>
+          <p style={{ marginTop: 6, fontSize: 11, lineHeight: 1.5, color: 'var(--mt-muted)', opacity: 0.7 }}>
+            Incluye: {panelPreview(panel)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          onMouseEnter={() => setBtnHov(true)}
+          onMouseLeave={() => setBtnHov(false)}
+          style={{
+            alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6,
+            borderRadius: 8, padding: '7px 12px', fontSize: 11, fontWeight: 600,
+            border: `1px solid ${btnHov ? 'var(--mt-primary)' : 'var(--mt-primary-mist)'}`,
+            background: btnHov ? 'var(--mt-primary-subtle)' : 'var(--mt-elevated)',
+            color: 'var(--mt-primary-deep)', cursor: 'pointer',
+          }}
+        >
+          <Plus size={13} />
+          Agregar este panel
+        </button>
+      </div>
     </div>
   )
 }
@@ -320,117 +384,143 @@ function CustomParameterForm({
   const canAdd = draft.parameter_name.trim().length > 0
 
   return (
-    <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/50 p-4">
-      <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm">
+    <div style={{
+      borderRadius: 12, border: '1px dashed var(--mt-primary-mist)',
+      background: 'var(--mt-primary-subtle)', padding: 16,
+    }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{
+          width: 36, height: 36, flexShrink: 0, borderRadius: 10,
+          background: 'var(--mt-surface)', color: 'var(--mt-primary)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: 'var(--mt-shadow-sm)',
+        }}>
           <Plus size={17} />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-slate-800">Examen específico</h3>
-          <p className="text-xs leading-5 text-slate-500">
+          <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>Examen específico</h3>
+          <p style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--mt-muted)', margin: '4px 0 0' }}>
             Úsalo para pedir una prueba suelta que no exista en los paneles. El nombre del examen es lo único obligatorio.
           </p>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[1fr_1.25fr_120px]">
-        <label className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-500">Grupo o panel</span>
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1.25fr 120px' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)' }}>Grupo o panel</span>
           <Input
             value={draft.panel_name}
             onChange={e => onChange('panel_name', e.target.value)}
             placeholder="Ej. Perfil tiroideo"
-            className="h-10 text-sm"
+            style={{ height: 40, fontSize: 13 }}
           />
         </label>
-        <label className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-500">Examen / parámetro *</span>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)' }}>Examen / parámetro *</span>
           <Input
             value={draft.parameter_name}
             onChange={e => onChange('parameter_name', e.target.value)}
             placeholder="Ej. TSH, Ferritina, Vitamina D"
-            className="h-10 text-sm"
+            style={{ height: 40, fontSize: 13 }}
           />
         </label>
-        <label className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-500">Unidad</span>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)' }}>Unidad</span>
           <Input
             value={draft.unit}
             onChange={e => onChange('unit', e.target.value)}
             placeholder="Ej. mg/dL"
-            className="h-10 text-sm"
+            style={{ height: 40, fontSize: 13 }}
           />
         </label>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {COMMON_UNITS.map(unit => (
-          <button
-            key={unit}
-            type="button"
-            onClick={() => onChange('unit', unit)}
-            className={cn(
-              'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-              draft.unit === unit
-                ? 'border-blue-300 bg-blue-100 text-blue-700'
-                : 'border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600',
-            )}
-          >
-            {unit}
-          </button>
+          <UnitChip key={unit} unit={unit} active={draft.unit === unit} onClick={() => onChange('unit', unit)} />
         ))}
       </div>
 
-      <details className="mt-4 rounded-lg border border-slate-200 bg-white">
-        <summary className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-slate-600">
+      <details style={{ marginTop: 16, borderRadius: 8, border: '1px solid var(--mt-border)', background: 'var(--mt-surface)' }}>
+        <summary style={{
+          display: 'flex', cursor: 'pointer', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '8px 12px', fontSize: 11, fontWeight: 600, color: 'var(--mt-text-2)',
+        }}>
           Referencia del resultado
           <ChevronDown size={14} />
         </summary>
-        <div className="grid gap-3 border-t border-slate-100 p-3 md:grid-cols-[110px_110px_1fr]">
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-slate-500">Mínimo</span>
+        <div style={{ display: 'grid', gap: 12, borderTop: '1px solid var(--mt-border)', padding: 12, gridTemplateColumns: '110px 110px 1fr' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)' }}>Mínimo</span>
             <Input
               type="number"
               value={draft.ref_min}
               onChange={e => onChange('ref_min', e.target.value)}
               placeholder="Mín"
-              className="h-9 text-sm"
+              style={{ height: 36, fontSize: 13 }}
             />
           </label>
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-slate-500">Máximo</span>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)' }}>Máximo</span>
             <Input
               type="number"
               value={draft.ref_max}
               onChange={e => onChange('ref_max', e.target.value)}
               placeholder="Máx"
-              className="h-9 text-sm"
+              style={{ height: 36, fontSize: 13 }}
             />
           </label>
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-slate-500">Texto de referencia</span>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)' }}>Texto de referencia</span>
             <Input
               value={draft.ref_text}
               onChange={e => onChange('ref_text', e.target.value)}
               placeholder="Ej. Negativo / No reactivo"
-              className="h-9 text-sm"
+              style={{ height: 36, fontSize: 13 }}
             />
           </label>
         </div>
       </details>
 
-      <div className="mt-4 flex justify-end">
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
         <button
           type="button"
           onClick={onAdd}
           disabled={!canAdd}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, borderRadius: 8,
+            background: canAdd ? 'var(--mt-primary)' : 'var(--mt-elevated)',
+            padding: '8px 14px', fontSize: 13, fontWeight: 600,
+            color: canAdd ? '#fff' : 'var(--mt-muted)',
+            border: 'none', cursor: canAdd ? 'pointer' : 'not-allowed',
+          }}
         >
           <CheckCircle2 size={15} />
           Agregar a la orden
         </button>
       </div>
     </div>
+  )
+}
+
+function UnitChip({ unit, active, onClick }: { unit: string; active: boolean; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 500,
+        border: active ? '1px solid var(--mt-primary-mist)' : `1px solid ${hov ? 'var(--mt-primary-mist)' : 'var(--mt-border)'}`,
+        background: active ? 'var(--mt-primary-subtle)' : hov ? 'var(--mt-primary-subtle)' : 'var(--mt-surface)',
+        color: active || hov ? 'var(--mt-primary-deep)' : 'var(--mt-muted)',
+        cursor: 'pointer',
+      }}
+    >
+      {unit}
+    </button>
   )
 }
 
@@ -451,44 +541,45 @@ function OrderPreview({
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-8 text-center">
-        <ClipboardList className="mx-auto mb-3 text-slate-300" size={28} />
-        <p className="text-sm font-medium text-slate-600">Todavía no hay exámenes en la orden.</p>
-        <p className="mt-1 text-xs text-slate-400">Agrega un panel prearmado o un examen específico.</p>
+      <div style={{
+        borderRadius: 12, border: '1px solid var(--mt-border)', background: 'var(--mt-elevated)',
+        padding: '32px 20px', textAlign: 'center',
+      }}>
+        <ClipboardList size={28} color="var(--mt-border)" style={{ margin: '0 auto 12px' }} />
+        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text-2)', margin: 0 }}>Todavía no hay exámenes en la orden.</p>
+        <p style={{ marginTop: 4, fontSize: 11, color: 'var(--mt-muted)' }}>Agrega un panel prearmado o un examen específico.</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {groups.map(group => (
-        <div key={group.name} className="rounded-xl border border-slate-200 bg-white">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+        <div key={group.name} style={{ borderRadius: 12, border: '1px solid var(--mt-border)', background: 'var(--mt-surface)', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid var(--mt-border)', padding: '12px 16px' }}>
             <div>
-              <h3 className="text-sm font-semibold text-slate-800">{group.name}</h3>
-              <p className="text-xs text-slate-400">
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>{group.name}</h3>
+              <p style={{ fontSize: 11, color: 'var(--mt-muted)', margin: 0 }}>
                 {group.items.length} parámetro{group.items.length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
-          <div className="divide-y divide-slate-100">
-            {group.items.map(item => (
-              <div key={`${item.originalIndex}-${item.parameter_name}`} className="flex items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-slate-700">{item.parameter_name || 'Sin nombre'}</div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-400">
+          <div>
+            {group.items.map((item, idx) => (
+              <div key={`${item.originalIndex}-${item.parameter_name}`} style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                borderBottom: idx < group.items.length - 1 ? '1px solid var(--mt-border)' : 'none',
+              }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.parameter_name || 'Sin nombre'}
+                  </div>
+                  <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 11, color: 'var(--mt-muted)' }}>
                     {item.unit && <span>Unidad: {item.unit}</span>}
                     <span>Referencia: <ReferenceText row={item} /></span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onRemove(item.originalIndex)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
-                  aria-label={`Quitar ${item.parameter_name}`}
-                >
-                  <Trash2 size={15} />
-                </button>
+                <RemoveBtn onClick={() => onRemove(item.originalIndex)} label={item.parameter_name} />
               </div>
             ))}
           </div>
@@ -498,28 +589,58 @@ function OrderPreview({
   )
 }
 
+function RemoveBtn({ onClick, label }: { onClick: () => void; label: string }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      aria-label={`Quitar ${label}`}
+      style={{
+        width: 32, height: 32, flexShrink: 0, borderRadius: 8, border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: hov ? 'var(--mt-danger-subtle)' : 'transparent',
+        color: hov ? 'var(--mt-danger)' : 'var(--mt-muted)',
+      }}
+    >
+      <Trash2 size={15} />
+    </button>
+  )
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
+
+const cardStyle: React.CSSProperties = {
+  borderRadius: 12, border: '1px solid var(--mt-border)',
+  background: 'var(--mt-surface)', boxShadow: 'var(--mt-shadow-sm)',
+}
+
+const cardHeaderStyle: React.CSSProperties = {
+  padding: '16px 20px', borderBottom: '1px solid var(--mt-border)',
+}
 
 export default function NewLabOrderPage() {
   const { token, user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const canCreateLabOrder = hasPermission(user?.role, PERMISSIONS.LAB_ORDER_WRITE, user?.permissions)
 
-  // Lab technicians cannot create orders
   useEffect(() => {
-    if (user?.role === 'LAB_TECHNICIAN') {
+    if (user && !canCreateLabOrder) {
       router.replace('/lab')
     }
-  }, [user, router])
+  }, [user, canCreateLabOrder, router])
 
   const [patient, setPatient] = useState<Patient | null>(null)
 
-  // Pre-fill patient from ?patient=<id> query param
   useEffect(() => {
     const pid = searchParams.get('patient')
     if (!pid || !token) return
     getPatient(token, pid).then(setPatient).catch(() => {})
   }, [searchParams, token])
+
   const [notes, setNotes] = useState('')
   const [rows, setRows] = useState<RowState[]>([])
   const [showCustom, setShowCustom] = useState(false)
@@ -551,7 +672,6 @@ export default function NewLabOrderPage() {
       setError('Escribe el nombre del examen o parámetro personalizado.')
       return
     }
-
     setRows(prev => [
       ...prev,
       {
@@ -620,13 +740,13 @@ export default function NewLabOrderPage() {
         }
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Patient */}
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-semibold text-slate-700">Paciente</h2>
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text-2)', margin: 0 }}>Paciente</h2>
           </div>
-          <div className="p-5">
+          <div style={{ padding: 20 }}>
             {token && (
               <PatientPicker value={patient} onChange={setPatient} token={token} />
             )}
@@ -634,47 +754,41 @@ export default function NewLabOrderPage() {
         </div>
 
         {/* Parameters */}
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-700">
-                  Estudios a solicitar
-                  {rows.length > 0 && (
-                    <span className="ml-2 text-xs font-normal text-slate-400">
-                      {rows.length} parámetro{rows.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </h2>
-                <p className="mt-1 text-xs text-slate-400">
-                  El paciente verá esta orden como laboratorio pendiente en su portada.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <PanelSelector onAdd={addPanel} />
-                <button
-                  type="button"
-                  onClick={() => setShowCustom(v => !v)}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-                    showCustom
-                      ? 'bg-slate-800 text-white'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800',
-                  )}
-                >
-                  <Plus size={12} />
-                  Examen específico
-                </button>
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text-2)', margin: 0 }}>
+                    Estudios a solicitar
+                    {rows.length > 0 && (
+                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: 'var(--mt-muted)' }}>
+                        {rows.length} parámetro{rows.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </h2>
+                  <p style={{ marginTop: 4, fontSize: 11, color: 'var(--mt-muted)' }}>
+                    El paciente verá esta orden como laboratorio pendiente en su portada.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                  <PanelSelector onAdd={addPanel} />
+                  <ToggleCustomBtn active={showCustom} onClick={() => setShowCustom(v => !v)} />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="space-y-4 p-5">
-            <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-              <Info size={16} className="mt-0.5 shrink-0 text-blue-600" />
-              <p className="leading-5">
-                Usa <span className="font-semibold">Panel prearmado</span> cuando quieres pedir un paquete frecuente
-                como hemograma o función renal. Usa <span className="font-semibold">Examen específico</span> cuando
+          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 12, borderRadius: 12,
+              border: '1px solid var(--mt-primary-mist)', background: 'var(--mt-primary-subtle)',
+              padding: '12px 16px', fontSize: 13, color: 'var(--mt-primary-deep)',
+            }}>
+              <Info size={16} style={{ marginTop: 2, flexShrink: 0, color: 'var(--mt-primary)' }} />
+              <p style={{ lineHeight: 1.5, margin: 0 }}>
+                Usa <span style={{ fontWeight: 600 }}>Panel prearmado</span> cuando quieres pedir un paquete frecuente
+                como hemograma o función renal. Usa <span style={{ fontWeight: 600 }}>Examen específico</span> cuando
                 necesitas pedir una prueba suelta que no aparece en el catálogo.
               </p>
             </div>
@@ -688,12 +802,15 @@ export default function NewLabOrderPage() {
             )}
 
             <div>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <h3 style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--mt-muted)', margin: 0 }}>
                   Vista previa de la orden
                 </h3>
                 {rows.length > 0 && (
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
+                  <span style={{
+                    borderRadius: 999, background: 'var(--mt-elevated)',
+                    padding: '4px 10px', fontSize: 11, fontWeight: 500, color: 'var(--mt-muted)',
+                  }}>
                     Se guardará como pendiente
                   </span>
                 )}
@@ -704,28 +821,41 @@ export default function NewLabOrderPage() {
         </div>
 
         {/* Notes */}
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-semibold text-slate-700">Notas de la orden <span className="text-slate-400 font-normal">(opcional)</span></h2>
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text-2)', margin: 0 }}>
+              Notas de la orden <span style={{ fontWeight: 400, color: 'var(--mt-muted)' }}>(opcional)</span>
+            </h2>
           </div>
-          <div className="p-5">
+          <div style={{ padding: 20 }}>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
               placeholder="Indicaciones clínicas, contexto, preparación del paciente…"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 resize-none focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 text-slate-700 placeholder:text-slate-300"
+              style={{
+                width: '100%', fontSize: 13, border: '1px solid var(--mt-border)', borderRadius: 8,
+                padding: '10px 12px', resize: 'none', outline: 'none',
+                background: 'var(--mt-surface)', color: 'var(--mt-text)',
+                fontFamily: 'var(--mt-font)', boxSizing: 'border-box',
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = 'var(--mt-primary)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--mt-primary-subtle)' }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'var(--mt-border)'; e.currentTarget.style.boxShadow = 'none' }}
             />
           </div>
         </div>
 
         {error && (
-          <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+          <div style={{
+            padding: '12px 16px', borderRadius: 12,
+            background: 'var(--mt-danger-subtle)', border: '1px solid #fecaca',
+            fontSize: 13, color: 'var(--mt-danger)',
+          }}>
             {error}
           </div>
         )}
 
-        <div className="flex justify-end gap-3">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <ClinicalButton href="/lab" variant="outline">Cancelar</ClinicalButton>
           <ClinicalButton type="submit" disabled={submitting}>
             {submitting ? 'Creando…' : 'Crear orden'}
@@ -733,5 +863,26 @@ export default function NewLabOrderPage() {
         </div>
       </form>
     </ClinicalPage>
+  )
+}
+
+function ToggleCustomBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px',
+        fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer',
+        background: active ? 'var(--mt-text)' : hov ? 'var(--mt-elevated)' : 'transparent',
+        color: active ? '#fff' : hov ? 'var(--mt-text)' : 'var(--mt-text-2)',
+      }}
+    >
+      <Plus size={12} />
+      Examen específico
+    </button>
   )
 }

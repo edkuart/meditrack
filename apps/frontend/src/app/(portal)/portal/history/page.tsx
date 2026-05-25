@@ -10,12 +10,12 @@ import { getHistory, isUnauthorizedPortalError } from '@/lib/portal/api'
 type Encounter = Awaited<ReturnType<typeof getHistory>>[number]
 
 const TYPE_LABELS: Record<string, string> = {
-  CONSULTATION: 'Consulta',
-  FOLLOW_UP: 'Seguimiento',
+  CONSULTATION:         'Consulta',
+  FOLLOW_UP:            'Seguimiento',
   POST_HOSPITALIZATION: 'Post-hospitalización',
-  DISCHARGE: 'Alta médica',
-  CHRONIC_CONTROL: 'Control crónico',
-  EMERGENCY: 'Emergencia',
+  DISCHARGE:            'Alta médica',
+  CHRONIC_CONTROL:      'Control crónico',
+  EMERGENCY:            'Emergencia',
 }
 
 export default function HistoryPage() {
@@ -40,85 +40,134 @@ export default function HistoryPage() {
 
   if (loading) {
     return (
-      <div className="portal-body flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
+      <div className="portal-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: '50%',
+          border: '4px solid var(--mt-primary-mist)',
+          borderTopColor: 'var(--mt-primary)',
+          animation: 'spin 1s linear infinite',
+        }} />
       </div>
     )
   }
 
   return (
-    <div className="portal-body">
-    <div className="mx-auto max-w-md">
+    <div className="portal-body mt-page-in">
+      <div style={{ maxWidth: 540, margin: '0 auto' }}>
 
-      <div className="flex items-center gap-3 px-5 pb-4 pt-6">
-        <Link href="/portal" className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
-          <ArrowLeft size={18} className="text-slate-600" />
-        </Link>
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Mis consultas</h1>
-          <p className="text-sm text-slate-400">Resumen de visitas compartidas</p>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 4px 18px' }}>
+          <Link
+            href="/portal"
+            aria-label="Volver"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 40, height: 40, borderRadius: 999,
+              background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+              boxShadow: 'var(--mt-shadow-xs)', color: 'var(--mt-text-2)', flexShrink: 0,
+            }}
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: '-0.025em', color: 'var(--mt-text)', lineHeight: 1.15 }}>
+              Mis consultas
+            </h1>
+            <p style={{ margin: '2px 0 0', fontSize: 13.5, color: 'var(--mt-muted)' }}>
+              Resumen de visitas compartidas por tu equipo médico
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {history.length === 0 ? (
+            <div style={{ padding: '64px 20px', textAlign: 'center' }}>
+              <div style={{
+                margin: '0 auto 14px', width: 56, height: 56, borderRadius: 16,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'var(--mt-primary-subtle)', color: 'var(--mt-primary)',
+              }}>
+                <CalendarDays size={26} />
+              </div>
+              <p style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: 'var(--mt-text)' }}>
+                No hay consultas registradas
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 13.5, color: 'var(--mt-muted)' }}>
+                Cuando tu equipo médico comparta consultas, aparecerán aquí.
+              </p>
+            </div>
+          ) : (
+            history.map(enc => (
+              <EncounterCard key={enc.id} enc={enc} />
+            ))
+          )}
         </div>
       </div>
-
-      <div className="flex flex-col gap-3 px-5">
-        {history.length === 0 ? (
-          <div className="py-16 text-center text-slate-400">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-500">
-              <CalendarDays size={26} />
-            </div>
-            <p className="font-medium text-slate-700">No hay consultas registradas</p>
-            <p className="mt-1 text-sm">Cuando tu equipo médico comparta consultas, aparecerán aquí.</p>
-          </div>
-        ) : (
-          history.map(enc => (
-            <div key={enc.id} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50">
-                  <Stethoscope size={16} className="text-blue-500" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {TYPE_LABELS[enc.encounter_type] ?? enc.encounter_type}
-                    </p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      enc.status === 'CLOSED'
-                        ? 'bg-slate-100 text-slate-500'
-                        : 'bg-blue-100 text-blue-600'
-                    }`}>
-                      {enc.status === 'CLOSED' ? 'Cerrada' : 'Abierta'}
-                    </span>
-                  </div>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Dr. {enc.doctor.first_name} {enc.doctor.last_name}
-                    {enc.doctor.specialty && ` · ${enc.doctor.specialty}`}
-                  </p>
-
-                  <p className="mt-1 flex items-center gap-1 text-xs text-slate-400">
-                    <CalendarDays size={12} />
-                    {new Date(enc.opened_at).toLocaleDateString('es', {
-                      day: 'numeric', month: 'long', year: 'numeric',
-                    })}
-                  </p>
-
-                  {enc.chief_complaint && (
-                    <p className="text-slate-600 text-sm mt-2 leading-snug">{enc.chief_complaint}</p>
-                  )}
-
-                  {enc.summary && (
-                    <div className="mt-3 rounded-xl bg-slate-50 p-3">
-                      <p className="mb-1 text-xs font-medium text-slate-500">Resumen</p>
-                      <p className="text-sm leading-relaxed text-slate-600">{enc.summary}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
     </div>
+  )
+}
+
+function EncounterCard({ enc }: { enc: Encounter }) {
+  const isOpen = enc.status !== 'CLOSED'
+  return (
+    <div className="portal-plan-card">
+      <div style={{ padding: '14px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--mt-primary-subtle)', color: 'var(--mt-primary)',
+          }}>
+            <Stethoscope size={18} />
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--mt-text)', letterSpacing: '-0.01em' }}>
+                {TYPE_LABELS[enc.encounter_type] ?? enc.encounter_type}
+              </p>
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap', flexShrink: 0,
+                background: isOpen ? 'var(--mt-primary-subtle)' : 'var(--mt-elevated)',
+                color: isOpen ? 'var(--mt-primary)' : 'var(--mt-muted)',
+              }}>
+                {isOpen ? 'Abierta' : 'Cerrada'}
+              </span>
+            </div>
+
+            <p style={{ margin: '3px 0 0', fontSize: 12.5, color: 'var(--mt-text-2)' }}>
+              Dr. {enc.doctor.first_name} {enc.doctor.last_name}
+              {enc.doctor.specialty && ` · ${enc.doctor.specialty}`}
+            </p>
+
+            <p style={{ margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--mt-muted)' }}>
+              <CalendarDays size={12} />
+              {new Date(enc.opened_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+
+            {enc.chief_complaint && (
+              <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--mt-text-2)', lineHeight: 1.45 }}>
+                {enc.chief_complaint}
+              </p>
+            )}
+
+            {enc.summary && (
+              <div style={{
+                margin: '10px 0 0', padding: '10px 12px',
+                borderRadius: 12, background: 'var(--mt-elevated)',
+                border: '1px solid var(--mt-border)',
+              }}>
+                <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--mt-muted)' }}>
+                  Resumen
+                </p>
+                <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: 'var(--mt-text-2)' }}>
+                  {enc.summary}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

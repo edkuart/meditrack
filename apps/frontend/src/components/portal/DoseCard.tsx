@@ -12,11 +12,22 @@ function isEditable(dose: DoseEvent) {
   return dose.status === 'PENDING' && new Date() <= new Date(dose.can_edit_until)
 }
 
+function periodLabel(iso: string) {
+  const h = new Date(iso).getHours()
+  if (h < 12) return 'mañana'
+  if (h < 18) return 'tarde'
+  return 'noche'
+}
+
 export function DoseCard({ dose, onConfirm }: { dose: DoseEvent; onConfirm: (id: string) => Promise<void> }) {
   const [loading, setLoading] = useState(false)
   const confirmed = dose.status === 'CONFIRMED'
   const missed = dose.status === 'MISSED'
   const editable = isEditable(dose)
+
+  const variantClass = confirmed ? 'confirmed' : missed ? 'missed' : 'pending'
+  const accent = confirmed ? 'var(--mt-success)' : missed ? 'var(--mt-danger)' : '#B45309'
+  const iconBorder = confirmed ? '#A7F3D0' : missed ? '#FECACA' : '#FDE68A'
 
   async function handleConfirm() {
     if (!editable || loading) return
@@ -24,133 +35,151 @@ export function DoseCard({ dose, onConfirm }: { dose: DoseEvent; onConfirm: (id:
     try { await onConfirm(dose.id) } finally { setLoading(false) }
   }
 
-  let bg: string, bd: string, accent: string
-  if (confirmed) {
-    bg = '#ecfdf5'; bd = '#a7f3d0'; accent = '#047857'
-  } else if (missed) {
-    bg = '#fef2f2'; bd = '#fecaca'; accent = '#b91c1c'
-  } else {
-    bg = '#fff'; bd = '#fde68a'; accent = '#d97706'
-  }
-
-  const statusIcon = confirmed
-    ? <CheckCircle size={18} color="#047857" />
-    : missed
-    ? <AlertCircle size={18} color="#b91c1c" />
-    : <Clock size={18} color="#d97706" />
-
-  const statusLabel = confirmed ? 'Confirmada' : missed ? 'No tomada' : 'Pendiente'
-
   return (
-    <div style={{
-      background: bg, border: `1px solid ${bd}`, borderRadius: 14,
-      padding: 16, boxShadow: 'var(--mt-shadow-sm)',
-      animation: 'mt-fade-scale-in .3s ease-out',
-    }}>
-      {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+    <article className={`portal-dose-card ${variantClass}`}>
+      {/* Header — icon + name + time chip + with-food */}
+      <header style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{
-          width: 44, height: 44, borderRadius: 10,
-          background: '#fff', border: `1.5px solid ${bd}`,
+          width: 48, height: 48, borderRadius: 12,
+          background: '#fff',
+          border: `1.5px solid ${iconBorder}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <Pill size={20} color={accent} />
+          <Pill size={22} color={accent} />
         </div>
+
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--mt-text)', letterSpacing: '-0.01em' }}>
+          <h3 style={{
+            margin: 0,
+            fontSize: 16.5,
+            fontWeight: 800,
+            color: 'var(--mt-text)',
+            letterSpacing: '-0.015em',
+            lineHeight: 1.2,
+          }}>
             {dose.medication_item.drug_name}
-          </div>
+          </h3>
+
           {dose.medication_item.presentation && (
-            <div style={{ marginTop: 2, fontSize: 13, color: 'var(--mt-text-2)' }}>
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--mt-text-2)' }}>
               {dose.medication_item.presentation}
-            </div>
+            </p>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-            <Clock size={13} color="var(--mt-muted)" />
-            <span style={{ fontSize: 13, color: 'var(--mt-text-2)', fontWeight: 500 }}>
+
+          <div style={{
+            marginTop: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+          }}>
+            <span className="portal-time-chip">
+              <Clock size={13} strokeWidth={2.5} />
               {formatTime(dose.scheduled_at)}
             </span>
+            <span style={{ fontSize: 12.5, color: 'var(--mt-muted)', fontWeight: 500 }}>
+              por la {periodLabel(dose.scheduled_at)}
+            </span>
             {dose.medication_item.with_food && (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 500,
-                background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a',
-              }}>
-                <Utensils size={11} />Con comida
+              <span className="portal-food-chip">
+                <Utensils size={11} />
+                Con comida
               </span>
             )}
-            <span style={{
-              marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4,
-              fontSize: 12, color: accent, fontWeight: 500,
-            }}>
-              {statusIcon}{statusLabel}
-            </span>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Special instructions */}
-      {dose.medication_item.special_instructions && (
-        <div style={{
-          marginTop: 10, fontSize: 12, color: 'var(--mt-text-2)',
-          lineHeight: 1.5, paddingLeft: 56,
+      {/* Dose amount + special instructions */}
+      <div style={{
+        marginTop: 12,
+        paddingLeft: 60,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}>
+        <p style={{
+          margin: 0,
+          fontSize: 13.5,
+          fontWeight: 700,
+          color: 'var(--mt-text)',
         }}>
-          {dose.medication_item.special_instructions}
-        </div>
-      )}
-
-      {/* Dose amount */}
-      <div style={{ marginTop: 8, paddingLeft: 56, fontSize: 13, color: 'var(--mt-text-2)' }}>
-        {dose.medication_item.dose_amount} {dose.medication_item.dose_unit}
+          {dose.medication_item.dose_amount} {dose.medication_item.dose_unit}
+        </p>
+        {dose.medication_item.special_instructions && (
+          <p style={{
+            margin: 0,
+            fontSize: 12.5,
+            color: 'var(--mt-text-2)',
+            lineHeight: 1.5,
+          }}>
+            {dose.medication_item.special_instructions}
+          </p>
+        )}
       </div>
 
-      {/* Action area */}
+      {/* Action: confirm button (active window) */}
       {editable && (
         <button
+          type="button"
           onClick={handleConfirm}
           disabled={loading}
-          style={{
-            marginTop: 14, width: '100%', height: 44,
-            background: 'var(--mt-primary)', color: '#fff', border: 'none', borderRadius: 10,
-            fontSize: 14, fontWeight: 500,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            boxShadow: '0 1px 3px rgba(26,86,219,.30)',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.8 : 1,
-            fontFamily: 'var(--mt-font)',
-            transition: 'opacity .2s',
-          }}
+          className="portal-confirm-btn"
+          aria-label={`Confirmar dosis de ${dose.medication_item.drug_name}`}
         >
-          {loading
-            ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />Registrando...</>
-            : <><CheckCircle size={16} />Confirmar dosis</>
-          }
+          {loading ? (
+            <>
+              <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+              Registrando…
+            </>
+          ) : (
+            <>
+              <CheckCircle size={18} strokeWidth={2.5} />
+              Confirmar dosis
+            </>
+          )}
         </button>
       )}
 
+      {/* Confirmed — celebratory strip */}
       {confirmed && (
-        <div style={{
-          marginTop: 12, padding: '10px 12px', background: '#fff',
-          borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 12, color: 'var(--mt-text-2)',
-        }}>
-          <CheckCircle size={14} color="#047857" />
-          Confirmada
-          {dose.confirmed_at && (
-            <> a las <strong style={{ color: 'var(--mt-text)' }}>{formatTime(dose.confirmed_at)}</strong></>
-          )}
+        <div className="portal-confirm-strip" role="status">
+          <span className="portal-confirm-strip-icon" aria-hidden>
+            <CheckCircle size={17} strokeWidth={3} />
+          </span>
+          <div style={{ flex: 1 }}>
+            <strong>¡Bien hecho!</strong>{' '}
+            {dose.confirmed_at ? (
+              <>Confirmada a las <strong>{formatTime(dose.confirmed_at)}</strong>.</>
+            ) : (
+              <>Dosis registrada.</>
+            )}
+          </div>
         </div>
       )}
 
+      {/* Missed — empathic, no scolding */}
       {missed && (
-        <div style={{
-          marginTop: 12, padding: '10px 12px',
-          background: '#fef2f2', borderRadius: 10,
-          fontSize: 12, color: '#b91c1c', textAlign: 'center',
-        }}>
-          No registrada en la ventana indicada
+        <div className="portal-missed-strip">
+          <AlertCircle size={16} color="var(--mt-danger)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <strong>No alcanzaste esta dosis.</strong> Tu equipo médico lo sabrá — lo importante es continuar con la siguiente.
+          </div>
         </div>
       )}
-    </div>
+
+      {/* Pending but past the editable window — kind nudge */}
+      {!confirmed && !missed && !editable && (
+        <div
+          className="portal-missed-strip"
+          style={{ borderColor: '#FDE68A', background: '#FFFBEB' }}
+        >
+          <Clock size={16} color="#B45309" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            La ventana para confirmar ya cerró. Si la tomaste, avísale a tu equipo médico.
+          </div>
+        </div>
+      )}
+    </article>
   )
 }

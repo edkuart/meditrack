@@ -7,14 +7,14 @@ import { MTInput, MTLogo } from '@/components/doctor/clinical-ui'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
 
-async function requestPasswordReset(email: string): Promise<void> {
-  const res = await fetch(`${API}/auth/forgot-password`, {
+async function requestPasswordHelp(email: string): Promise<void> {
+  const res = await fetch(`${API}/auth/password-help`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   })
   const json = await res.json()
-  if (!json.success) throw new Error(json.error?.message ?? 'Error al enviar el correo')
+  if (!json.success) throw new Error(json.error?.message ?? 'Error al enviar la solicitud')
 }
 
 export default function ForgotPasswordPage() {
@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
     setLoading(true)
     const email = (e.currentTarget.elements.namedItem('email') as HTMLInputElement).value
     try {
-      await requestPasswordReset(email)
+      await requestPasswordHelp(email)
       setSent(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error inesperado')
@@ -63,13 +63,13 @@ export default function ForgotPasswordPage() {
               <CheckCircle2 size={28} color="#16a34a" />
             </div>
             <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--mt-text)', margin: '0 0 10px' }}>
-              Revisa tu correo
+              Solicitud recibida
             </h1>
             <p style={{ fontSize: 14, color: 'var(--mt-text-2)', lineHeight: 1.6, margin: '0 0 24px' }}>
-              Si esa dirección está registrada en meditrack, recibirás un enlace para restablecer tu contraseña en los próximos minutos.
+              Si esa dirección está registrada en meditrack, un administrador de plataforma revisará la solicitud.
             </p>
             <p style={{ fontSize: 13, color: 'var(--mt-muted)', margin: '0 0 24px' }}>
-              El enlace expira en 30 minutos. Revisa también tu carpeta de spam.
+              Por seguridad, no habilitamos cambio automático de contraseña desde esta pantalla.
             </p>
             <Link
               href="/login"
@@ -94,7 +94,7 @@ export default function ForgotPasswordPage() {
                 ¿Olvidaste tu contraseña?
               </h1>
               <p style={{ fontSize: 14, color: 'var(--mt-text-2)', margin: 0, lineHeight: 1.6 }}>
-                Ingresa tu correo y te enviaremos un enlace para restablecerla.
+                Ingresa tu correo y enviaremos una solicitud al administrador de Meditrack.
               </p>
             </div>
 
@@ -133,7 +133,7 @@ export default function ForgotPasswordPage() {
               >
                 {loading
                   ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Enviando…</>
-                  : 'Enviar enlace de restablecimiento'
+                  : 'Solicitar ayuda de contraseña'
                 }
               </button>
             </form>

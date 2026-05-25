@@ -10,6 +10,7 @@ export const staffInvitations = pgTable('staff_invitations', {
   tenant_id: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
   email: varchar('email', { length: 254 }).notNull(),
   role: userRoleEnum('role').default('DOCTOR').notNull(),
+  custom_role_id: uuid('custom_role_id'),
   // Optional: auto-assign to a department on acceptance (hospital tenants)
   department_id: uuid('department_id').references(() => departments.id, { onDelete: 'set null' }),
   // SHA-256 of the opaque invite token

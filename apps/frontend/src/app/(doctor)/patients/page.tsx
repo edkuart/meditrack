@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Plus, RotateCw, Users, UserRoundSearch } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import { listPatients, type Patient } from '@/lib/doctor/api'
+import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
 import {
   ClinicalButton,
   ClinicalHeader,
@@ -16,14 +17,23 @@ import { patientsColumns } from '@/components/doctor/patients-columns'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function PatientsPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [patients, setPatients] = useState<Patient[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const canReadPatients = hasPermission(user?.role, PERMISSIONS.PATIENT_READ, user?.permissions)
+  const canCreatePatients = hasPermission(user?.role, PERMISSIONS.PATIENT_WRITE, user?.permissions)
 
   const load = useCallback(async () => {
     if (!token) return
+    if (!canReadPatients) {
+      setPatients([])
+      setTotal(0)
+      setError('Tu rol no tiene acceso a la cartera de pacientes.')
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -38,7 +48,7 @@ export default function PatientsPage() {
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [token, canReadPatients])
 
   useEffect(() => { load() }, [load])
 
@@ -49,9 +59,9 @@ export default function PatientsPage() {
         title="Pacientes"
         subtitle={total > 0 ? `${total} pacientes registrados` : 'Agrega el primer paciente para iniciar seguimiento clínico.'}
         icon={Users}
-        actions={
+        actions={canCreatePatients ? (
           <ClinicalButton href="/patients/new" icon={Plus}>Nuevo paciente</ClinicalButton>
-        }
+        ) : null}
       />
 
       {loading ? (
@@ -76,7 +86,7 @@ export default function PatientsPage() {
           icon={UserRoundSearch}
           title="No hay pacientes registrados"
           description="Agrega el primer paciente para iniciar encounters, tratamientos y seguimiento."
-          action={<ClinicalButton href="/patients/new" icon={Plus}>Nuevo paciente</ClinicalButton>}
+          action={canCreatePatients ? <ClinicalButton href="/patients/new" icon={Plus}>Nuevo paciente</ClinicalButton> : undefined}
         />
       ) : (
         <DataTable

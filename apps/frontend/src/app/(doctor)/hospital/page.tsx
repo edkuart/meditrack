@@ -237,7 +237,7 @@ function AdmissionRow({
               <Link
                 href={`/patients/${adm.patient_id}`}
                 style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)', textDecoration: 'none' }}
-                className="hover:text-blue-600 transition-colors"
+                className="hover:text-[var(--mt-primary)] transition-colors"
               >
                 {adm.patient.first_name} {adm.patient.last_name}
               </Link>
@@ -294,7 +294,7 @@ function AdmissionRow({
                 background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
                 borderRadius: 6, transition: 'all .15s',
               }}
-              className="hover:text-blue-700"
+              className="hover:text-[var(--mt-primary)]"
             >
               <LogOut size={13} /> Dar de alta
             </button>
@@ -357,7 +357,7 @@ function DeptGrid({
                       <Link
                         href={`/patients/${adm.patient_id}`}
                         style={{ fontSize: 12, fontWeight: 600, color: 'var(--mt-text)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        className="hover:text-blue-600 transition-colors"
+                        className="hover:text-[var(--mt-primary)] transition-colors"
                       >
                         {adm.patient.first_name} {adm.patient.last_name}
                       </Link>
@@ -455,9 +455,9 @@ export default function HospitalPage() {
       ) : loading ? (
         <LoadingState label="Cargando censo hospitalario…" />
       ) : error ? (
-        <div className="flex flex-col items-center gap-3 py-12">
-          <AlertTriangle size={32} className="text-red-400" />
-          <p className="text-sm text-slate-500">{error}</p>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '48px 0' }}>
+          <AlertTriangle size={32} color="var(--mt-danger)" />
+          <p style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>{error}</p>
           <ClinicalButton variant="outline" tone="slate" onClick={load}>Reintentar</ClinicalButton>
         </div>
       ) : (

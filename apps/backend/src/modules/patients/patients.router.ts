@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import { CreatePatientSchema, UpdatePatientSchema, SearchPatientsSchema } from './patients.schema.ts'
 import * as patientsService from './patients.service.ts'
 
@@ -9,7 +10,7 @@ const router = new Hono()
 router.use('*', requireAuth)
 
 // GET /patients?q=garcia&page=1&limit=20
-router.get('/', zValidator('query', SearchPatientsSchema), async (c) => {
+router.get('/', requirePermission(PERMISSIONS.PATIENT_READ), zValidator('query', SearchPatientsSchema), async (c) => {
   const auth = c.get('auth')
   const query = c.req.valid('query')
 
@@ -30,7 +31,7 @@ router.get('/', zValidator('query', SearchPatientsSchema), async (c) => {
 })
 
 // POST /patients
-router.post('/', zValidator('json', CreatePatientSchema), async (c) => {
+router.post('/', requirePermission(PERMISSIONS.PATIENT_WRITE), zValidator('json', CreatePatientSchema), async (c) => {
   const auth = c.get('auth')
   const body = c.req.valid('json')
   const patient = await patientsService.createPatient(auth.tenant_id, auth.sub, auth.email, body)
@@ -38,20 +39,20 @@ router.post('/', zValidator('json', CreatePatientSchema), async (c) => {
 })
 
 // GET /patients/:id/check-ins
-router.get('/:id/check-ins', async (c) => {
+router.get('/:id/check-ins', requirePermission(PERMISSIONS.TREATMENT_ADHERENCE_READ), async (c) => {
   const auth = c.get('auth')
   const limitParam = Number(c.req.query('limit') ?? 14)
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.trunc(limitParam), 1), 60) : 14
-  const checkIns = await patientsService.listPatientCheckIns(auth.tenant_id, c.req.param('id'), limit)
+  const checkIns = await patientsService.listPatientCheckIns(auth.tenant_id, c.req.param('id')!, limit)
   return c.json({ success: true, data: checkIns })
 })
 
 // GET /patients/:id/clinical-workspace
-router.get('/:id/clinical-workspace', async (c) => {
+router.get('/:id/clinical-workspace', requirePermission(PERMISSIONS.PATIENT_SENSITIVE_READ), async (c) => {
   const auth = c.get('auth')
   const workspace = await patientsService.getPatientClinicalWorkspace(
     auth.tenant_id,
-    c.req.param('id'),
+    c.req.param('id')!,
     auth.sub,
     auth.email,
   )
@@ -59,19 +60,20 @@ router.get('/:id/clinical-workspace', async (c) => {
 })
 
 // GET /patients/:id
-router.get('/:id', async (c) => {
+router.get('/:id', requirePermission(PERMISSIONS.PATIENT_READ), async (c) => {
   const auth = c.get('auth')
   const patient = await patientsService.getPatientById(
     auth.tenant_id,
-    c.req.param('id'),
+    c.req.param('id')!,
     auth.sub,
     auth.email,
+    auth.permissions?.includes(PERMISSIONS.PATIENT_SENSITIVE_READ) ?? false,
   )
   return c.json({ success: true, data: patient })
 })
 
 // PATCH /patients/:id
-router.patch('/:id', zValidator('json', UpdatePatientSchema), async (c) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PATIENT_WRITE), zValidator('json', UpdatePatientSchema), async (c) => {
   const auth = c.get('auth')
   const body = c.req.valid('json')
   const patient = await patientsService.updatePatient(
@@ -85,9 +87,9 @@ router.patch('/:id', zValidator('json', UpdatePatientSchema), async (c) => {
 })
 
 // DELETE /patients/:id  (soft delete — deactivate only)
-router.delete('/:id', async (c) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PATIENT_WRITE), async (c) => {
   const auth = c.get('auth')
-  await patientsService.deactivatePatient(auth.tenant_id, c.req.param('id'), auth.sub, auth.email)
+  await patientsService.deactivatePatient(auth.tenant_id, c.req.param('id')!, auth.sub, auth.email)
   return c.json({ success: true, data: null })
 })
 

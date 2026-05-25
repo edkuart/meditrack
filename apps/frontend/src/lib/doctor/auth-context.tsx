@@ -12,12 +12,24 @@ import {
 const TOKEN_KEY = 'meditrack_doctor_token'
 const REFRESH_TOKEN_KEY = 'meditrack_doctor_refresh_token'
 const REFRESH_SKEW_MS = 60_000
+let refreshInFlight: Promise<string> | null = null
+
+function refreshAccessTokenOnce() {
+  if (!refreshInFlight) {
+    refreshInFlight = refreshSession()
+      .then(next => next.access_token)
+      .finally(() => {
+        refreshInFlight = null
+      })
+  }
+  return refreshInFlight
+}
 
 interface AuthState {
   token: string | null
   user: DoctorUser | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<DoctorUser>
   logout: () => void
   refreshUser: () => Promise<void>
 }
@@ -29,9 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<DoctorUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const persistTokens = useCallback((accessToken: string, refreshToken: string) => {
-    localStorage.setItem(TOKEN_KEY, accessToken)
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+  const persistAccessToken = useCallback((accessToken: string) => {
     setToken(accessToken)
   }, [])
 
@@ -43,35 +53,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const refresh = useCallback(async () => {
-    const storedRefresh = localStorage.getItem(REFRESH_TOKEN_KEY)
-    if (!storedRefresh) throw new Error('Missing refresh token')
-    const next = await refreshSession(storedRefresh)
-    persistTokens(next.access_token, next.refresh_token)
-    return next.access_token
-  }, [persistTokens])
+    const accessToken = await refreshAccessTokenOnce()
+    persistAccessToken(accessToken)
+    return accessToken
+  }, [persistAccessToken])
 
   useEffect(() => {
-    const stored = localStorage.getItem(TOKEN_KEY)
-    const storedRefresh = localStorage.getItem(REFRESH_TOKEN_KEY)
-    if (!stored && !storedRefresh) { setIsLoading(false); return }
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
 
-    if (stored) setToken(stored)
-
-    const ensureToken = stored
-      ? Promise.resolve(stored)
-      : refresh()
-
-    ensureToken
+    refresh()
       .then(accessToken => getMe(accessToken))
       .then(setUser)
-      .catch(async () => {
-        try {
-          const accessToken = await refresh()
-          setUser(await getMe(accessToken))
-        } catch {
-          clearSession()
-        }
-      })
+      .catch(clearSession)
       .finally(() => setIsLoading(false))
   }, [clearSession, refresh])
 
@@ -91,25 +85,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const result = await apiLogin(email, password)
-    persistTokens(result.access_token, result.refresh_token)
+    persistAccessToken(result.access_token)
     setUser(result.user)
-  }, [persistTokens])
+    return result.user
+  }, [persistAccessToken])
 
   const logout = useCallback(() => {
-    const currentToken = localStorage.getItem(TOKEN_KEY)
-    const currentRefresh = localStorage.getItem(REFRESH_TOKEN_KEY)
-    if (currentToken) {
-      logoutSession(currentToken, currentRefresh ?? undefined).catch(() => {})
-    }
+    logoutSession(token).catch(() => {})
     clearSession()
-  }, [clearSession])
+  }, [token, clearSession])
 
   const refreshUser = useCallback(async () => {
-    const currentToken = localStorage.getItem(TOKEN_KEY)
-    if (!currentToken) return
-    const updated = await getMe(currentToken)
+    if (!token) return
+    const updated = await getMe(token)
     setUser(updated)
-  }, [])
+  }, [token])
 
   return (
     <AuthContext.Provider value={{ token, user, isLoading, login, logout, refreshUser }}>

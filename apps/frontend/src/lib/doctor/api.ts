@@ -1,8 +1,10 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001/api/v1'
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
+let clinicalCsrfToken: string | null = null
 
 async function doctorFetch<T>(path: string, token: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       Authorization: `Bearer ${token}`,
       ...(options?.headers ?? {}),
@@ -16,6 +18,7 @@ async function doctorFetch<T>(path: string, token: string, options?: RequestInit
 async function publicFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...options,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
   })
   const json = await res.json()
@@ -31,6 +34,15 @@ export interface DoctorUser {
   first_name: string
   last_name: string
   role: string
+  custom_role_id: string | null
+  custom_role: {
+    id: string
+    name: string
+    description: string | null
+    base_role: string
+    permissions: string[]
+  } | null
+  permissions: string[]
   specialty: string | null
   colegiado_number: string | null
   professional_id: string | null
@@ -44,7 +56,7 @@ export interface DoctorUser {
 export interface AuthResult {
   user: DoctorUser
   access_token: string
-  refresh_token: string
+  refresh_token?: string
 }
 
 export async function login(email: string, password: string): Promise<AuthResult> {
@@ -76,22 +88,63 @@ export async function getMe(token: string): Promise<DoctorUser> {
   return doctorFetch('/auth/me', token)
 }
 
-export async function refreshSession(refreshToken: string): Promise<{
+export async function refreshSession(refreshToken?: string): Promise<{
   access_token: string
-  refresh_token: string
+  refresh_token?: string
 }> {
-  return publicFetch('/auth/refresh', {
+  const headers: Record<string, string> = {}
+  if (!refreshToken) headers['X-CSRF-Token'] = await getClinicalCsrfToken()
+  const tokens = await publicFetch<{
+    access_token: string
+    refresh_token?: string
+  }>('/auth/refresh', {
     method: 'POST',
-    body: JSON.stringify({ refresh_token: refreshToken }),
+    headers,
+    body: refreshToken ? JSON.stringify({ refresh_token: refreshToken }) : JSON.stringify({}),
   })
+  clinicalCsrfToken = null
+  return tokens
 }
 
-export async function logoutSession(token: string, refreshToken?: string): Promise<void> {
-  await doctorFetch('/auth/logout', token, {
+export async function logoutSession(token?: string | null, refreshToken?: string): Promise<void> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+  if (!refreshToken) {
+    try {
+      headers['X-CSRF-Token'] = await getClinicalCsrfToken()
+    } catch {
+      clinicalCsrfToken = null
+    }
+  }
+  const res = await fetch(`${API}/auth/logout`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers,
     body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
   })
+  clinicalCsrfToken = null
+  const json = await res.json()
+  if (!json.success) throw new Error(json.error?.message ?? 'Request failed')
+}
+
+async function getClinicalCsrfToken() {
+  if (clinicalCsrfToken) return clinicalCsrfToken
+
+  const res = await fetch(`${API}/auth/csrf`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  const json = await res.json().catch(() => null)
+  if (!json?.success) throw new Error(json?.error?.message ?? 'Sesión expirada')
+
+  const token = json.data?.csrf_token
+  if (typeof token !== 'string') throw new Error('Sesión expirada')
+
+  clinicalCsrfToken = token
+  return token
 }
 
 // ─── Patients ─────────────────────────────────────────────────────────────────
@@ -107,9 +160,10 @@ export interface Patient {
   date_of_birth: string | null
   sex: 'male' | 'female' | 'other' | null
   is_active: boolean
-  notes: string | null
+  notes?: string | null
   anonymized_at: string | null
   created_at: string
+  _access_notice?: string
 }
 
 export interface PatientSearchResult {
@@ -714,6 +768,7 @@ export async function acceptInvite(data: {
 }> {
   const res = await fetch(`${API}/staff/accept-invite`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })

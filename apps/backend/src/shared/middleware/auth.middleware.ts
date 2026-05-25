@@ -1,9 +1,12 @@
 import type { Context, Next } from 'hono'
+import { getCookie } from 'hono/cookie'
 import { verifyAccessToken, type AccessTokenPayload } from '../services/token.service.ts'
 import { UnauthorizedError, ForbiddenError } from '../errors.ts'
 import type { userRoleEnum } from '../db/schema/users.ts'
 import { db, users } from '../db/index.ts'
 import { eq } from 'drizzle-orm'
+import { resolveEffectivePermissions } from '../permissions.ts'
+import { getClinicalAccessCookie } from '../session-cookies.ts'
 
 type UserRole = (typeof userRoleEnum.enumValues)[number]
 
@@ -21,21 +24,40 @@ declare module 'hono' {
 
 export async function requireAuth(c: Context, next: Next) {
   const authHeader = c.req.header('Authorization')
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+  const adminCookieToken = getCookie(c, 'meditrack_admin_access')
+  const clinicalCookieToken = getClinicalAccessCookie(c)
+  const token = bearerToken ?? adminCookieToken ?? clinicalCookieToken
 
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new UnauthorizedError('Missing or invalid Authorization header')
+  if (!token) {
+    throw new UnauthorizedError('Missing or invalid Authorization token')
   }
-
-  const token = authHeader.slice(7)
 
   try {
     const payload = await verifyAccessToken(token)
     const user = await db.query.users.findFirst({
       where: eq(users.id, payload.sub),
-      columns: { id: true, is_active: true, is_verified: true, verification_rejected_at: true },
+      columns: {
+        id: true,
+        tenant_id: true,
+        email: true,
+        role: true,
+        custom_role_id: true,
+        is_active: true,
+        is_verified: true,
+        verification_rejected_at: true,
+      },
     })
     if (!user?.is_active) throw new UnauthorizedError('User is inactive')
-    c.set('auth', payload)
+    const permissions = await resolveEffectivePermissions(user.tenant_id, user.role, user.custom_role_id)
+    c.set('auth', {
+      ...payload,
+      tenant_id: user.tenant_id,
+      email: user.email,
+      role: user.role,
+      custom_role_id: user.custom_role_id,
+      permissions,
+    })
     c.set('userVerified', user.is_verified)
     c.set('userRejected', user.verification_rejected_at !== null)
     await next()

@@ -239,6 +239,34 @@
       "when": 1779213050000,
       "tag": "0032_location_maps_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1779646400000,
+      "tag": "0033_custom_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1779732800000,
+      "tag": "0034_platform_password_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1779819200000,
+      "tag": "0035_super_admin_mfa",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1779905600000,
+      "tag": "0036_check_in_fields_v2",
+      "breakpoints": true
     }
   ]
 }

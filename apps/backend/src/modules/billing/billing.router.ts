@@ -1,23 +1,23 @@
 import { Hono } from 'hono'
-import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import { getBillingStatus, createCheckoutSession, createPortalSession, handleWebhook } from './billing.service.ts'
 
-// Protected billing routes (require ADMIN_CLINIC or SUPER_ADMIN)
 export const billingRouter = new Hono()
 
-billingRouter.get('/billing/status', requireAuth, requireRole('ADMIN_CLINIC', 'SUPER_ADMIN'), async (c) => {
+billingRouter.get('/billing/status', requireAuth, requirePermission(PERMISSIONS.HOSPITAL_MANAGE), async (c) => {
   const { tenant_id } = c.get('auth')
   const status = await getBillingStatus(tenant_id)
   return c.json({ success: true, data: status })
 })
 
-billingRouter.post('/billing/checkout', requireAuth, requireRole('ADMIN_CLINIC', 'SUPER_ADMIN'), async (c) => {
+billingRouter.post('/billing/checkout', requireAuth, requirePermission(PERMISSIONS.HOSPITAL_MANAGE), async (c) => {
   const { tenant_id, sub, email } = c.get('auth')
   const result = await createCheckoutSession(tenant_id, sub, email)
   return c.json({ success: true, data: result })
 })
 
-billingRouter.post('/billing/portal', requireAuth, requireRole('ADMIN_CLINIC', 'SUPER_ADMIN'), async (c) => {
+billingRouter.post('/billing/portal', requireAuth, requirePermission(PERMISSIONS.HOSPITAL_MANAGE), async (c) => {
   const { tenant_id } = c.get('auth')
   const result = await createPortalSession(tenant_id)
   return c.json({ success: true, data: result })

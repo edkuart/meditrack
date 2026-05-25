@@ -73,14 +73,25 @@ export interface DoseEvent {
 export type CheckInSeverity = 'OK' | 'WATCH' | 'ALERT'
 export type CheckInMood = 'better' | 'same' | 'worse'
 
+export type CheckInAdherenceReport = 'all' | 'most' | 'some' | 'none'
+export type CheckInEnergyLevel = 'low' | 'normal' | 'high'
+export type CheckInSleepQuality = 'poor' | 'fair' | 'good'
+export type CheckInTreatmentPerception = 'better' | 'same' | 'worse'
+
 export interface PatientCheckIn {
   id: string
   check_in_date: string
   pain_score: number | null
   temperature_c: number | null
   symptoms: string[]
+  side_effects: string[]
   red_flags: string[]
   medication_issue: boolean
+  adherence_self_report: CheckInAdherenceReport | null
+  adherence_skip_reason: string | null
+  energy_level: CheckInEnergyLevel | null
+  sleep_quality: CheckInSleepQuality | null
+  treatment_perception: CheckInTreatmentPerception | null
   mood: CheckInMood | null
   notes: string | null
   severity: CheckInSeverity
@@ -92,8 +103,14 @@ export interface PatientCheckInInput {
   pain_score?: number | null
   temperature_c?: number | null
   symptoms: string[]
+  side_effects: string[]
   red_flags: string[]
   medication_issue: boolean
+  adherence_self_report?: CheckInAdherenceReport | null
+  adherence_skip_reason?: string | null
+  energy_level?: CheckInEnergyLevel | null
+  sleep_quality?: CheckInSleepQuality | null
+  treatment_perception?: CheckInTreatmentPerception | null
   mood?: CheckInMood | null
   notes?: string | null
 }

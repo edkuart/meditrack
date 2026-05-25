@@ -1,21 +1,16 @@
 import { eq, and } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
-import { db, tenants, users, refreshTokens } from '../../shared/db/index.ts'
-import { passwordResetTokens } from '../../shared/db/schema/password-reset-tokens.ts'
+import { db, tenants, users, refreshTokens, customRoles, platformPasswordTickets, passwordResetTokens } from '../../shared/db/index.ts'
 import {
   signAccessToken,
   generateRefreshToken,
   hashToken,
   refreshTokenExpiresAt,
-  generateOpaqueToken,
 } from '../../shared/services/token.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
-import { sendEmail } from '../../shared/services/email.service.ts'
-import { UnauthorizedError, ConflictError, NotFoundError, ForbiddenError } from '../../shared/errors.ts'
-import type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput, UpdateProfileInput, ChangePasswordInput } from './auth.schema.ts'
-
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
-const RESET_EXPIRES_MINUTES = 30
+import { UnauthorizedError, ConflictError, NotFoundError } from '../../shared/errors.ts'
+import type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput, UpdateProfileInput, PasswordHelpInput, AuthenticatedPasswordHelpInput } from './auth.schema.ts'
+import { normalizePermissions, resolveEffectivePermissions } from '../../shared/permissions.ts'
 
 export async function register(input: RegisterInput) {
   const existingSlug = await db.query.tenants.findFirst({
@@ -29,7 +24,7 @@ export async function register(input: RegisterInput) {
     where: eq(users.email, input.email),
   })
   if (existingUser) {
-    throw new ConflictError('Email is already registered', 'EMAIL_TAKEN')
+    throw new ConflictError('Unable to process registration request', 'REGISTRATION_UNAVAILABLE')
   }
 
   const password_hash = await bcrypt.hash(input.password, 12)
@@ -66,7 +61,7 @@ export async function register(input: RegisterInput) {
     resource_id: user.id,
   })
 
-  return { user: sanitizeUser(user), ...tokens }
+  return { user: await sanitizeUser(user), ...tokens }
 }
 
 export async function login(input: LoginInput, ip?: string, userAgent?: string) {
@@ -121,7 +116,7 @@ export async function login(input: LoginInput, ip?: string, userAgent?: string) 
     user_agent: userAgent,
   })
 
-  return { user: sanitizeUser(user), ...tokens }
+  return { user: await sanitizeUser(user), ...tokens }
 }
 
 export async function refresh(rawRefreshToken: string, userAgent?: string) {
@@ -217,40 +212,109 @@ export async function logout(userId: string, rawRefreshToken: string) {
   }
 }
 
+export async function logoutByRefresh(rawRefreshToken: string) {
+  const tokenHash = hashToken(rawRefreshToken)
+  const stored = await db.query.refreshTokens.findFirst({
+    where: eq(refreshTokens.token_hash, tokenHash),
+    with: { user: true },
+  })
+  if (!stored) return
+
+  await db.update(refreshTokens)
+    .set({ is_revoked: true, used_at: new Date() })
+    .where(eq(refreshTokens.id, stored.id))
+
+  await createAuditLog({
+    tenant_id: stored.user.tenant_id,
+    actor_id: stored.user.id,
+    actor_type: 'USER',
+    actor_email: stored.user.email,
+    action: 'LOGOUT',
+    resource_type: 'USER',
+    resource_id: stored.user.id,
+    context: { refresh_token_id: stored.id },
+  })
+}
+
 // ─── Password reset ───────────────────────────────────────────────────────────
 
 export async function forgotPassword(input: ForgotPasswordInput) {
+  await requestPasswordHelp(input)
+}
+
+export async function requestPasswordHelp(input: PasswordHelpInput) {
   const user = await db.query.users.findFirst({
     where: eq(users.email, input.email),
-    columns: { id: true, email: true, first_name: true, is_active: true },
+    columns: { id: true, tenant_id: true, email: true, first_name: true, last_name: true, is_active: true },
   })
 
-  // Always return success to prevent email enumeration
+  // Always return success to prevent email enumeration.
   if (!user || !user.is_active) return
 
-  const rawToken = generateOpaqueToken()
-  const tokenHash = hashToken(rawToken)
-  const expiresAt = new Date(Date.now() + RESET_EXPIRES_MINUTES * 60 * 1000)
-
-  // Invalidate any previous unused tokens
-  await db.update(passwordResetTokens)
-    .set({ used_at: new Date() })
-    .where(and(eq(passwordResetTokens.user_id, user.id), eq(passwordResetTokens.used_at, null as unknown as Date)))
-
-  await db.insert(passwordResetTokens).values({
+  await createPasswordHelpTicket({
     user_id: user.id,
-    token_hash: tokenHash,
-    expires_at: expiresAt,
+    tenant_id: user.tenant_id,
+    requester_email: user.email,
+    requester_name: `${user.first_name} ${user.last_name}`.trim(),
+    source: 'LOGIN_HELP',
+    message: input.message,
+  })
+}
+
+export async function requestAuthenticatedPasswordHelp(userId: string, input: AuthenticatedPasswordHelpInput) {
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { id: true, tenant_id: true, email: true, first_name: true, last_name: true, is_active: true },
   })
 
-  const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}`
+  if (!user || !user.is_active) throw new UnauthorizedError('Account not found', 'ACCOUNT_INACTIVE')
 
-  sendEmail({
-    to: user.email,
-    subject: 'Restablecer contraseña — meditrack',
-    html: resetEmailHtml(user.first_name, resetUrl, RESET_EXPIRES_MINUTES),
-    text: `Hola ${user.first_name},\n\nUsa este enlace para restablecer tu contraseña: ${resetUrl}\n\nExpira en ${RESET_EXPIRES_MINUTES} minutos. Si no solicitaste esto, ignora este correo.`,
-  }).catch(err => console.error('[auth] reset email failed:', err))
+  await createPasswordHelpTicket({
+    user_id: user.id,
+    tenant_id: user.tenant_id,
+    requester_email: user.email,
+    requester_name: `${user.first_name} ${user.last_name}`.trim(),
+    source: 'AUTHENTICATED_PROFILE',
+    message: input.message,
+  })
+}
+
+async function createPasswordHelpTicket(input: {
+  user_id: string
+  tenant_id: string
+  requester_email: string
+  requester_name: string
+  source: 'LOGIN_HELP' | 'AUTHENTICATED_PROFILE'
+  message?: string
+}) {
+  const existing = await db.query.platformPasswordTickets.findFirst({
+    where: and(
+      eq(platformPasswordTickets.user_id, input.user_id),
+      eq(platformPasswordTickets.status, 'OPEN'),
+    ),
+    columns: { id: true },
+  }) ?? await db.query.platformPasswordTickets.findFirst({
+    where: and(
+      eq(platformPasswordTickets.user_id, input.user_id),
+      eq(platformPasswordTickets.status, 'IN_REVIEW'),
+    ),
+    columns: { id: true },
+  })
+
+  if (!existing) {
+    const [ticket] = await db.insert(platformPasswordTickets).values(input).returning({ id: platformPasswordTickets.id })
+
+    await createAuditLog({
+      tenant_id: input.tenant_id,
+      actor_id: input.user_id,
+      actor_type: 'USER',
+      actor_email: input.requester_email,
+      action: 'SETTINGS_CHANGED',
+      resource_type: 'PLATFORM_PASSWORD_TICKET',
+      resource_id: ticket.id,
+      context: { action: 'PASSWORD_HELP_REQUESTED', source: input.source },
+    })
+  }
 }
 
 export async function resetPassword(input: ResetPasswordInput) {
@@ -262,9 +326,9 @@ export async function resetPassword(input: ResetPasswordInput) {
   })
 
   if (!record) throw new UnauthorizedError('Invalid or expired reset link', 'INVALID_TOKEN')
-  if (record.used_at) throw new UnauthorizedError('This reset link has already been used', 'TOKEN_USED')
-  if (record.expires_at < new Date()) throw new UnauthorizedError('This reset link has expired', 'TOKEN_EXPIRED')
-  if (!record.user.is_active) throw new UnauthorizedError('Account is inactive', 'ACCOUNT_INACTIVE')
+  if (record.used_at) throw new UnauthorizedError('Invalid or expired reset link', 'INVALID_TOKEN')
+  if (record.expires_at < new Date()) throw new UnauthorizedError('Invalid or expired reset link', 'INVALID_TOKEN')
+  if (!record.user.is_active) throw new UnauthorizedError('Invalid or expired reset link', 'INVALID_TOKEN')
 
   const password_hash = await bcrypt.hash(input.password, 12)
 
@@ -276,7 +340,6 @@ export async function resetPassword(input: ResetPasswordInput) {
     .set({ used_at: new Date() })
     .where(eq(passwordResetTokens.id, record.id))
 
-  // Revoke all sessions
   await db.update(refreshTokens)
     .set({ is_revoked: true })
     .where(eq(refreshTokens.user_id, record.user_id))
@@ -289,43 +352,7 @@ export async function resetPassword(input: ResetPasswordInput) {
     action: 'SETTINGS_CHANGED',
     resource_type: 'USER',
     resource_id: record.user_id,
-    context: { action: 'PASSWORD_RESET' },
-  })
-}
-
-// ─── Change password (authenticated) ─────────────────────────────────────────
-
-export async function changePassword(userId: string, input: ChangePasswordInput) {
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: { id: true, tenant_id: true, email: true, password_hash: true, is_active: true },
-  })
-
-  if (!user || !user.is_active) throw new UnauthorizedError('Account not found', 'ACCOUNT_INACTIVE')
-
-  const valid = await bcrypt.compare(input.current_password, user.password_hash)
-  if (!valid) throw new UnauthorizedError('Current password is incorrect', 'INVALID_CREDENTIALS')
-
-  const password_hash = await bcrypt.hash(input.new_password, 12)
-
-  await db.update(users)
-    .set({ password_hash, updated_at: new Date() })
-    .where(eq(users.id, userId))
-
-  // Revoke all refresh tokens so other sessions are signed out
-  await db.update(refreshTokens)
-    .set({ is_revoked: true })
-    .where(eq(refreshTokens.user_id, userId))
-
-  await createAuditLog({
-    tenant_id: user.tenant_id,
-    actor_id: user.id,
-    actor_type: 'USER',
-    actor_email: user.email,
-    action: 'SETTINGS_CHANGED',
-    resource_type: 'USER',
-    resource_id: user.id,
-    context: { action: 'PASSWORD_CHANGE' },
+    context: { action: 'PASSWORD_RESET_WITH_PLATFORM_TOKEN' },
   })
 }
 
@@ -378,30 +405,17 @@ async function issueTokenPair(
   return { access_token, refresh_token: rawRefresh }
 }
 
-function resetEmailHtml(firstName: string, url: string, minutes: number): string {
-  return `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-  <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06)">
-    <div style="background:#2563eb;padding:24px 32px">
-      <p style="margin:0;color:#fff;font-size:20px;font-weight:700">meditrack</p>
-    </div>
-    <div style="padding:32px">
-      <h2 style="margin:0 0 12px;color:#1e293b;font-size:20px">Restablecer contraseña</h2>
-      <p style="margin:0 0 24px;color:#475569">Hola <strong>${firstName}</strong>, recibimos una solicitud para restablecer tu contraseña. Haz clic en el botón para continuar.</p>
-      <div style="text-align:center;margin:24px 0">
-        <a href="${url}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:600;font-size:16px">
-          Restablecer contraseña →
-        </a>
-      </div>
-      <p style="margin:0;font-size:13px;color:#94a3b8">Este enlace expira en <strong>${minutes} minutos</strong>. Si no solicitaste esto, ignora este correo — tu cuenta está segura.</p>
-    </div>
-  </div>
-</body></html>`
-}
-
-function sanitizeUser(user: typeof users.$inferSelect) {
+async function sanitizeUser(user: typeof users.$inferSelect) {
   const { password_hash, access_pin_hash, ...safe } = user as typeof users.$inferSelect & { access_pin_hash?: string }
-  return safe
+  const customRole = safe.custom_role_id
+    ? await db.query.customRoles.findFirst({
+        where: and(eq(customRoles.id, safe.custom_role_id), eq(customRoles.tenant_id, safe.tenant_id), eq(customRoles.is_active, true)),
+        columns: { id: true, name: true, description: true, base_role: true, permissions: true },
+      })
+    : null
+  return {
+    ...safe,
+    custom_role: customRole ? { ...customRole, permissions: normalizePermissions(customRole.permissions) } : null,
+    permissions: await resolveEffectivePermissions(safe.tenant_id, safe.role, safe.custom_role_id),
+  }
 }

@@ -22,6 +22,7 @@ export const users = pgTable('users', {
   email: varchar('email', { length: 254 }).notNull().unique(),
   password_hash: text('password_hash').notNull(),
   role: userRoleEnum('role').default('DOCTOR').notNull(),
+  custom_role_id: uuid('custom_role_id'),
   first_name: varchar('first_name', { length: 100 }).notNull(),
   last_name: varchar('last_name', { length: 100 }).notNull(),
   professional_id: varchar('professional_id', { length: 50 }),
@@ -36,6 +37,8 @@ export const users = pgTable('users', {
   verification_rejected_at: timestamp('verification_rejected_at', { withTimezone: true }),
   verification_rejected_reason: text('verification_rejected_reason'),
   two_fa_enabled: boolean('two_fa_enabled').default(false).notNull(),
+  two_fa_secret_encrypted: text('two_fa_secret_encrypted'),
+  two_fa_confirmed_at: timestamp('two_fa_confirmed_at', { withTimezone: true }),
   last_login_at: timestamp('last_login_at', { withTimezone: true }),
   // Legal acceptance tracking — gated at login if null or before policy update date
   tos_accepted_at: timestamp('tos_accepted_at', { withTimezone: true }),

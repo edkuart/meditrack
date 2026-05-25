@@ -10,6 +10,9 @@ export interface AccessTokenPayload {
   tenant_id: string
   role: string
   email: string
+  custom_role_id?: string | null
+  custom_role_name?: string | null
+  permissions?: string[]
 }
 
 export async function signAccessToken(payload: AccessTokenPayload): Promise<string> {

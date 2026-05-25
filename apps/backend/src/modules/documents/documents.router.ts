@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import { ValidationError } from '../../shared/errors.ts'
 import { UploadDocumentSchema, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES } from './documents.schema.ts'
 import * as documentsService from './documents.service.ts'
@@ -16,7 +17,7 @@ const router = new Hono()
 router.use('*', requireAuth)
 
 // POST /patients/:patientId/documents  (multipart/form-data)
-router.post('/patients/:patientId/documents', async (c) => {
+router.post('/patients/:patientId/documents', requirePermission(PERMISSIONS.DOCUMENT_WRITE), async (c) => {
   const auth = c.get('auth')
   const patientId = c.req.param('patientId')!
 
@@ -44,7 +45,7 @@ router.post('/patients/:patientId/documents', async (c) => {
 })
 
 // GET /patients/:patientId/documents
-router.get('/patients/:patientId/documents', async (c) => {
+router.get('/patients/:patientId/documents', requirePermission(PERMISSIONS.DOCUMENT_READ), async (c) => {
   const auth = c.get('auth')
   const docs = await documentsService.listPatientDocuments(
     auth.tenant_id, c.req.param('patientId')!,
@@ -53,7 +54,7 @@ router.get('/patients/:patientId/documents', async (c) => {
 })
 
 // GET /documents/:id/url  — returns a signed URL for viewing
-router.get('/documents/:id/url', async (c) => {
+router.get('/documents/:id/url', requirePermission(PERMISSIONS.DOCUMENT_READ), async (c) => {
   const auth = c.get('auth')
   const result = await documentsService.getDocumentUrl(
     auth.tenant_id, c.req.param('id')!, auth.sub, auth.email,
@@ -62,7 +63,7 @@ router.get('/documents/:id/url', async (c) => {
 })
 
 // GET /documents/:id/processing-jobs
-router.get('/documents/:id/processing-jobs', async (c) => {
+router.get('/documents/:id/processing-jobs', requirePermission(PERMISSIONS.DOCUMENT_PROCESS), async (c) => {
   const auth = c.get('auth')
   const jobs = await clinicalIntelligenceService.listDocumentProcessingJobs(
     auth.tenant_id,
@@ -74,6 +75,7 @@ router.get('/documents/:id/processing-jobs', async (c) => {
 // POST /documents/:id/process — starts local triage or queues an external/manual extraction pass
 router.post(
   '/documents/:id/process',
+  requirePermission(PERMISSIONS.DOCUMENT_PROCESS),
   zValidator('json', StartDocumentProcessingSchema),
   async (c) => {
     const auth = c.get('auth')
@@ -91,6 +93,7 @@ router.post(
 // POST /documents/:id/extractions — submits OCR/AI/manual findings into the review queue
 router.post(
   '/documents/:id/extractions',
+  requirePermission(PERMISSIONS.DOCUMENT_PROCESS),
   zValidator('json', SubmitDocumentExtractionSchema),
   async (c) => {
     const auth = c.get('auth')
@@ -108,6 +111,7 @@ router.post(
 // PATCH /documents/:id/visibility
 router.patch(
   '/documents/:id/visibility',
+  requirePermission(PERMISSIONS.DOCUMENT_VISIBILITY_WRITE),
   zValidator('json', z.object({ is_visible_to_patient: z.boolean() })),
   async (c) => {
     const auth = c.get('auth')
@@ -120,7 +124,7 @@ router.patch(
 )
 
 // DELETE /documents/:id
-router.delete('/documents/:id', async (c) => {
+router.delete('/documents/:id', requirePermission(PERMISSIONS.DOCUMENT_DELETE), async (c) => {
   const auth = c.get('auth')
   await documentsService.deleteDocument(
     auth.tenant_id, c.req.param('id')!, auth.sub, auth.email,

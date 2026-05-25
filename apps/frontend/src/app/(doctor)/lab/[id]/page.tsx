@@ -18,17 +18,14 @@ import {
 } from '@/lib/doctor/lab-external-api'
 import { ClinicalPage, ClinicalHeader, ClinicalButton, LoadingState } from '@/components/doctor/clinical-ui'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 function ResultStatusBadge({ status }: { status: LabResult['status'] }) {
   const cfg = STATUS_CONFIG[status]
   return (
-    <span
-      className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full"
-      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
-    >
+    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}>
       {cfg.label}
     </span>
   )
@@ -77,6 +74,37 @@ function computeLocalStatus(
   return 'PENDING'
 }
 
+function valueInputStyle(localStatus: LabResult['status'], isEmpty: boolean): React.CSSProperties {
+  if (isEmpty) return { width: 96, height: 32, padding: '0 8px', fontSize: 13, border: '1px solid var(--mt-border)', borderRadius: 6, outline: 'none', background: 'var(--mt-surface)', color: 'var(--mt-text)' }
+  if (localStatus === 'CRITICAL_HIGH' || localStatus === 'CRITICAL_LOW') return { width: 96, height: 32, padding: '0 8px', fontSize: 13, border: '1px solid #fca5a5', borderRadius: 6, outline: 'none', background: '#FFF5F5', color: 'var(--mt-danger)' }
+  if (localStatus === 'HIGH' || localStatus === 'LOW') return { width: 96, height: 32, padding: '0 8px', fontSize: 13, border: '1px solid #FCD34D', borderRadius: 6, outline: 'none', background: '#FFFBEB', color: '#92400E' }
+  return { width: 96, height: 32, padding: '0 8px', fontSize: 13, border: '1px solid #6EE7B7', borderRadius: 6, outline: 'none', background: 'var(--mt-success-subtle)', color: '#065F46' }
+}
+
+function valueTextColor(localStatus: LabResult['status']): string {
+  if (localStatus === 'CRITICAL_HIGH' || localStatus === 'CRITICAL_LOW') return 'var(--mt-danger)'
+  if (localStatus === 'HIGH' || localStatus === 'LOW') return '#D97706'
+  if (localStatus === 'NORMAL') return 'var(--mt-success)'
+  return 'var(--mt-muted)'
+}
+
+// ─── Info banner ─────────────────────────────────────────────────────────────
+
+function InfoBanner({ icon: Icon, children, variant = 'info' }: { icon: typeof FlaskConical; children: React.ReactNode; variant?: 'info' | 'neutral' | 'success' | 'error' }) {
+  const styles = {
+    info:    { bg: 'var(--mt-primary-subtle)', border: 'var(--mt-primary-mist)', color: 'var(--mt-primary-deep)' },
+    neutral: { bg: 'var(--mt-elevated)', border: 'var(--mt-border)', color: 'var(--mt-text-2)' },
+    success: { bg: 'var(--mt-success-subtle)', border: '#6EE7B7', color: '#065F46' },
+    error:   { bg: 'var(--mt-danger-subtle)', border: '#fecaca', color: 'var(--mt-danger)' },
+  }[variant]
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderRadius: 12, border: `1px solid ${styles.border}`, background: styles.bg, fontSize: 13, color: styles.color }}>
+      <Icon size={16} style={{ flexShrink: 0 }} />
+      {children}
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function LabOrderDetailPage() {
@@ -93,10 +121,9 @@ export default function LabOrderDetailPage() {
   const [cancelOpen, setCancelOpen] = useState(false)
   const [externalSubs, setExternalSubs] = useState<ExternalSubmission[]>([])
 
-  // Role-based permissions
-  const isLabTech = user?.role === 'LAB_TECHNICIAN'
-  const canEditResults = isLabTech || user?.role === 'ADMIN_CLINIC'
-  const canCancelOrder = !isLabTech
+  const canEditResults = hasPermission(user?.role, PERMISSIONS.LAB_RESULT_WRITE, user?.permissions)
+  const canCancelOrder = hasPermission(user?.role, PERMISSIONS.LAB_ORDER_WRITE, user?.permissions)
+  const isLabTech = user?.role === 'LAB_TECHNICIAN' || (canEditResults && !canCancelOrder)
 
   useEffect(() => {
     if (!token || !id) return
@@ -166,7 +193,7 @@ export default function LabOrderDetailPage() {
   if (!order) {
     return (
       <ClinicalPage>
-        <div className="text-center py-20 text-slate-400">Orden no encontrada.</div>
+        <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--mt-muted)', fontSize: 13 }}>Orden no encontrada.</div>
       </ClinicalPage>
     )
   }
@@ -175,10 +202,8 @@ export default function LabOrderDetailPage() {
   const isCancelled = order.status === 'CANCELLED'
   const isCompleted = order.status === 'COMPLETED'
   const isInProgress = order.status === 'IN_PROGRESS'
-  // Editing is only possible for lab tech/admin on non-final orders
   const editingEnabled = canEditResults && !isCancelled && !isCompleted
 
-  // Group rows by panel
   const panels: Record<string, { rows: EditRow[]; indices: number[] }> = {}
   rows.forEach((r, i) => {
     if (!panels[r.panel_name]) panels[r.panel_name] = { rows: [], indices: [] }
@@ -194,15 +219,12 @@ export default function LabOrderDetailPage() {
         subtitle={`Orden del ${new Date(order.ordered_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`}
         icon={FlaskConical}
         meta={
-          <span
-            className="text-xs font-semibold px-2.5 py-1 rounded-full"
-            style={{ color: orderCfg.color, background: orderCfg.bg }}
-          >
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, color: orderCfg.color, background: orderCfg.bg }}>
             {orderCfg.label}
           </span>
         }
         actions={
-          <div className="flex gap-2">
+          <div style={{ display: 'flex', gap: 8 }}>
             <ClinicalButton href="/lab" variant="outline" icon={ArrowLeft}>Volver</ClinicalButton>
             {isCompleted && (
               <ClinicalButton href={`/lab/${id}/print`} variant="outline" icon={Printer}>
@@ -210,11 +232,7 @@ export default function LabOrderDetailPage() {
               </ClinicalButton>
             )}
             {editingEnabled && dirty && (
-              <ClinicalButton
-                onClick={saveResults}
-                disabled={saving}
-                icon={Save}
-              >
+              <ClinicalButton onClick={saveResults} disabled={saving} icon={Save}>
                 {saving ? 'Guardando…' : 'Guardar resultados'}
               </ClinicalButton>
             )}
@@ -223,35 +241,35 @@ export default function LabOrderDetailPage() {
       />
 
       {/* Order meta */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
         {[
           { label: 'Paciente', value: `${order.patient.first_name} ${order.patient.last_name}` },
           { label: 'Médico', value: `Dr. ${order.doctor.first_name} ${order.doctor.last_name}` },
           { label: 'Estado', value: orderCfg.label },
           { label: 'Fecha', value: new Date(order.ordered_at).toLocaleDateString('es') },
         ].map(item => (
-          <div key={item.label} className="rounded-xl bg-white border border-slate-200 px-4 py-3">
-            <div className="text-xs text-slate-400 mb-0.5">{item.label}</div>
-            <div className="text-sm font-semibold text-slate-800">{item.value}</div>
+          <div key={item.label} style={{ borderRadius: 12, background: 'var(--mt-surface)', border: '1px solid var(--mt-border)', padding: '12px 16px' }}>
+            <div style={{ fontSize: 11, color: 'var(--mt-muted)', marginBottom: 2 }}>{item.label}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)' }}>{item.value}</div>
           </div>
         ))}
       </div>
 
       {order.notes && (
-        <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">
-          <span className="font-medium">Notas: </span>{order.notes}
-        </div>
+        <InfoBanner icon={FlaskConical} variant="info">
+          <span><span style={{ fontWeight: 500 }}>Notas: </span>{order.notes}</span>
+        </InfoBanner>
       )}
 
       {/* External submissions from patient */}
       {externalSubs.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-200">
-            <Upload size={14} className="text-amber-600" />
-            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+        <div style={{ borderRadius: 12, border: '1px solid #FDE68A', background: '#FFFBEB', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: '1px solid #FDE68A' }}>
+            <Upload size={14} color="#D97706" />
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#B45309', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Resultados enviados por el paciente
             </span>
-            <span className="ml-auto text-xs text-amber-600 font-medium">
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#D97706', fontWeight: 500 }}>
               {externalSubs.length} envío{externalSubs.length > 1 ? 's' : ''}
             </span>
           </div>
@@ -259,49 +277,7 @@ export default function LabOrderDetailPage() {
             const cfg = SUBMISSION_STATUS_CONFIG[sub.status]
             const isPending = sub.status === 'RECEIVED' || sub.status === 'DRAFT_READY'
             return (
-              <Link
-                key={sub.id}
-                href={`/lab/external/${sub.id}`}
-                className={cn(
-                  'flex items-center gap-3 px-4 py-3 hover:bg-amber-100/60 transition-colors group',
-                  i < externalSubs.length - 1 && 'border-b border-amber-100',
-                )}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span
-                      className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                      style={{ color: cfg.color, background: cfg.bg }}
-                    >
-                      {cfg.label}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      {new Date(sub.submitted_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </span>
-                    {(sub.file_count ?? 0) > 0 && (
-                      <span className="text-xs text-slate-400">· {sub.file_count} archivo{(sub.file_count ?? 0) > 1 ? 's' : ''}</span>
-                    )}
-                    {(sub.extracted_count ?? 0) > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-violet-600 font-medium">
-                        <BrainCircuit size={11} />
-                        {sub.extracted_count} valores extraídos
-                      </span>
-                    )}
-                  </div>
-                  {sub.patient_notes && (
-                    <p className="text-xs text-slate-500 truncate">{sub.patient_notes}</p>
-                  )}
-                </div>
-                <span className={cn(
-                  'text-xs font-medium px-2.5 py-1 rounded-lg transition-colors',
-                  isPending
-                    ? 'bg-amber-600 text-white group-hover:bg-amber-700'
-                    : 'text-slate-400 group-hover:text-slate-600',
-                )}>
-                  {isPending ? 'Revisar' : 'Ver'}
-                </span>
-                <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
-              </Link>
+              <ExternalSubRow key={sub.id} sub={sub} cfg={cfg} isPending={isPending} isLast={i === externalSubs.length - 1} />
             )
           })}
         </div>
@@ -309,100 +285,81 @@ export default function LabOrderDetailPage() {
 
       {/* Status banners */}
       {isInProgress && !isLabTech && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-700">
-          <FlaskConical size={16} />
+        <InfoBanner icon={FlaskConical} variant="info">
           El laboratorio está procesando esta orden. Los resultados estarán disponibles pronto.
-        </div>
+        </InfoBanner>
       )}
-
       {isInProgress && isLabTech && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-700">
-          <Clock size={16} />
+        <InfoBanner icon={Clock} variant="info">
           Orden en proceso. Ingresa los valores y guarda para actualizar el estado.
-        </div>
+        </InfoBanner>
       )}
-
       {!canEditResults && !isCancelled && !isCompleted && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600">
-          <FlaskConical size={16} />
+        <InfoBanner icon={FlaskConical} variant="neutral">
           Los resultados son ingresados por el personal de laboratorio. Esta vista es de solo lectura.
-        </div>
+        </InfoBanner>
       )}
 
       {error && (
-        <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{error}</div>
+        <InfoBanner icon={FlaskConical} variant="error">{error}</InfoBanner>
       )}
 
       {/* Results table by panel */}
       {order.results.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="py-12 text-center text-slate-400 text-sm">
+        <div style={{ borderRadius: 12, border: '1px solid var(--mt-border)', background: 'var(--mt-surface)', boxShadow: 'var(--mt-shadow-sm)' }}>
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--mt-muted)', fontSize: 13 }}>
             Esta orden no tiene parámetros definidos.
           </div>
         </div>
       ) : (
         Object.entries(panels).map(([panelName, panelData]) => (
-          <div key={panelName} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-700">{panelName}</h3>
+          <div key={panelName} style={{ borderRadius: 12, border: '1px solid var(--mt-border)', background: 'var(--mt-surface)', boxShadow: 'var(--mt-shadow-sm)', overflow: 'hidden' }}>
+            <div style={{ padding: '12px 20px', background: 'var(--mt-elevated)', borderBottom: '1px solid var(--mt-border)' }}>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text-2)', margin: 0 }}>{panelName}</h3>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">Parámetro</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">Valor</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">Unidad</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">Referencia</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">Estado</th>
+                  <tr style={{ borderBottom: '1px solid var(--mt-border)' }}>
+                    {['Parámetro', 'Valor', 'Unidad', 'Referencia', 'Estado'].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--mt-muted)' }}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {panelData.rows.map((row, localIdx) => {
                     const globalIdx = panelData.indices[localIdx]
                     const localStatus = computeLocalStatus(row.value, row.ref_min, row.ref_max)
+                    const isLast = localIdx === panelData.rows.length - 1
                     return (
-                      <tr key={row.id} className={cn('border-b border-slate-100 last:border-0', isCancelled && 'opacity-50')}>
-                        <td className="px-4 py-2.5 font-medium text-slate-700">{row.parameter_name}</td>
-                        <td className="px-4 py-2.5">
+                      <tr key={row.id} style={{ borderBottom: !isLast ? '1px solid var(--mt-border)' : 'none', opacity: isCancelled ? 0.5 : 1 }}>
+                        <td style={{ padding: '10px 16px', fontWeight: 500, color: 'var(--mt-text-2)' }}>{row.parameter_name}</td>
+                        <td style={{ padding: '10px 16px' }}>
                           {editingEnabled ? (
                             <input
                               type="text"
                               value={row.value}
                               onChange={e => handleValueChange(globalIdx, e.target.value)}
                               placeholder="—"
-                              className={cn(
-                                'w-24 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400',
-                                row.value === '' ? 'border-slate-200' :
-                                localStatus === 'CRITICAL_HIGH' || localStatus === 'CRITICAL_LOW' ? 'border-red-300 bg-red-50 text-red-700' :
-                                localStatus === 'HIGH' || localStatus === 'LOW' ? 'border-amber-300 bg-amber-50 text-amber-700' :
-                                'border-emerald-300 bg-emerald-50 text-emerald-700',
-                              )}
+                              style={valueInputStyle(localStatus, row.value === '')}
                             />
                           ) : (
-                            <span className={cn(
-                              'font-semibold',
-                              localStatus === 'CRITICAL_HIGH' || localStatus === 'CRITICAL_LOW' ? 'text-red-600' :
-                              localStatus === 'HIGH' || localStatus === 'LOW' ? 'text-amber-600' :
-                              localStatus === 'NORMAL' ? 'text-emerald-700' : 'text-slate-400',
-                            )}>
+                            <span style={{ fontWeight: 600, color: valueTextColor(localStatus) }}>
                               {row.value || '—'}
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-slate-400 text-xs">{row.unit || '—'}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-400">
-                          {row.ref_text ? (
-                            row.ref_text
-                          ) : (row.ref_min != null || row.ref_max != null) ? (
-                            `${row.ref_min ?? '?'} – ${row.ref_max ?? '?'}`
-                          ) : '—'}
+                        <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--mt-muted)' }}>{row.unit || '—'}</td>
+                        <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--mt-muted)' }}>
+                          {row.ref_text ? row.ref_text : (row.ref_min != null || row.ref_max != null) ? `${row.ref_min ?? '?'} – ${row.ref_max ?? '?'}` : '—'}
                         </td>
-                        <td className="px-4 py-2.5">
+                        <td style={{ padding: '10px 16px' }}>
                           {row.value !== '' ? (
                             <ResultStatusBadge status={localStatus} />
                           ) : (
-                            <span className="text-xs text-slate-300">Pendiente</span>
+                            <span style={{ fontSize: 11, color: 'var(--mt-muted)', opacity: 0.5 }}>Pendiente</span>
                           )}
                         </td>
                       </tr>
@@ -415,61 +372,126 @@ export default function LabOrderDetailPage() {
         ))
       )}
 
-      {/* Floating save bar — lab tech only */}
+      {/* Floating save bar */}
       {editingEnabled && dirty && (
-        <div className="sticky bottom-4 flex justify-center pointer-events-none">
-          <div className="flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-xl pointer-events-auto">
-            <span className="text-sm">Hay cambios sin guardar.</span>
-            <button
-              onClick={saveResults}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-1.5 text-sm font-semibold bg-blue-500 hover:bg-blue-400 rounded-xl transition-colors disabled:opacity-60"
-            >
-              <Save size={13} />
-              {saving ? 'Guardando…' : 'Guardar'}
-            </button>
+        <div style={{ position: 'sticky', bottom: 16, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', background: 'var(--mt-text)', color: '#fff', borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,.25)', pointerEvents: 'auto' }}>
+            <span style={{ fontSize: 13 }}>Hay cambios sin guardar.</span>
+            <FloatSaveBtn saving={saving} onSave={saveResults} />
           </div>
         </div>
       )}
 
-      {/* Cancel order — doctors and admins only */}
+      {/* Cancel order */}
       {canCancelOrder && !isCancelled && !isCompleted && (
-        <div className="flex justify-end pt-2 border-t border-slate-100">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--mt-border)' }}>
           {cancelOpen ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-500">¿Confirmas cancelar esta orden?</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 13, color: 'var(--mt-muted)' }}>¿Confirmas cancelar esta orden?</span>
               <button
                 onClick={cancelOrder}
                 disabled={saving}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                style={{ padding: '6px 12px', fontSize: 13, fontWeight: 500, color: '#fff', background: 'var(--mt-danger)', border: 'none', borderRadius: 8, cursor: 'pointer' }}
               >
                 Sí, cancelar
               </button>
               <button
                 onClick={() => setCancelOpen(false)}
-                className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                style={{ padding: '6px 12px', fontSize: 13, color: 'var(--mt-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 No
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => setCancelOpen(true)}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-500 transition-colors"
-            >
-              <XCircle size={13} />
-              Cancelar orden
-            </button>
+            <CancelTriggerBtn onClick={() => setCancelOpen(true)} />
           )}
         </div>
       )}
 
       {isCompleted && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700">
-          <CheckCircle2 size={16} />
+        <InfoBanner icon={CheckCircle2} variant="success">
           Orden completada. Todos los resultados fueron ingresados.
-        </div>
+        </InfoBanner>
       )}
     </ClinicalPage>
+  )
+}
+
+function FloatSaveBtn({ saving, onSave }: { saving: boolean; onSave: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onSave}
+      disabled={saving}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', fontSize: 13, fontWeight: 600,
+        background: hov ? 'var(--mt-primary)' : 'rgba(37,99,235,.85)', color: '#fff',
+        border: 'none', borderRadius: 12, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1,
+      }}
+    >
+      <Save size={13} />
+      {saving ? 'Guardando…' : 'Guardar'}
+    </button>
+  )
+}
+
+function CancelTriggerBtn({ onClick }: { onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: hov ? 'var(--mt-danger)' : 'var(--mt-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+    >
+      <XCircle size={13} />
+      Cancelar orden
+    </button>
+  )
+}
+
+function ExternalSubRow({ sub, cfg, isPending, isLast }: { sub: ExternalSubmission; cfg: { color: string; bg: string; label: string }; isPending: boolean; isLast: boolean }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <Link
+      href={`/lab/external/${sub.id}`}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 16px', textDecoration: 'none',
+        borderBottom: !isLast ? '1px solid #FEF3C7' : 'none',
+        background: hov ? '#FEF3C7' : 'transparent', transition: 'background .1s',
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: cfg.color, background: cfg.bg }}>{cfg.label}</span>
+          <span style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
+            {new Date(sub.submitted_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
+          </span>
+          {(sub.file_count ?? 0) > 0 && <span style={{ fontSize: 11, color: 'var(--mt-muted)' }}>· {sub.file_count} archivo{(sub.file_count ?? 0) > 1 ? 's' : ''}</span>}
+          {(sub.extracted_count ?? 0) > 0 && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--mt-purple-deep)', fontWeight: 500 }}>
+              <BrainCircuit size={11} />
+              {sub.extracted_count} valores extraídos
+            </span>
+          )}
+        </div>
+        {sub.patient_notes && (
+          <p style={{ fontSize: 11, color: 'var(--mt-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.patient_notes}</p>
+        )}
+      </div>
+      <span style={{
+        fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 8,
+        background: isPending ? '#D97706' : 'transparent',
+        color: isPending ? '#fff' : 'var(--mt-muted)',
+      }}>
+        {isPending ? 'Revisar' : 'Ver'}
+      </span>
+      <ChevronRight size={14} color="var(--mt-muted)" style={{ flexShrink: 0 }} />
+    </Link>
   )
 }

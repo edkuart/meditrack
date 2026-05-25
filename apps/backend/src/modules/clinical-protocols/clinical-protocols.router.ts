@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
+import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
+import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import {
   ListClinicalProtocolsQuerySchema,
   CreateProtocolSchema,
@@ -12,7 +13,7 @@ const router = new Hono()
 
 router.use('*', requireAuth)
 
-router.get('/clinical-protocols', zValidator('query', ListClinicalProtocolsQuerySchema), async (c) => {
+router.get('/clinical-protocols', requirePermission(PERMISSIONS.TREATMENT_READ), zValidator('query', ListClinicalProtocolsQuerySchema), async (c) => {
   const auth = c.get('auth')
   const protocols = await clinicalProtocolsService.listClinicalProtocols(auth.tenant_id, c.req.valid('query'))
   return c.json({ success: true, data: protocols })
@@ -20,7 +21,7 @@ router.get('/clinical-protocols', zValidator('query', ListClinicalProtocolsQuery
 
 router.post(
   '/clinical-protocols',
-  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  requirePermission(PERMISSIONS.TREATMENT_WRITE),
   zValidator('json', CreateProtocolSchema),
   async (c) => {
     const { tenant_id } = c.get('auth')
@@ -31,7 +32,7 @@ router.post(
 
 router.patch(
   '/clinical-protocols/:id',
-  requireRole('ADMIN_CLINIC', 'DOCTOR'),
+  requirePermission(PERMISSIONS.TREATMENT_WRITE),
   zValidator('json', UpdateProtocolSchema),
   async (c) => {
     const { tenant_id } = c.get('auth')
@@ -44,7 +45,7 @@ router.patch(
   },
 )
 
-router.delete('/clinical-protocols/:id', requireRole('ADMIN_CLINIC', 'DOCTOR'), async (c) => {
+router.delete('/clinical-protocols/:id', requirePermission(PERMISSIONS.TREATMENT_WRITE), async (c) => {
   const { tenant_id } = c.get('auth')
   await clinicalProtocolsService.deleteProtocol(tenant_id, c.req.param('id')!)
   return c.json({ success: true, data: null })

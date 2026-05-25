@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Upload, X, FileText, Image, Loader2 } from 'lucide-react'
 import { uploadDocument, type Document } from '@/lib/doctor/api'
+import { MTButton } from '@/components/doctor/clinical-ui'
 
 const DOC_TYPES = [
   { value: 'PRESCRIPTION', label: 'Receta' },
@@ -67,67 +68,100 @@ export function DocumentUploader({ token, patientId, encounterId, onUploaded }: 
 
   const isPdf = selectedFile?.type === 'application/pdf'
 
+  const dropZoneBorder = selectedFile
+    ? '2px dashed var(--mt-success)'
+    : dragging
+      ? '2px dashed var(--mt-primary)'
+      : '2px dashed var(--mt-border-2)'
+
+  const dropZoneBg = selectedFile
+    ? 'var(--mt-success-subtle)'
+    : dragging
+      ? 'var(--mt-primary-subtle)'
+      : 'var(--mt-bg)'
+
   return (
-    <div className="flex flex-col gap-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Drop zone */}
       <div
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
         onClick={() => inputRef.current?.click()}
-        className={`
-          border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors
-          ${dragging ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}
-          ${selectedFile ? 'border-green-300 bg-green-50' : ''}
-        `}
+        style={{
+          border: dropZoneBorder,
+          borderRadius: 12,
+          padding: '28px 20px',
+          textAlign: 'center',
+          cursor: 'pointer',
+          background: dropZoneBg,
+          transition: 'border-color .2s, background .2s',
+        }}
       >
         <input
           ref={inputRef}
           type="file"
           accept=".pdf,.jpg,.jpeg,.png,.webp"
-          className="hidden"
+          style={{ display: 'none' }}
           onChange={e => handleFiles(e.target.files)}
         />
 
         {selectedFile ? (
-          <div className="flex items-center justify-center gap-3">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
             {isPdf
-              ? <FileText size={28} className="text-red-500 shrink-0" />
-              : <Image size={28} className="text-blue-500 shrink-0" />
+              ? <FileText size={28} color="var(--mt-danger)" style={{ flexShrink: 0 }} />
+              : <Image size={28} color="var(--mt-primary)" style={{ flexShrink: 0 }} />
             }
-            <div className="text-left min-w-0">
-              <p className="font-medium text-slate-800 truncate">{selectedFile.name}</p>
-              <p className="text-slate-400 text-sm">
+            <div style={{ textAlign: 'left', minWidth: 0 }}>
+              <p style={{ fontWeight: 500, color: 'var(--mt-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedFile.name}
+              </p>
+              <p style={{ color: 'var(--mt-muted)', fontSize: 12, margin: '2px 0 0' }}>
                 {(selectedFile.size / 1024).toFixed(0)} KB
               </p>
             </div>
             <button
               onClick={e => { e.stopPropagation(); setSelectedFile(null) }}
-              className="ml-auto text-slate-400 hover:text-slate-600"
+              style={{
+                marginLeft: 'auto', background: 'none', border: 'none',
+                cursor: 'pointer', color: 'var(--mt-muted)', display: 'flex',
+                padding: 4, borderRadius: 4,
+              }}
             >
               <X size={18} />
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2 text-slate-400">
-            <Upload size={28} />
-            <p className="font-medium">Arrastra un archivo o haz clic</p>
-            <p className="text-sm">PDF, JPEG, PNG, WEBP — máx. 20MB</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--mt-muted)' }}>
+            <Upload size={26} color="var(--mt-muted)" />
+            <p style={{ fontWeight: 500, margin: 0, color: 'var(--mt-text-2)' }}>Arrastra un archivo o haz clic</p>
+            <p style={{ fontSize: 12, margin: 0 }}>PDF, JPEG, PNG, WEBP — máx. 20MB</p>
           </div>
         )}
       </div>
 
       {/* Metadata */}
       {selectedFile && (
-        <div className="flex flex-col gap-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">
+            <label style={{
+              display: 'block', fontSize: 13, fontWeight: 500,
+              color: 'var(--mt-text-2)', marginBottom: 6,
+            }}>
               Tipo de documento
             </label>
             <select
               value={docType}
               onChange={e => setDocType(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              style={{
+                width: '100%',
+                border: '1px solid var(--mt-border)',
+                borderRadius: 8, padding: '8px 12px',
+                color: 'var(--mt-text)', fontSize: 13,
+                background: 'var(--mt-surface)',
+                outline: 'none',
+                fontFamily: 'var(--mt-font)',
+              }}
             >
               {DOC_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -135,34 +169,38 @@ export function DocumentUploader({ token, patientId, encounterId, onUploaded }: 
             </select>
           </div>
 
-          <label className="flex items-center gap-3 cursor-pointer select-none">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
             <input
               type="checkbox"
               checked={visibleToPatient}
               onChange={e => setVisibleToPatient(e.target.checked)}
-              className="w-4 h-4 rounded text-blue-500"
+              style={{ width: 16, height: 16, accentColor: 'var(--mt-purple)', cursor: 'pointer' }}
             />
-            <span className="text-sm text-slate-600">Visible para el paciente en su portal</span>
+            <span style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>Visible para el paciente en su portal</span>
           </label>
         </div>
       )}
 
       {error && (
-        <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{error}</p>
+        <p style={{
+          fontSize: 13, color: 'var(--mt-danger)',
+          background: 'var(--mt-danger-subtle)',
+          borderRadius: 8, padding: '8px 12px', margin: 0,
+          border: '1px solid #fecaca',
+        }}>{error}</p>
       )}
 
       {selectedFile && (
-        <button
-          onClick={handleUpload}
+        <MTButton
+          variant="solid"
+          size="md"
+          icon={uploading ? Loader2 : Upload}
           disabled={uploading}
-          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-blue-500 text-white font-medium text-sm disabled:opacity-60 hover:bg-blue-600 transition-colors"
+          onClick={handleUpload}
+          style={{ width: '100%', justifyContent: 'center' }}
         >
-          {uploading ? (
-            <><Loader2 size={16} className="animate-spin" /> Subiendo...</>
-          ) : (
-            <><Upload size={16} /> Subir documento</>
-          )}
-        </button>
+          {uploading ? 'Subiendo...' : 'Subir documento'}
+        </MTButton>
       )}
     </div>
   )

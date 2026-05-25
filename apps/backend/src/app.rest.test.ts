@@ -68,6 +68,56 @@ describe('REST app critical routes', () => {
     })
   })
 
+  it('protects admin cookie session endpoints by default', async () => {
+    const me = await app.fetch(new Request('http://localhost/api/v1/admin/auth/me'))
+    const csrf = await app.fetch(new Request('http://localhost/api/v1/admin/auth/csrf'))
+    const audit = await app.fetch(new Request('http://localhost/api/v1/admin/audit-logs'))
+    const refresh = await app.fetch(new Request('http://localhost/api/v1/admin/auth/refresh', { method: 'POST' }))
+    const logout = await app.fetch(new Request('http://localhost/api/v1/admin/auth/logout', { method: 'POST' }))
+
+    expect(me.status).toBe(401)
+    expect(csrf.status).toBe(401)
+    expect(audit.status).toBe(401)
+    expect(refresh.status).toBe(401)
+    expect(logout.status).toBe(200)
+    expect(logout.headers.getSetCookie()).toEqual([
+      'meditrack_admin_access=; Max-Age=0; Path=/api/v1/admin',
+      'meditrack_admin_refresh=; Max-Age=0; Path=/api/v1/admin',
+    ])
+  })
+
+  it('protects and clears clinical cookie sessions by default', async () => {
+    const refresh = await app.fetch(new Request('http://localhost/api/v1/auth/refresh', { method: 'POST' }))
+    const logout = await app.fetch(new Request('http://localhost/api/v1/auth/logout', { method: 'POST' }))
+
+    expect(refresh.status).toBe(401)
+    expect(logout.status).toBe(200)
+    expect(logout.headers.getSetCookie()).toEqual([
+      'meditrack_clinical_access=; Max-Age=0; Path=/api/v1/auth',
+      'meditrack_clinical_refresh=; Max-Age=0; Path=/api/v1/auth',
+    ])
+  })
+
+  it('requires CSRF for clinical refresh-cookie mutations', async () => {
+    const csrf = await app.fetch(new Request('http://localhost/api/v1/auth/csrf'))
+    const refresh = await app.fetch(new Request('http://localhost/api/v1/auth/refresh', {
+      method: 'POST',
+      headers: { cookie: 'meditrack_clinical_refresh=fake-refresh-token' },
+    }))
+    const logout = await app.fetch(new Request('http://localhost/api/v1/auth/logout', {
+      method: 'POST',
+      headers: { cookie: 'meditrack_clinical_refresh=fake-refresh-token' },
+    }))
+    const refreshBody = await refresh.json() as JsonBody
+    const logoutBody = await logout.json() as JsonBody
+
+    expect(csrf.status).toBe(401)
+    expect(refresh.status).toBe(401)
+    expect(logout.status).toBe(401)
+    expect(refreshBody).toMatchObject({ success: false, error: { code: 'INVALID_CSRF_TOKEN' } })
+    expect(logoutBody).toMatchObject({ success: false, error: { code: 'INVALID_CSRF_TOKEN' } })
+  })
+
   it('rate limits repeated doctor login attempts by IP', async () => {
     for (let i = 0; i < 8; i += 1) {
       await app.fetch(new Request('http://localhost/api/v1/auth/login', {
@@ -96,6 +146,27 @@ describe('REST app critical routes', () => {
       success: false,
       error: { code: 'RATE_LIMITED' },
     })
+  })
+
+  it('rejects public hospital tenant creation during registration', async () => {
+    const res = await app.fetch(new Request('http://localhost/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'phase1-hospital@example.com',
+        password: 'ThisIsAFifteenCharPassword',
+        first_name: 'Phase',
+        last_name: 'One',
+        clinic_name: 'Phase Hospital',
+        clinic_slug: 'phase-hospital',
+        colegiado_number: 'PHASE-1',
+        tenant_type: 'HOSPITAL',
+      }),
+    }))
+    const body = await res.json() as JsonBody
+
+    expect(res.status).toBe(400)
+    expect(JSON.stringify(body)).toContain('tenant_type')
   })
 
   it('rate limits repeated portal PIN attempts by IP', async () => {
