@@ -26,4 +26,4 @@ ENV PORT=3001
 EXPOSE 3001
 
 # tsx is in devDependencies — kept intentionally since noEmit: true prevents tsc build
-CMD ["sh", "-c", "npx tsx src/shared/db/migrate.ts; npx tsx src/index.ts"]
+CMD ["sh", "-c", "npx tsx src/shared/db/migrate.ts && npx tsx src/scripts/create-super-admin.ts && npx tsx src/index.ts"]

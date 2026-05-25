@@ -3,10 +3,22 @@ import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { db, tenants, users } from '../shared/db/index.ts'
 
-const email = process.env.SUPER_ADMIN_EMAIL?.trim() || 'superadmin@meditrack.app'
-const password = process.env.SUPER_ADMIN_PASSWORD?.trim() || `${crypto.randomBytes(18).toString('base64url')}Aa9!`
+const explicitEmail = process.env.SUPER_ADMIN_EMAIL?.trim()
+const explicitPassword = process.env.SUPER_ADMIN_PASSWORD?.trim()
+const isProduction = process.env.NODE_ENV === 'production'
+
+if (isProduction && (!explicitEmail || !explicitPassword)) {
+  console.log('[admin:create] SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD not set; skipping bootstrap.')
+  process.exit(0)
+}
+
+const email = explicitEmail || 'superadmin@meditrack.app'
+const password = explicitPassword || `${crypto.randomBytes(18).toString('base64url')}Aa9!`
 const tenantSlug = process.env.SUPER_ADMIN_TENANT_SLUG?.trim() || 'meditrack-platform'
 const tenantName = process.env.SUPER_ADMIN_TENANT_NAME?.trim() || 'Meditrack Platform'
+const resetExistingPassword = ['1', 'true', 'yes', 'on'].includes(
+  (process.env.SUPER_ADMIN_RESET_PASSWORD || '').toLowerCase(),
+)
 const now = new Date()
 
 async function main() {
@@ -33,25 +45,33 @@ async function main() {
   let user = await db.query.users.findFirst({
     where: eq(users.email, email),
   })
+  let created = false
+  let passwordUpdated = false
 
   if (user) {
+    const patch: Partial<typeof users.$inferInsert> = {
+      tenant_id: tenant.id,
+      role: 'SUPER_ADMIN',
+      first_name: user.first_name || 'Platform',
+      last_name: user.last_name || 'Admin',
+      is_verified: true,
+      is_active: true,
+      verification_rejected_at: null,
+      verification_rejected_reason: null,
+      updated_at: now,
+    }
+
+    if (resetExistingPassword) {
+      patch.password_hash = passwordHash
+      patch.two_fa_enabled = false
+      patch.two_fa_secret_encrypted = null
+      patch.two_fa_confirmed_at = null
+      passwordUpdated = true
+    }
+
     const updated = await db
       .update(users)
-      .set({
-        tenant_id: tenant.id,
-        password_hash: passwordHash,
-        role: 'SUPER_ADMIN',
-        first_name: 'Platform',
-        last_name: 'Admin',
-        is_verified: true,
-        is_active: true,
-        verification_rejected_at: null,
-        verification_rejected_reason: null,
-        two_fa_enabled: false,
-        two_fa_secret_encrypted: null,
-        two_fa_confirmed_at: null,
-        updated_at: now,
-      })
+      .set(patch)
       .where(eq(users.id, user.id))
       .returning()
     user = updated[0]
@@ -72,15 +92,19 @@ async function main() {
       })
       .returning()
     user = inserted[0]
+    created = true
+    passwordUpdated = true
   }
 
   console.log(JSON.stringify({
     email,
-    password,
     user_id: user.id,
     tenant_id: tenant.id,
     role: user.role,
-    mfa_setup_required_on_first_login: true,
+    created,
+    password_updated: passwordUpdated,
+    mfa_setup_required_on_first_login: created || resetExistingPassword,
+    password: !isProduction && passwordUpdated ? password : undefined,
   }, null, 2))
 }
 
