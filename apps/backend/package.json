@@ -16,7 +16,8 @@
     "db:migrate": "tsx --env-file=.env src/shared/db/migrate.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx --env-file=.env src/scripts/seed-admin.ts"
+    "db:seed": "tsx --env-file=.env src/scripts/seed-admin.ts",
+    "admin:create": "tsx --env-file=.env src/scripts/create-super-admin.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.97.1",

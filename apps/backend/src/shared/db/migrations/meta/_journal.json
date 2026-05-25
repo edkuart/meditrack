@@ -267,6 +267,13 @@
       "when": 1779905600000,
       "tag": "0036_check_in_fields_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1779909200000,
+      "tag": "0037_auth_users_guard",
+      "breakpoints": true
     }
   ]
 }
