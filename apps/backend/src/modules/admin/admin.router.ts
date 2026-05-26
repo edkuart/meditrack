@@ -151,25 +151,28 @@ router.patch('/admin/tenants/:id', zValidator('json', UpdateTenantSchema), async
 
 function setAdminSessionCookies(c: Parameters<typeof setCookie>[0], accessToken: string, refreshToken: string) {
   const secure = config.env === 'production'
+  const sameSite = secure ? 'None' : 'Lax'
   setCookie(c, ADMIN_ACCESS_COOKIE, accessToken, {
     httpOnly: true,
     secure,
-    sameSite: 'Lax',
+    sameSite,
     path: ADMIN_COOKIE_PATH,
     maxAge: ACCESS_COOKIE_MAX_AGE_SECONDS,
   })
   setCookie(c, ADMIN_REFRESH_COOKIE, refreshToken, {
     httpOnly: true,
     secure,
-    sameSite: 'Lax',
+    sameSite,
     path: ADMIN_COOKIE_PATH,
     maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
   })
 }
 
 function clearAdminSessionCookies(c: Parameters<typeof deleteCookie>[0]) {
-  deleteCookie(c, ADMIN_ACCESS_COOKIE, { path: ADMIN_COOKIE_PATH })
-  deleteCookie(c, ADMIN_REFRESH_COOKIE, { path: ADMIN_COOKIE_PATH })
+  const secure = config.env === 'production'
+  const sameSite = secure ? 'None' : 'Lax'
+  deleteCookie(c, ADMIN_ACCESS_COOKIE, { path: ADMIN_COOKIE_PATH, secure, sameSite })
+  deleteCookie(c, ADMIN_REFRESH_COOKIE, { path: ADMIN_COOKIE_PATH, secure, sameSite })
 }
 
 async function requireAdminCsrf(c: Parameters<typeof requireAuth>[0], next: Parameters<typeof requireAuth>[1]) {
