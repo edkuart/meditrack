@@ -1,21 +1,21 @@
-CREATE TYPE "public"."platform_ticket_source" AS ENUM('LOGIN_HELP', 'AUTHENTICATED_PROFILE');--> statement-breakpoint
-CREATE TYPE "public"."platform_ticket_status" AS ENUM('OPEN', 'IN_REVIEW', 'RESOLVED', 'REJECTED');--> statement-breakpoint
-CREATE TYPE "public"."lab_external_status" AS ENUM('RECEIVED', 'AI_EXTRACTING', 'DRAFT_READY', 'VALIDATED', 'REJECTED');--> statement-breakpoint
-CREATE TYPE "public"."lab_extracted_value_status" AS ENUM('AI_DRAFT', 'ACCEPTED', 'EDITED', 'REJECTED');--> statement-breakpoint
-CREATE TYPE "public"."invoice_provider" AS ENUM('recurrente', 'stripe', 'manual');--> statement-breakpoint
-CREATE TYPE "public"."invoice_status" AS ENUM('pending', 'paid', 'overdue', 'cancelled', 'refunded');--> statement-breakpoint
-CREATE TYPE "public"."tenant_access_grant_status" AS ENUM('active', 'expired', 'revoked', 'converted');--> statement-breakpoint
-CREATE TYPE "public"."tenant_access_grant_type" AS ENUM('trial', 'promo', 'manual_override', 'internal_demo');--> statement-breakpoint
-CREATE TYPE "public"."appointment_status" AS ENUM('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW');--> statement-breakpoint
-CREATE TYPE "public"."appointment_type" AS ENUM('CONSULTATION', 'FOLLOW_UP', 'PROCEDURE', 'CHECK_UP', 'EMERGENCY', 'TELECONSULT');--> statement-breakpoint
-ALTER TYPE "public"."plan_type" ADD VALUE 'doctor_individual' BEFORE 'pro';--> statement-breakpoint
-ALTER TYPE "public"."plan_type" ADD VALUE 'clinic_complete' BEFORE 'pro';--> statement-breakpoint
-ALTER TYPE "public"."audit_action" ADD VALUE 'BILLING_INVOICE_PAID_MANUAL' BEFORE 'CONSENT_RECORDED';--> statement-breakpoint
-ALTER TYPE "public"."audit_action" ADD VALUE 'BILLING_INVOICE_CANCELLED' BEFORE 'CONSENT_RECORDED';--> statement-breakpoint
-ALTER TYPE "public"."audit_action" ADD VALUE 'LAB_EXTERNAL_SUBMITTED';--> statement-breakpoint
-ALTER TYPE "public"."audit_action" ADD VALUE 'LAB_EXTERNAL_AI_EXTRACTED';--> statement-breakpoint
-ALTER TYPE "public"."audit_action" ADD VALUE 'LAB_EXTERNAL_VALIDATED';--> statement-breakpoint
-CREATE TABLE "custom_roles" (
+DO $$ BEGIN CREATE TYPE "public"."platform_ticket_source" AS ENUM('LOGIN_HELP', 'AUTHENTICATED_PROFILE'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN CREATE TYPE "public"."platform_ticket_status" AS ENUM('OPEN', 'IN_REVIEW', 'RESOLVED', 'REJECTED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN CREATE TYPE "public"."lab_external_status" AS ENUM('RECEIVED', 'AI_EXTRACTING', 'DRAFT_READY', 'VALIDATED', 'REJECTED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN CREATE TYPE "public"."lab_extracted_value_status" AS ENUM('AI_DRAFT', 'ACCEPTED', 'EDITED', 'REJECTED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN CREATE TYPE "public"."invoice_provider" AS ENUM('recurrente', 'stripe', 'manual'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN CREATE TYPE "public"."invoice_status" AS ENUM('pending', 'paid', 'overdue', 'cancelled', 'refunded'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN CREATE TYPE "public"."tenant_access_grant_type" AS ENUM('trial', 'promo', 'manual_override', 'internal_demo'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+ALTER TYPE "public"."tenant_access_grant_status" ADD VALUE IF NOT EXISTS 'converted';--> statement-breakpoint
+DO $$ BEGIN CREATE TYPE "public"."appointment_status" AS ENUM('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN CREATE TYPE "public"."appointment_type" AS ENUM('CONSULTATION', 'FOLLOW_UP', 'PROCEDURE', 'CHECK_UP', 'EMERGENCY', 'TELECONSULT'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+ALTER TYPE "public"."plan_type" ADD VALUE IF NOT EXISTS 'doctor_individual' BEFORE 'pro';--> statement-breakpoint
+ALTER TYPE "public"."plan_type" ADD VALUE IF NOT EXISTS 'clinic_complete' BEFORE 'pro';--> statement-breakpoint
+ALTER TYPE "public"."audit_action" ADD VALUE IF NOT EXISTS 'BILLING_INVOICE_PAID_MANUAL' BEFORE 'CONSENT_RECORDED';--> statement-breakpoint
+ALTER TYPE "public"."audit_action" ADD VALUE IF NOT EXISTS 'BILLING_INVOICE_CANCELLED' BEFORE 'CONSENT_RECORDED';--> statement-breakpoint
+ALTER TYPE "public"."audit_action" ADD VALUE IF NOT EXISTS 'LAB_EXTERNAL_SUBMITTED';--> statement-breakpoint
+ALTER TYPE "public"."audit_action" ADD VALUE IF NOT EXISTS 'LAB_EXTERNAL_AI_EXTRACTED';--> statement-breakpoint
+ALTER TYPE "public"."audit_action" ADD VALUE IF NOT EXISTS 'LAB_EXTERNAL_VALIDATED';--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "custom_roles" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"name" varchar(100) NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE "custom_roles" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "platform_password_tickets" (
+CREATE TABLE IF NOT EXISTS "platform_password_tickets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid,
 	"user_id" uuid,
@@ -44,7 +44,7 @@ CREATE TABLE "platform_password_tickets" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lab_external_submissions" (
+CREATE TABLE IF NOT EXISTS "lab_external_submissions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"order_id" uuid,
@@ -60,7 +60,7 @@ CREATE TABLE "lab_external_submissions" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lab_extracted_values" (
+CREATE TABLE IF NOT EXISTS "lab_extracted_values" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"submission_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -82,7 +82,7 @@ CREATE TABLE "lab_extracted_values" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lab_submission_files" (
+CREATE TABLE IF NOT EXISTS "lab_submission_files" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"submission_id" uuid NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -94,13 +94,13 @@ CREATE TABLE "lab_submission_files" (
 	"uploaded_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "billing_invoice_counters" (
+CREATE TABLE IF NOT EXISTS "billing_invoice_counters" (
 	"year" integer NOT NULL,
 	"next_number" integer DEFAULT 1 NOT NULL,
 	CONSTRAINT "billing_invoice_counters_year_pk" PRIMARY KEY("year")
 );
 --> statement-breakpoint
-CREATE TABLE "billing_invoices" (
+CREATE TABLE IF NOT EXISTS "billing_invoices" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"invoice_number" varchar(30) NOT NULL,
@@ -122,7 +122,7 @@ CREATE TABLE "billing_invoices" (
 	CONSTRAINT "billing_invoices_invoice_number_unique" UNIQUE("invoice_number")
 );
 --> statement-breakpoint
-CREATE TABLE "tenant_access_grants" (
+CREATE TABLE IF NOT EXISTS "tenant_access_grants" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"grant_type" "tenant_access_grant_type" DEFAULT 'trial' NOT NULL,
@@ -143,7 +143,7 @@ CREATE TABLE "tenant_access_grants" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "appointments" (
+CREATE TABLE IF NOT EXISTS "appointments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"patient_id" uuid NOT NULL,
@@ -161,60 +161,60 @@ CREATE TABLE "appointments" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "custom_role_id" uuid;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "two_fa_secret_encrypted" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "two_fa_confirmed_at" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "staff_invitations" ADD COLUMN "custom_role_id" uuid;--> statement-breakpoint
-ALTER TABLE "patient_check_ins" ADD COLUMN "side_effects" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
-ALTER TABLE "patient_check_ins" ADD COLUMN "adherence_self_report" text;--> statement-breakpoint
-ALTER TABLE "patient_check_ins" ADD COLUMN "adherence_skip_reason" text;--> statement-breakpoint
-ALTER TABLE "patient_check_ins" ADD COLUMN "energy_level" text;--> statement-breakpoint
-ALTER TABLE "patient_check_ins" ADD COLUMN "sleep_quality" text;--> statement-breakpoint
-ALTER TABLE "patient_check_ins" ADD COLUMN "treatment_perception" text;--> statement-breakpoint
-ALTER TABLE "locations" ADD COLUMN "formatted_address" text;--> statement-breakpoint
-ALTER TABLE "locations" ADD COLUMN "google_place_id" varchar(255);--> statement-breakpoint
-ALTER TABLE "locations" ADD COLUMN "latitude" real;--> statement-breakpoint
-ALTER TABLE "locations" ADD COLUMN "longitude" real;--> statement-breakpoint
-ALTER TABLE "locations" ADD COLUMN "maps_url" text;--> statement-breakpoint
-ALTER TABLE "custom_roles" ADD CONSTRAINT "custom_roles_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "platform_password_tickets" ADD CONSTRAINT "platform_password_tickets_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "platform_password_tickets" ADD CONSTRAINT "platform_password_tickets_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "platform_password_tickets" ADD CONSTRAINT "platform_password_tickets_resolved_by_users_id_fk" FOREIGN KEY ("resolved_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_external_submissions" ADD CONSTRAINT "lab_external_submissions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_external_submissions" ADD CONSTRAINT "lab_external_submissions_order_id_lab_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."lab_orders"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_external_submissions" ADD CONSTRAINT "lab_external_submissions_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_external_submissions" ADD CONSTRAINT "lab_external_submissions_reviewed_by_users_id_fk" FOREIGN KEY ("reviewed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_extracted_values" ADD CONSTRAINT "lab_extracted_values_submission_id_lab_external_submissions_id_fk" FOREIGN KEY ("submission_id") REFERENCES "public"."lab_external_submissions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_extracted_values" ADD CONSTRAINT "lab_extracted_values_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_submission_files" ADD CONSTRAINT "lab_submission_files_submission_id_lab_external_submissions_id_fk" FOREIGN KEY ("submission_id") REFERENCES "public"."lab_external_submissions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_submission_files" ADD CONSTRAINT "lab_submission_files_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lab_submission_files" ADD CONSTRAINT "lab_submission_files_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tenant_access_grants" ADD CONSTRAINT "tenant_access_grants_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tenant_access_grants" ADD CONSTRAINT "tenant_access_grants_granted_by_users_id_fk" FOREIGN KEY ("granted_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tenant_access_grants" ADD CONSTRAINT "tenant_access_grants_revoked_by_users_id_fk" FOREIGN KEY ("revoked_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_doctor_id_users_id_fk" FOREIGN KEY ("doctor_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "custom_roles_tenant_id_idx" ON "custom_roles" USING btree ("tenant_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "custom_roles_tenant_name_uidx" ON "custom_roles" USING btree ("tenant_id","name");--> statement-breakpoint
-CREATE INDEX "ppt_status_idx" ON "platform_password_tickets" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "ppt_user_idx" ON "platform_password_tickets" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "ppt_tenant_idx" ON "platform_password_tickets" USING btree ("tenant_id");--> statement-breakpoint
-CREATE INDEX "ppt_created_at_idx" ON "platform_password_tickets" USING btree ("created_at");--> statement-breakpoint
-CREATE INDEX "lab_ext_sub_tenant_idx" ON "lab_external_submissions" USING btree ("tenant_id");--> statement-breakpoint
-CREATE INDEX "lab_ext_sub_patient_idx" ON "lab_external_submissions" USING btree ("tenant_id","patient_id");--> statement-breakpoint
-CREATE INDEX "lab_ext_sub_order_idx" ON "lab_external_submissions" USING btree ("order_id");--> statement-breakpoint
-CREATE INDEX "lab_ext_sub_status_idx" ON "lab_external_submissions" USING btree ("tenant_id","status");--> statement-breakpoint
-CREATE INDEX "lab_extracted_submission_idx" ON "lab_extracted_values" USING btree ("submission_id");--> statement-breakpoint
-CREATE INDEX "lab_sub_files_submission_idx" ON "lab_submission_files" USING btree ("submission_id");--> statement-breakpoint
-CREATE INDEX "tenant_access_grants_tenant_status_idx" ON "tenant_access_grants" USING btree ("tenant_id","status","ends_at");--> statement-breakpoint
-CREATE INDEX "tenant_access_grants_granted_by_idx" ON "tenant_access_grants" USING btree ("granted_by");--> statement-breakpoint
-CREATE INDEX "appointments_tenant_idx" ON "appointments" USING btree ("tenant_id");--> statement-breakpoint
-CREATE INDEX "appointments_patient_idx" ON "appointments" USING btree ("patient_id");--> statement-breakpoint
-CREATE INDEX "appointments_doctor_idx" ON "appointments" USING btree ("doctor_id");--> statement-breakpoint
-CREATE INDEX "appointments_scheduled_at_idx" ON "appointments" USING btree ("tenant_id","scheduled_at");--> statement-breakpoint
-CREATE INDEX "appointments_status_idx" ON "appointments" USING btree ("tenant_id","status");
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "custom_role_id" uuid;--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "two_fa_secret_encrypted" text;--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "two_fa_confirmed_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "staff_invitations" ADD COLUMN IF NOT EXISTS "custom_role_id" uuid;--> statement-breakpoint
+ALTER TABLE "patient_check_ins" ADD COLUMN IF NOT EXISTS "side_effects" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "patient_check_ins" ADD COLUMN IF NOT EXISTS "adherence_self_report" text;--> statement-breakpoint
+ALTER TABLE "patient_check_ins" ADD COLUMN IF NOT EXISTS "adherence_skip_reason" text;--> statement-breakpoint
+ALTER TABLE "patient_check_ins" ADD COLUMN IF NOT EXISTS "energy_level" text;--> statement-breakpoint
+ALTER TABLE "patient_check_ins" ADD COLUMN IF NOT EXISTS "sleep_quality" text;--> statement-breakpoint
+ALTER TABLE "patient_check_ins" ADD COLUMN IF NOT EXISTS "treatment_perception" text;--> statement-breakpoint
+ALTER TABLE "locations" ADD COLUMN IF NOT EXISTS "formatted_address" text;--> statement-breakpoint
+ALTER TABLE "locations" ADD COLUMN IF NOT EXISTS "google_place_id" varchar(255);--> statement-breakpoint
+ALTER TABLE "locations" ADD COLUMN IF NOT EXISTS "latitude" real;--> statement-breakpoint
+ALTER TABLE "locations" ADD COLUMN IF NOT EXISTS "longitude" real;--> statement-breakpoint
+ALTER TABLE "locations" ADD COLUMN IF NOT EXISTS "maps_url" text;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "custom_roles" ADD CONSTRAINT "custom_roles_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "platform_password_tickets" ADD CONSTRAINT "platform_password_tickets_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "platform_password_tickets" ADD CONSTRAINT "platform_password_tickets_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "platform_password_tickets" ADD CONSTRAINT "platform_password_tickets_resolved_by_users_id_fk" FOREIGN KEY ("resolved_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_external_submissions" ADD CONSTRAINT "lab_external_submissions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_external_submissions" ADD CONSTRAINT "lab_external_submissions_order_id_lab_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."lab_orders"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_external_submissions" ADD CONSTRAINT "lab_external_submissions_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE restrict ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_external_submissions" ADD CONSTRAINT "lab_external_submissions_reviewed_by_users_id_fk" FOREIGN KEY ("reviewed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_extracted_values" ADD CONSTRAINT "lab_extracted_values_submission_id_lab_external_submissions_id_fk" FOREIGN KEY ("submission_id") REFERENCES "public"."lab_external_submissions"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_extracted_values" ADD CONSTRAINT "lab_extracted_values_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_submission_files" ADD CONSTRAINT "lab_submission_files_submission_id_lab_external_submissions_id_fk" FOREIGN KEY ("submission_id") REFERENCES "public"."lab_external_submissions"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_submission_files" ADD CONSTRAINT "lab_submission_files_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "lab_submission_files" ADD CONSTRAINT "lab_submission_files_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE restrict ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE no action ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "billing_invoices" ADD CONSTRAINT "billing_invoices_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "tenant_access_grants" ADD CONSTRAINT "tenant_access_grants_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "tenant_access_grants" ADD CONSTRAINT "tenant_access_grants_granted_by_users_id_fk" FOREIGN KEY ("granted_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "tenant_access_grants" ADD CONSTRAINT "tenant_access_grants_revoked_by_users_id_fk" FOREIGN KEY ("revoked_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "appointments" ADD CONSTRAINT "appointments_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "appointments" ADD CONSTRAINT "appointments_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE restrict ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "appointments" ADD CONSTRAINT "appointments_doctor_id_users_id_fk" FOREIGN KEY ("doctor_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "appointments" ADD CONSTRAINT "appointments_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+DO $$ BEGIN ALTER TABLE "appointments" ADD CONSTRAINT "appointments_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "custom_roles_tenant_id_idx" ON "custom_roles" USING btree ("tenant_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "custom_roles_tenant_name_uidx" ON "custom_roles" USING btree ("tenant_id","name");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "ppt_status_idx" ON "platform_password_tickets" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "ppt_user_idx" ON "platform_password_tickets" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "ppt_tenant_idx" ON "platform_password_tickets" USING btree ("tenant_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "ppt_created_at_idx" ON "platform_password_tickets" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "lab_ext_sub_tenant_idx" ON "lab_external_submissions" USING btree ("tenant_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "lab_ext_sub_patient_idx" ON "lab_external_submissions" USING btree ("tenant_id","patient_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "lab_ext_sub_order_idx" ON "lab_external_submissions" USING btree ("order_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "lab_ext_sub_status_idx" ON "lab_external_submissions" USING btree ("tenant_id","status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "lab_extracted_submission_idx" ON "lab_extracted_values" USING btree ("submission_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "lab_sub_files_submission_idx" ON "lab_submission_files" USING btree ("submission_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "tenant_access_grants_tenant_status_idx" ON "tenant_access_grants" USING btree ("tenant_id","status","ends_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "tenant_access_grants_granted_by_idx" ON "tenant_access_grants" USING btree ("granted_by");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "appointments_tenant_idx" ON "appointments" USING btree ("tenant_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "appointments_patient_idx" ON "appointments" USING btree ("patient_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "appointments_doctor_idx" ON "appointments" USING btree ("doctor_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "appointments_scheduled_at_idx" ON "appointments" USING btree ("tenant_id","scheduled_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "appointments_status_idx" ON "appointments" USING btree ("tenant_id","status");
