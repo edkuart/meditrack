@@ -11,6 +11,7 @@ import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { UnauthorizedError, ConflictError, NotFoundError } from '../../shared/errors.ts'
 import type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput, UpdateProfileInput, PasswordHelpInput, AuthenticatedPasswordHelpInput } from './auth.schema.ts'
 import { normalizePermissions, resolveEffectivePermissions } from '../../shared/permissions.ts'
+import { getTenantEntitlements } from '../../shared/services/limits.service.ts'
 
 export async function register(input: RegisterInput) {
   const existingSlug = await db.query.tenants.findFirst({
@@ -33,6 +34,7 @@ export async function register(input: RegisterInput) {
     name: input.clinic_name,
     slug: input.clinic_slug,
     type: input.tenant_type ?? 'CLINIC',
+    settings: input.selected_plan ? { requested_plan: input.selected_plan } : {},
   }).returning()
 
   const [user] = await db.insert(users).values({
@@ -59,6 +61,7 @@ export async function register(input: RegisterInput) {
     action: 'USER_INVITED',
     resource_type: 'USER',
     resource_id: user.id,
+    context: input.selected_plan ? { requested_plan: input.selected_plan } : undefined,
   })
 
   return { user: await sanitizeUser(user), ...tokens }
@@ -406,7 +409,16 @@ async function issueTokenPair(
 }
 
 async function sanitizeUser(user: typeof users.$inferSelect) {
-  const { password_hash, access_pin_hash, ...safe } = user as typeof users.$inferSelect & { access_pin_hash?: string }
+  const safe = Object.fromEntries(
+    Object.entries(user).filter(([key]) => key !== 'password_hash' && key !== 'access_pin_hash'),
+  ) as Omit<typeof users.$inferSelect, 'password_hash'>
+  const [tenant, entitlements] = await Promise.all([
+    db.query.tenants.findFirst({
+      where: eq(tenants.id, safe.tenant_id),
+      columns: { type: true },
+    }),
+    getTenantEntitlements(safe.tenant_id),
+  ])
   const customRole = safe.custom_role_id
     ? await db.query.customRoles.findFirst({
         where: and(eq(customRoles.id, safe.custom_role_id), eq(customRoles.tenant_id, safe.tenant_id), eq(customRoles.is_active, true)),
@@ -415,6 +427,9 @@ async function sanitizeUser(user: typeof users.$inferSelect) {
     : null
   return {
     ...safe,
+    tenant_type: tenant?.type ?? 'CLINIC',
+    tenant_plan: entitlements.plan,
+    tenant_capabilities: entitlements.capabilities,
     custom_role: customRole ? { ...customRole, permissions: normalizePermissions(customRole.permissions) } : null,
     permissions: await resolveEffectivePermissions(safe.tenant_id, safe.role, safe.custom_role_id),
   }

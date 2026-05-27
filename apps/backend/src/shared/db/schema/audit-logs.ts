@@ -64,6 +64,8 @@ export const auditActionEnum = pgEnum('audit_action', [
   // Billing
   'BILLING_CHECKOUT_STARTED',
   'BILLING_PLAN_CHANGED',
+  'BILLING_INVOICE_PAID_MANUAL',
+  'BILLING_INVOICE_CANCELLED',
   // Compliance
   'CONSENT_RECORDED',
   'CONSENT_WITHDRAWN',

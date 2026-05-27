@@ -6,13 +6,18 @@ import {
   AdminMfaVerifySchema,
   ListAdminAuditLogsQuerySchema,
   RejectDoctorSchema,
+  UpdateUserStatusSchema,
   ListUsersQuerySchema,
   ListTenantsQuerySchema,
+  ListCommercialAccountsQuerySchema,
   ListPasswordTicketsQuerySchema,
   UpdateTenantSchema,
+  CreateTenantAccessGrantSchema,
+  RevokeTenantAccessGrantSchema,
   UpdatePasswordTicketSchema,
 } from './admin.schema.ts'
 import * as adminService from './admin.service.ts'
+import { adminListInvoices, adminMarkInvoicePaid, adminCancelInvoice } from '../billing/billing.service.ts'
 import { requireAuth, requireRole } from '../../shared/middleware/auth.middleware.ts'
 import { rateLimit } from '../../shared/middleware/rate-limit.middleware.ts'
 import { UnauthorizedError } from '../../shared/errors.ts'
@@ -133,6 +138,13 @@ router.post('/admin/users/:id/reject', zValidator('json', RejectDoctorSchema), a
   return c.json({ success: true, data: result })
 })
 
+router.patch('/admin/users/:id/status', zValidator('json', UpdateUserStatusSchema), async (c) => {
+  const userId = c.req.param('id')
+  const adminId = c.get('auth').sub
+  const result = await adminService.updateUserStatus(userId, c.req.valid('json'), adminId)
+  return c.json({ success: true, data: result })
+})
+
 // ─── Tenants ───────────────────────────────────────────────────────────────────
 
 router.get('/admin/tenants', zValidator('query', ListTenantsQuerySchema), async (c) => {
@@ -147,6 +159,61 @@ router.patch('/admin/tenants/:id', zValidator('json', UpdateTenantSchema), async
   const body = c.req.valid('json')
   const result = await adminService.updateTenant(tenantId, body, adminId)
   return c.json({ success: true, data: result })
+})
+
+// ─── Commercial access control ────────────────────────────────────────────────
+
+router.get('/admin/commercial/accounts', zValidator('query', ListCommercialAccountsQuerySchema), async (c) => {
+  const query = c.req.valid('query')
+  const result = await adminService.listCommercialAccounts(query)
+  return c.json({ success: true, ...result })
+})
+
+router.post('/admin/commercial/access-grants/expire', async (c) => {
+  await adminService.expireExpiredTenantAccessGrants()
+  return c.json({ success: true, data: { message: 'Expired grants updated' } })
+})
+
+router.post('/admin/tenants/:id/access-grants', zValidator('json', CreateTenantAccessGrantSchema), async (c) => {
+  const tenantId = c.req.param('id')
+  const adminId = c.get('auth').sub
+  const result = await adminService.createTenantAccessGrant(tenantId, c.req.valid('json'), adminId)
+  return c.json({ success: true, data: result }, 201)
+})
+
+router.post('/admin/access-grants/:id/revoke', zValidator('json', RevokeTenantAccessGrantSchema), async (c) => {
+  const grantId = c.req.param('id')
+  const adminId = c.get('auth').sub
+  const result = await adminService.revokeTenantAccessGrant(grantId, c.req.valid('json'), adminId)
+  return c.json({ success: true, data: result })
+})
+
+// ─── Billing (invoice management) ─────────────────────────────────────────────
+
+router.get('/admin/billing/invoices', async (c) => {
+  const page = Number(c.req.query('page') ?? '1')
+  const pageSize = Math.min(Number(c.req.query('pageSize') ?? '30'), 100)
+  const status = c.req.query('status')
+  const tenantId = c.req.query('tenantId')
+  const q = c.req.query('q')
+  const result = await adminListInvoices({ page, pageSize, status, tenantId, q })
+  return c.json({ success: true, data: result })
+})
+
+router.post('/admin/billing/invoices/:id/mark-paid', async (c) => {
+  const invoiceId = c.req.param('id')
+  const adminId = c.get('auth').sub
+  const body = await c.req.json().catch(() => ({})) as { notes?: string }
+  await adminMarkInvoicePaid(invoiceId, adminId, body.notes)
+  return c.json({ success: true, data: { message: 'Invoice marked as paid' } })
+})
+
+router.post('/admin/billing/invoices/:id/cancel', async (c) => {
+  const invoiceId = c.req.param('id')
+  const adminId = c.get('auth').sub
+  const body = await c.req.json().catch(() => ({})) as { notes?: string }
+  await adminCancelInvoice(invoiceId, adminId, body.notes)
+  return c.json({ success: true, data: { message: 'Invoice cancelled' } })
 })
 
 function setAdminSessionCookies(c: Parameters<typeof setCookie>[0], accessToken: string, refreshToken: string) {

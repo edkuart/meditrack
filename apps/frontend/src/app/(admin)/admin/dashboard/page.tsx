@@ -5,18 +5,20 @@ import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ShieldCheck, Users, Building2, Clock, CheckCircle2,
-  XCircle, LogOut, ChevronRight, Loader2, AlertTriangle,
-  KeyRound, FileClock,
+  XCircle, LogOut, Loader2, AlertTriangle,
+  KeyRound, FileClock, Gift, Sparkles,
 } from 'lucide-react'
 import {
   clearAdminSession,
-  fetchMetrics, fetchUsers, verifyDoctor, rejectDoctor, fetchTenants, updateTenant,
+  fetchMetrics, fetchUsers, verifyDoctor, rejectDoctor, updateAdminUserStatus, fetchTenants, updateTenant,
   fetchPasswordTickets, updatePasswordTicket, issuePasswordResetLink,
-  fetchAdminAuditLogs,
-  type PendingDoctor, type Tenant, type AdminMetrics, type PasswordTicket, type PasswordTicketStatus, type AdminAuditLog,
+  fetchAdminAuditLogs, fetchCommercialAccounts, grantTenantAccess, revokeTenantAccessGrant, expireCommercialAccessGrants,
+  markAdminInvoicePaid, cancelAdminInvoice,
+  type PendingDoctor, type Tenant, type AdminMetrics, type PasswordTicket, type PasswordTicketStatus,
+  type AdminAuditLog, type CommercialAccount, type AccessGrantDuration, type PlanType, type CommercialSummary,
 } from '@/lib/admin/admin-api'
 
-type Tab = 'pending' | 'tickets' | 'tenants' | 'audit'
+type Tab = 'pending' | 'tickets' | 'tenants' | 'commercial' | 'audit'
 
 function StatCard({ label, value, icon: Icon, accent }: {
   label: string; value: number; icon: React.ElementType; accent: string
@@ -42,10 +44,11 @@ function StatCard({ label, value, icon: Icon, accent }: {
   )
 }
 
-function DoctorRow({ doctor, onVerify, onReject }: {
+function DoctorRow({ doctor, onVerify, onReject, onStatusChange }: {
   doctor: PendingDoctor
   onVerify: (id: string) => void
   onReject: (id: string) => void
+  onStatusChange: (id: string, isActive: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const isRejected = !!doctor.verification_rejected_at
@@ -62,6 +65,21 @@ function DoctorRow({ doctor, onVerify, onReject }: {
     try { await rejectDoctor(doctor.id, reason); onReject(doctor.id) } finally { setBusy(false) }
   }
 
+  async function handleToggleActive() {
+    const nextActive = !doctor.is_active
+    const reason = nextActive
+      ? window.prompt('Nota interna de reactivación (opcional):') ?? undefined
+      : window.prompt('Razón para desactivar este usuario (mínimo 10 caracteres):')
+    if (!nextActive && (!reason || reason.trim().length < 10)) return
+    setBusy(true)
+    try {
+      await updateAdminUserStatus(doctor.id, nextActive, reason?.trim() || undefined)
+      onStatusChange(doctor.id, nextActive)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div style={{
       background: '#1e293b', border: '1px solid #334155',
@@ -75,10 +93,22 @@ function DoctorRow({ doctor, onVerify, onReject }: {
           </div>
           <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{doctor.email}</div>
         </div>
-        {isRejected
-          ? <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(239,68,68,.15)', color: '#f87171', fontWeight: 500, flexShrink: 0 }}>Rechazado</span>
-          : <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(251,191,36,.12)', color: '#fbbf24', fontWeight: 500, flexShrink: 0 }}>Pendiente</span>
-        }
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {isRejected
+            ? <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(239,68,68,.15)', color: '#f87171', fontWeight: 500, flexShrink: 0 }}>Rechazado</span>
+            : doctor.is_verified
+              ? <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(52,211,153,.12)', color: '#34d399', fontWeight: 500, flexShrink: 0 }}>Verificado</span>
+              : <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(251,191,36,.12)', color: '#fbbf24', fontWeight: 500, flexShrink: 0 }}>Pendiente</span>
+          }
+          <span style={{
+            fontSize: 11, padding: '3px 10px', borderRadius: 999,
+            background: doctor.is_active ? 'rgba(96,165,250,.12)' : 'rgba(239,68,68,.12)',
+            color: doctor.is_active ? '#60a5fa' : '#f87171',
+            fontWeight: 500, flexShrink: 0,
+          }}>
+            {doctor.is_active ? 'Activo' : 'Inactivo'}
+          </span>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -87,6 +117,7 @@ function DoctorRow({ doctor, onVerify, onReject }: {
           { l: 'Especialidad', v: doctor.specialty },
           { l: 'Cédula', v: doctor.professional_id },
           { l: 'Clínica', v: doctor.tenant?.name },
+          { l: 'Rol', v: doctor.role },
         ].map(item => item.v && (
           <div key={item.l}>
             <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>{item.l}</div>
@@ -142,8 +173,24 @@ function DoctorRow({ doctor, onVerify, onReject }: {
         </div>
       )}
 
+      <button
+        onClick={handleToggleActive}
+        disabled={busy}
+        style={{
+          height: 34, borderRadius: 8,
+          border: doctor.is_active ? '1px solid rgba(239,68,68,.4)' : '1px solid rgba(52,211,153,.4)',
+          background: 'transparent',
+          color: doctor.is_active ? '#f87171' : '#34d399',
+          fontSize: 12, fontWeight: 700,
+          cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1,
+        }}
+      >
+        {doctor.is_active ? 'Desactivar usuario' : 'Reactivar usuario'}
+      </button>
+
       <div style={{ fontSize: 11, color: '#334155' }}>
         Registrado: {new Date(doctor.created_at).toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })}
+        {doctor.last_login_at ? ` · Último login: ${new Date(doctor.last_login_at).toLocaleDateString('es-GT')}` : ''}
       </div>
     </div>
   )
@@ -207,7 +254,10 @@ function PasswordTicketRow({ ticket, onUpdate }: {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <div>
           <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Clínica</div>
-          <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 1 }}>{ticket.tenant?.name ?? 'Sin clínica'}</div>
+          <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 1 }}>
+            {ticket.tenant?.name ?? 'Sin clínica'}
+            {ticket.support_context?.tenant_status ? ` · ${planLabels[ticket.support_context.tenant_status.plan_type] ?? ticket.support_context.tenant_status.plan_type}` : ''}
+          </div>
         </div>
         <div>
           <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Origen</div>
@@ -216,6 +266,54 @@ function PasswordTicketRow({ ticket, onUpdate }: {
           </div>
         </div>
       </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+        {[
+          {
+            label: 'Usuario',
+            value: ticket.support_context?.user_status
+              ? `${ticket.support_context.user_status.is_active ? 'Activo' : 'Inactivo'} · ${ticket.support_context.user_status.is_verified ? 'Verificado' : 'No verificado'}`
+              : 'No vinculado',
+          },
+          {
+            label: 'Tenant',
+            value: ticket.support_context?.tenant_status?.status ?? 'Sin tenant',
+          },
+          {
+            label: 'Tickets abiertos',
+            value: String(ticket.support_context?.open_tickets_for_email ?? 0),
+          },
+          {
+            label: 'Último login',
+            value: ticket.support_context?.user_status?.last_login_at
+              ? new Date(ticket.support_context.user_status.last_login_at).toLocaleDateString('es-GT')
+              : 'Sin actividad',
+          },
+        ].map(item => (
+          <div key={item.label} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 10px' }}>
+            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>{item.label}</div>
+            <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 4, fontWeight: 700 }}>{item.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {!!ticket.support_context?.recent_audit.length && (
+        <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 10px' }}>
+          <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700, marginBottom: 6 }}>
+            Auditoría reciente del tenant
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {ticket.support_context.recent_audit.map(event => (
+              <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, color: '#94a3b8' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {event.action} · {event.resource_type}
+                </span>
+                <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{new Date(event.created_at).toLocaleDateString('es-GT')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {ticket.message && (
         <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#cbd5e1', lineHeight: 1.5 }}>
@@ -341,12 +439,456 @@ function AuditLogRow({ log }: { log: AdminAuditLog }) {
   )
 }
 
+const planLabels: Record<string, string> = {
+  free: 'Sin plan',
+  doctor_individual: 'Doctor Individual',
+  clinic_complete: 'Clínica Completa',
+  pro: 'Pro legacy',
+  enterprise: 'Enterprise',
+}
+
+function CommercialAccountRow({ account, onRefresh }: {
+  account: CommercialAccount
+  onRefresh: () => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [draftDuration, setDraftDuration] = useState<AccessGrantDuration | null>(null)
+  const [draftPlan, setDraftPlan] = useState<Extract<PlanType, 'doctor_individual' | 'clinic_complete'>>('clinic_complete')
+  const [draftEndsAt, setDraftEndsAt] = useState('')
+  const [draftReason, setDraftReason] = useState('')
+  const [draftNotes, setDraftNotes] = useState('')
+  const [draftMaxAi, setDraftMaxAi] = useState('')
+  const [draftMaxOrganizations, setDraftMaxOrganizations] = useState('')
+  const [draftMaxStaff, setDraftMaxStaff] = useState('')
+  const [draftMaxPatients, setDraftMaxPatients] = useState('')
+  const [revokeReason, setRevokeReason] = useState('')
+  const [invoiceNotes, setInvoiceNotes] = useState('')
+  const [formError, setFormError] = useState('')
+  const { tenant, owner, active_grant: activeGrant, usage } = account
+  const aiLimit = usage.ai.limit === -1 ? '∞' : usage.ai.limit.toLocaleString('es-GT')
+  const aiUsed = usage.ai.used.toLocaleString('es-GT')
+  const trialEnds = activeGrant ? new Date(activeGrant.ends_at) : null
+  const stateBadge = commercialStateBadge(account.commercial_state.trial_status)
+  const latestInvoice = account.billing.latest_invoice
+  const pendingInvoice = account.billing.latest_pending_invoice
+
+  function startGrant(duration: AccessGrantDuration) {
+    setDraftDuration(duration)
+    setFormError('')
+    setDraftReason('')
+    setDraftNotes('')
+    setDraftEndsAt('')
+    setDraftMaxAi('')
+    setDraftMaxOrganizations('')
+    setDraftMaxStaff('')
+    setDraftMaxPatients('')
+  }
+
+  async function submitGrant() {
+    if (!draftDuration) return
+    if (draftReason.trim().length < 10) {
+      setFormError('Agrega una razón comercial de al menos 10 caracteres.')
+      return
+    }
+    if (draftDuration === 'custom' && !draftEndsAt) {
+      setFormError('Selecciona la fecha final para la prueba personalizada.')
+      return
+    }
+
+    setBusy(true)
+    setFormError('')
+    try {
+      await grantTenantAccess(tenant.id, {
+        grant_type: 'trial',
+        plan_type: draftPlan,
+        duration: draftDuration,
+        ends_at: draftDuration === 'custom' ? new Date(draftEndsAt).toISOString() : undefined,
+        reason: draftReason.trim(),
+        notes: draftNotes.trim() || undefined,
+        max_ai_units_monthly: parseOptionalPositiveInt(draftMaxAi),
+        max_organizations: parseOptionalPositiveInt(draftMaxOrganizations),
+        max_staff: parseOptionalPositiveInt(draftMaxStaff),
+        max_patients: parseOptionalPositiveInt(draftMaxPatients),
+      })
+      setDraftDuration(null)
+      await onRefresh()
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'No se pudo conceder la prueba.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function revoke() {
+    if (!activeGrant) return
+    if (revokeReason.trim().length < 10) {
+      setFormError('Agrega una razón de revocación de al menos 10 caracteres.')
+      return
+    }
+    setBusy(true)
+    setFormError('')
+    try {
+      await revokeTenantAccessGrant(activeGrant.id, revokeReason.trim())
+      setRevokeReason('')
+      await onRefresh()
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'No se pudo revocar la prueba.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function markPendingInvoicePaid() {
+    if (!pendingInvoice) return
+    setBusy(true)
+    setFormError('')
+    try {
+      await markAdminInvoicePaid(pendingInvoice.id, invoiceNotes.trim() || undefined)
+      setInvoiceNotes('')
+      await onRefresh()
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'No se pudo marcar la factura como pagada.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function cancelPendingInvoice() {
+    if (!pendingInvoice) return
+    setBusy(true)
+    setFormError('')
+    try {
+      await cancelAdminInvoice(pendingInvoice.id, invoiceNotes.trim() || undefined)
+      setInvoiceNotes('')
+      await onRefresh()
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'No se pudo cancelar la factura.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{
+      background: '#1e293b',
+      border: '1px solid #334155',
+      borderRadius: 10,
+      padding: '16px 18px',
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1.35fr) minmax(220px, .85fr)',
+      gap: 18,
+    }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#f8fafc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {tenant.name}
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              /{tenant.slug} · {owner ? `${owner.first_name} ${owner.last_name}` : 'Sin owner'}
+            </div>
+          </div>
+          <span style={{
+            fontSize: 11,
+            padding: '3px 10px',
+            borderRadius: 999,
+            background: stateBadge.bg,
+            color: stateBadge.color,
+            fontWeight: 700,
+            flexShrink: 0,
+          }}>
+            {stateBadge.label}
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, marginTop: 14 }}>
+          {[
+            { label: 'Plan efectivo', value: planLabels[usage.ai.plan] ?? usage.ai.plan },
+            { label: 'Organizaciones', value: usage.organizations.toLocaleString('es-GT') },
+            { label: 'Staff', value: usage.staff.toLocaleString('es-GT') },
+            { label: 'Pacientes', value: usage.patients.toLocaleString('es-GT') },
+            { label: 'IA mensual', value: `${aiUsed} / ${aiLimit}` },
+            { label: 'Cobrado', value: formatGTQ(account.billing.revenue_paid_gtq) },
+            { label: 'Pendiente', value: formatGTQ(account.billing.revenue_pending_gtq) },
+          ].map(item => (
+            <div key={item.label} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>{item.label}</div>
+              <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 4, fontWeight: 700 }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {activeGrant && trialEnds && (
+          <div style={{ marginTop: 12, fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>
+            Acceso temporal hasta <strong style={{ color: '#f8fafc' }}>{trialEnds.toLocaleString('es-GT', { dateStyle: 'medium', timeStyle: 'short' })}</strong>
+            {account.commercial_state.days_remaining !== null ? ` · ${account.commercial_state.days_remaining} días restantes` : ''}
+            {activeGrant.reason ? ` · ${activeGrant.reason}` : ''}
+          </div>
+        )}
+
+        {account.grant_history.length > 0 && (
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>Historial reciente</div>
+            {account.grant_history.slice(0, 3).map(grant => (
+              <div key={grant.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12, color: '#94a3b8' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {planLabels[grant.plan_type] ?? grant.plan_type} · {grant.status}
+                </span>
+                <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>
+                  {new Date(grant.ends_at).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {latestInvoice && (
+          <div style={{ marginTop: 12, border: '1px solid #334155', borderRadius: 8, background: '#0f172a', padding: '9px 11px', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 800 }}>Última factura</div>
+              <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {latestInvoice.invoice_number} · {latestInvoice.status} · {latestInvoice.provider}
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: '#f8fafc', fontWeight: 800, whiteSpace: 'nowrap' }}>
+              {formatGTQ(Number(latestInvoice.amount_gtq))}
+            </div>
+          </div>
+        )}
+
+        {pendingInvoice && (
+          <div style={{ marginTop: 10, border: '1px solid rgba(251,191,36,.3)', borderRadius: 8, background: 'rgba(251,191,36,.08)', padding: '10px 11px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 800 }}>Factura pendiente</div>
+                <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {pendingInvoice.invoice_number} · {planLabels[pendingInvoice.plan_type] ?? pendingInvoice.plan_type}
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: '#f8fafc', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                {formatGTQ(Number(pendingInvoice.amount_gtq))}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={invoiceNotes}
+                onChange={event => setInvoiceNotes(event.target.value)}
+                placeholder="Nota interna"
+                style={{ ...commercialInputStyle, flex: 1, minWidth: 0 }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={markPendingInvoicePaid} disabled={busy} style={{ ...commercialButtonStyle('#34d399', busy), flex: 1 }}>
+                Marcar pagada
+              </button>
+              <button onClick={cancelPendingInvoice} disabled={busy} style={commercialButtonStyle('#ef4444', busy)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#f8fafc', fontSize: 13, fontWeight: 700 }}>
+          <Gift size={15} color="#f472b6" />
+          Acceso de prueba
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+          {([
+            ['1_day', '1 día'],
+            ['7_days', '1 semana'],
+            ['30_days', '1 mes'],
+            ['365_days', '1 año'],
+            ['custom', 'Personalizada'],
+          ] as Array<[AccessGrantDuration, string]>).map(([duration, label]) => (
+            <button
+              key={duration}
+              onClick={() => startGrant(duration)}
+              disabled={busy}
+              style={commercialButtonStyle(draftDuration === duration ? '#f472b6' : '#60a5fa', busy)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {draftDuration && (
+          <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setDraftPlan('doctor_individual')}
+                style={commercialButtonStyle(draftPlan === 'doctor_individual' ? '#34d399' : '#64748b', busy)}
+              >
+                Doctor
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftPlan('clinic_complete')}
+                style={commercialButtonStyle(draftPlan === 'clinic_complete' ? '#34d399' : '#64748b', busy)}
+              >
+                Clínica
+              </button>
+            </div>
+
+            {draftDuration === 'custom' && (
+              <input
+                type="datetime-local"
+                value={draftEndsAt}
+                onChange={event => setDraftEndsAt(event.target.value)}
+                style={commercialInputStyle}
+              />
+            )}
+
+            <textarea
+              value={draftReason}
+              onChange={event => setDraftReason(event.target.value)}
+              placeholder="Razón comercial de la prueba"
+              rows={2}
+              style={{ ...commercialInputStyle, minHeight: 64, resize: 'vertical' }}
+            />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input value={draftMaxOrganizations} onChange={event => setDraftMaxOrganizations(event.target.value)} placeholder="Orgs max." inputMode="numeric" style={commercialInputStyle} />
+              <input value={draftMaxAi} onChange={event => setDraftMaxAi(event.target.value)} placeholder="IA max." inputMode="numeric" style={commercialInputStyle} />
+              <input value={draftMaxStaff} onChange={event => setDraftMaxStaff(event.target.value)} placeholder="Staff max." inputMode="numeric" style={commercialInputStyle} />
+              <input value={draftMaxPatients} onChange={event => setDraftMaxPatients(event.target.value)} placeholder="Pacientes max." inputMode="numeric" style={commercialInputStyle} />
+            </div>
+
+            <input
+              value={draftNotes}
+              onChange={event => setDraftNotes(event.target.value)}
+              placeholder="Notas internas opcionales"
+              style={commercialInputStyle}
+            />
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={submitGrant} disabled={busy} style={{ ...commercialButtonStyle('#34d399', busy), flex: 1 }}>
+                Conceder
+              </button>
+              <button onClick={() => setDraftDuration(null)} disabled={busy} style={commercialButtonStyle('#64748b', busy)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeGrant && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <input
+              value={revokeReason}
+              onChange={event => setRevokeReason(event.target.value)}
+              placeholder="Razón para revocar"
+              style={commercialInputStyle}
+            />
+            <button
+              onClick={revoke}
+              disabled={busy}
+              style={{ ...commercialButtonStyle('#ef4444', busy), width: '100%' }}
+            >
+              Revocar prueba
+            </button>
+          </div>
+        )}
+
+        {formError && (
+          <div style={{ fontSize: 12, color: '#f87171', lineHeight: 1.4 }}>
+            {formError}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function commercialButtonStyle(color: string, busy: boolean): CSSProperties {
+  return {
+    height: 34,
+    padding: '0 10px',
+    borderRadius: 8,
+    border: `1px solid ${color}66`,
+    background: `${color}18`,
+    color,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: busy ? 'not-allowed' : 'pointer',
+    opacity: busy ? 0.7 : 1,
+  }
+}
+
+function commercialStateBadge(status: CommercialAccount['commercial_state']['trial_status']) {
+  if (status === 'active') return { label: 'Prueba activa', bg: 'rgba(52,211,153,.12)', color: '#34d399' }
+  if (status === 'expiring') return { label: 'Por vencer', bg: 'rgba(251,191,36,.13)', color: '#fbbf24' }
+  if (status === 'expired') return { label: 'Prueba vencida', bg: 'rgba(239,68,68,.12)', color: '#f87171' }
+  if (status === 'converted') return { label: 'Convertida', bg: 'rgba(167,139,250,.14)', color: '#a78bfa' }
+  return { label: 'Sin prueba', bg: 'rgba(96,165,250,.12)', color: '#60a5fa' }
+}
+
+function formatGTQ(value: number) {
+  return `Q${value.toLocaleString('es-GT', { maximumFractionDigits: 0 })}`
+}
+
+function CommercialSummaryCards({ summary }: { summary: CommercialSummary | null }) {
+  const cards = [
+    { label: 'Trials activas', value: summary?.trials.active ?? 0, color: '#34d399' },
+    { label: 'Por vencer', value: summary?.trials.expiring ?? 0, color: '#fbbf24' },
+    { label: 'Convertidas', value: summary?.trials.converted ?? 0, color: '#a78bfa' },
+    { label: 'Conversión', value: `${summary?.trials.conversion_rate ?? 0}%`, color: '#60a5fa' },
+    { label: 'Tenants pagados', value: summary?.paid_tenants.total ?? 0, color: '#f472b6' },
+    { label: 'Cobrado total', value: formatGTQ(summary?.revenue.paid_total_gtq ?? 0), color: '#34d399' },
+    { label: 'Cobrado mes', value: formatGTQ(summary?.revenue.paid_this_month_gtq ?? 0), color: '#60a5fa' },
+    { label: 'Pendiente', value: formatGTQ(summary?.revenue.pending_gtq ?? 0), color: '#fbbf24' },
+  ]
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 }}>
+      {cards.map(card => (
+        <div key={card.label} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 800 }}>{card.label}</div>
+          <div style={{ fontSize: 22, color: card.color, fontWeight: 800, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{card.value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const commercialInputStyle: CSSProperties = {
+  width: '100%',
+  boxSizing: 'border-box',
+  borderRadius: 8,
+  border: '1px solid #334155',
+  background: '#020617',
+  color: '#cbd5e1',
+  padding: '8px 10px',
+  fontSize: 12,
+  lineHeight: 1.4,
+  outline: 'none',
+}
+
+function parseOptionalPositiveInt(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = Number(trimmed)
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error('Los overrides numéricos deben ser enteros positivos.')
+  }
+  return parsed
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('pending')
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null)
   const [doctors, setDoctors] = useState<PendingDoctor[]>([])
+  const [userFilter, setUserFilter] = useState<'pending' | 'verified' | 'rejected' | 'all'>('pending')
   const [tenants, setTenants] = useState<Tenant[]>([])
+  const [tenantSearch, setTenantSearch] = useState('')
+  const [tenantStatusFilter, setTenantStatusFilter] = useState<Tenant['status'] | 'all'>('all')
+  const [commercialAccounts, setCommercialAccounts] = useState<CommercialAccount[]>([])
+  const [commercialSummary, setCommercialSummary] = useState<CommercialSummary | null>(null)
+  const [commercialFilter, setCommercialFilter] = useState<CommercialAccount['commercial_state']['trial_status'] | 'all'>('all')
+  const [commercialSearch, setCommercialSearch] = useState('')
   const [tickets, setTickets] = useState<PasswordTicket[]>([])
   const [ticketFilter, setTicketFilter] = useState<PasswordTicketStatus | 'all'>('OPEN')
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([])
@@ -355,16 +897,19 @@ export default function AdminDashboardPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [m, u, t, pt, audit] = await Promise.all([
+      const [m, u, t, commercial, pt, audit] = await Promise.all([
         fetchMetrics(),
-        fetchUsers('pending'),
+        fetchUsers(userFilter),
         fetchTenants(),
+        fetchCommercialAccounts(),
         fetchPasswordTickets(ticketFilter),
         fetchAdminAuditLogs(),
       ])
       setMetrics(m.data)
       setDoctors(u.data)
       setTenants(t.data)
+      setCommercialAccounts(commercial.data)
+      setCommercialSummary(commercial.summary)
       setTickets(pt.data)
       setAuditLogs(audit.data)
     } catch {
@@ -373,7 +918,7 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [router, ticketFilter])
+  }, [router, ticketFilter, userFilter])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -387,10 +932,44 @@ export default function AdminDashboardPage() {
     if (metrics) setMetrics({ ...metrics, doctors: { ...metrics.doctors, pending_verification: Math.max(0, metrics.doctors.pending_verification - 1) } })
   }
 
+  function updateDoctorStatus(id: string, isActive: boolean) {
+    setDoctors(prev => prev.map(d => d.id === id ? { ...d, is_active: isActive } : d))
+  }
+
   async function handleTenantStatus(id: string, status: 'active' | 'suspended') {
-    await updateTenant(id, { status })
+    const reason = status === 'suspended'
+      ? window.prompt('Razón para suspender este tenant (mínimo 10 caracteres):')
+      : window.prompt('Nota interna de reactivación (opcional):') ?? undefined
+    if (status === 'suspended' && (!reason || reason.trim().length < 10)) return
+    await updateTenant(id, { status, reason: reason?.trim() || undefined })
     setTenants(prev => prev.map(t => t.id === id ? { ...t, status } : t))
   }
+
+  async function handleExpireGrants() {
+    await expireCommercialAccessGrants()
+    await loadData()
+  }
+
+  const visibleCommercialAccounts = commercialAccounts.filter(account => {
+    const matchesStatus = commercialFilter === 'all' || account.commercial_state.trial_status === commercialFilter
+    const q = commercialSearch.trim().toLowerCase()
+    const matchesSearch = !q
+      || account.tenant.name.toLowerCase().includes(q)
+      || account.tenant.slug.toLowerCase().includes(q)
+      || account.owner?.email.toLowerCase().includes(q)
+    return matchesStatus && matchesSearch
+  })
+
+  const visibleTenants = tenants.filter(tenant => {
+    const matchesStatus = tenantStatusFilter === 'all' || tenant.status === tenantStatusFilter
+    const q = tenantSearch.trim().toLowerCase()
+    const ownerName = tenant.owner ? `${tenant.owner.first_name} ${tenant.owner.last_name} ${tenant.owner.email}`.toLowerCase() : ''
+    const matchesSearch = !q
+      || tenant.name.toLowerCase().includes(q)
+      || tenant.slug.toLowerCase().includes(q)
+      || ownerName.includes(q)
+    return matchesStatus && matchesSearch
+  })
 
   function updateTicket(id: string, status: 'IN_REVIEW' | 'RESOLVED' | 'REJECTED', adminNotes?: string) {
     setTickets(prev => prev.map(t => t.id === id ? { ...t, status, admin_notes: adminNotes ?? t.admin_notes, updated_at: new Date().toISOString() } : t))
@@ -447,9 +1026,10 @@ export default function AdminDashboardPage() {
             {/* Tabs */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #1e293b', paddingBottom: 0 }}>
               {[
-                { key: 'pending' as Tab, label: 'Doctores pendientes', badge: metrics?.doctors.pending_verification },
+                { key: 'pending' as Tab, label: 'Usuarios médicos', badge: metrics?.doctors.pending_verification },
                 { key: 'tickets' as Tab, label: 'Tickets', badge: metrics?.tickets.password_open },
                 { key: 'tenants' as Tab, label: 'Tenants' },
+                { key: 'commercial' as Tab, label: 'Control comercial' },
                 { key: 'audit' as Tab, label: 'Auditoría' },
               ].map(t => (
                 <button
@@ -479,10 +1059,36 @@ export default function AdminDashboardPage() {
             {/* Content */}
             {tab === 'pending' && (
               <div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                  {([
+                    ['pending', 'Pendientes'],
+                    ['verified', 'Verificados'],
+                    ['rejected', 'Rechazados'],
+                    ['all', 'Todos'],
+                  ] as Array<['pending' | 'verified' | 'rejected' | 'all', string]>).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setUserFilter(value)}
+                      style={{
+                        height: 32,
+                        padding: '0 12px',
+                        borderRadius: 8,
+                        border: userFilter === value ? '1px solid #60a5fa' : '1px solid #334155',
+                        background: userFilter === value ? 'rgba(96,165,250,.12)' : 'transparent',
+                        color: userFilter === value ? '#60a5fa' : '#94a3b8',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 {doctors.length === 0 ? (
                   <div style={{ textAlign: 'center', paddingTop: 60, color: '#475569' }}>
                     <CheckCircle2 size={36} color="#34d399" style={{ margin: '0 auto 12px' }} />
-                    <p style={{ fontSize: 15 }}>Sin solicitudes pendientes</p>
+                    <p style={{ fontSize: 15 }}>Sin usuarios en este filtro</p>
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
@@ -492,6 +1098,7 @@ export default function AdminDashboardPage() {
                         doctor={d}
                         onVerify={removeDoctor}
                         onReject={removeDoctor}
+                        onStatusChange={updateDoctorStatus}
                       />
                     ))}
                   </div>
@@ -548,41 +1155,161 @@ export default function AdminDashboardPage() {
             )}
 
             {tab === 'tenants' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {tenants.map(tenant => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                  <input
+                    value={tenantSearch}
+                    onChange={event => setTenantSearch(event.target.value)}
+                    placeholder="Buscar tenant, slug u owner"
+                    style={{ ...commercialInputStyle, width: 'min(100%, 300px)', height: 34 }}
+                  />
+                  {([
+                    ['all', 'Todos'],
+                    ['active', 'Activos'],
+                    ['suspended', 'Suspendidos'],
+                    ['cancelled', 'Cancelados'],
+                  ] as Array<[Tenant['status'] | 'all', string]>).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setTenantStatusFilter(value)}
+                      style={commercialButtonStyle(tenantStatusFilter === value ? '#60a5fa' : '#64748b', false)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {visibleTenants.map(tenant => (
                   <div
                     key={tenant.id}
                     style={{
                       background: '#1e293b', border: '1px solid #334155',
-                      borderRadius: 10, padding: '14px 18px',
-                      display: 'flex', alignItems: 'center', gap: 16,
+                      borderRadius: 10, padding: '16px 18px',
+                      display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto',
+                      gap: 16, alignItems: 'start',
                     }}
                   >
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{tenant.name}</div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>/{tenant.slug} · {tenant.plan_type}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: '#f1f5f9' }}>{tenant.name}</div>
+                        <span style={{
+                          fontSize: 11, padding: '3px 10px', borderRadius: 999, fontWeight: 700,
+                          background: tenant.status === 'active' ? 'rgba(52,211,153,.12)' : tenant.status === 'suspended' ? 'rgba(251,191,36,.12)' : 'rgba(239,68,68,.12)',
+                          color: tenant.status === 'active' ? '#34d399' : tenant.status === 'suspended' ? '#fbbf24' : '#f87171',
+                        }}>
+                          {tenant.status === 'active' ? 'Activo' : tenant.status === 'suspended' ? 'Suspendido' : 'Cancelado'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>/{tenant.slug} · {planLabels[tenant.plan_type] ?? tenant.plan_type}</div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginTop: 12 }}>
+                        {[
+                          { label: 'Owner', value: tenant.owner ? `${tenant.owner.first_name} ${tenant.owner.last_name}` : 'Sin owner' },
+                          { label: 'Staff activo', value: String(tenant.usage?.staff ?? 0) },
+                          { label: 'Pacientes', value: String(tenant.usage?.patients ?? 0) },
+                          { label: 'Último login', value: tenant.last_login_at ? new Date(tenant.last_login_at).toLocaleDateString('es-GT') : 'Sin actividad' },
+                        ].map(item => (
+                          <div key={item.label} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 10px' }}>
+                            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700 }}>{item.label}</div>
+                            <div style={{ fontSize: 12, color: '#cbd5e1', marginTop: 4, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <span style={{
-                      fontSize: 11, padding: '3px 10px', borderRadius: 999, fontWeight: 500, flexShrink: 0,
-                      background: tenant.status === 'active' ? 'rgba(52,211,153,.12)' : 'rgba(239,68,68,.12)',
-                      color: tenant.status === 'active' ? '#34d399' : '#f87171',
-                    }}>
-                      {tenant.status === 'active' ? 'Activo' : 'Suspendido'}
-                    </span>
                     <button
                       onClick={() => handleTenantStatus(tenant.id, tenant.status === 'active' ? 'suspended' : 'active')}
+                      disabled={tenant.status === 'cancelled'}
                       style={{
                         height: 32, padding: '0 14px', borderRadius: 8,
                         border: '1px solid #334155', background: 'transparent',
-                        color: '#94a3b8', fontSize: 12, fontWeight: 500,
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+                        color: tenant.status === 'cancelled' ? '#475569' : '#94a3b8', fontSize: 12, fontWeight: 700,
+                        cursor: tenant.status === 'cancelled' ? 'not-allowed' : 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
                       }}
                     >
                       {tenant.status === 'active' ? <><AlertTriangle size={13} />Suspender</> : <><CheckCircle2 size={13} />Activar</>}
                     </button>
-                    <ChevronRight size={16} color="#334155" />
                   </div>
                 ))}
+                {visibleTenants.length === 0 && (
+                  <div style={{ textAlign: 'center', paddingTop: 56, color: '#475569' }}>
+                    <Building2 size={34} color="#64748b" style={{ margin: '0 auto 12px' }} />
+                    <p style={{ fontSize: 15 }}>Sin tenants en este filtro</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab === 'commercial' && (
+              <div>
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(96,165,250,.12), rgba(244,114,182,.10))',
+                  border: '1px solid #334155',
+                  borderRadius: 10,
+                  padding: '14px 16px',
+                  marginBottom: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  justifyContent: 'space-between',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <Sparkles size={16} color="#f472b6" style={{ flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#f8fafc' }}>Pruebas, acceso temporal y consumo</div>
+                      <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                        Control super admin para cuentas demo, promos, límites de IA y operación por organización.
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={handleExpireGrants} style={{ ...commercialButtonStyle('#f472b6', false), flexShrink: 0 }}>
+                    Actualizar vencidas
+                  </button>
+                </div>
+
+                <CommercialSummaryCards summary={commercialSummary} />
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                  <input
+                    value={commercialSearch}
+                    onChange={event => setCommercialSearch(event.target.value)}
+                    placeholder="Buscar clínica, slug o email"
+                    style={{ ...commercialInputStyle, width: 'min(100%, 280px)', height: 34 }}
+                  />
+                  {([
+                    ['all', 'Todos'],
+                    ['active', 'Activas'],
+                    ['expiring', 'Por vencer'],
+                    ['expired', 'Vencidas'],
+                    ['converted', 'Convertidas'],
+                    ['none', 'Sin prueba'],
+                  ] as Array<[CommercialAccount['commercial_state']['trial_status'] | 'all', string]>).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setCommercialFilter(value)}
+                      style={commercialButtonStyle(commercialFilter === value ? '#60a5fa' : '#64748b', false)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {visibleCommercialAccounts.length === 0 ? (
+                  <div style={{ textAlign: 'center', paddingTop: 60, color: '#475569' }}>
+                    <CheckCircle2 size={36} color="#34d399" style={{ margin: '0 auto 12px' }} />
+                    <p style={{ fontSize: 15 }}>Sin cuentas comerciales</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {visibleCommercialAccounts.map(account => (
+                      <CommercialAccountRow
+                        key={account.tenant.id}
+                        account={account}
+                        onRefresh={loadData}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

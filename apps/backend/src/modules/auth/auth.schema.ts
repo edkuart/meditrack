@@ -22,6 +22,7 @@ export const RegisterSchema = z.object({
   professional_id: z.string().max(50).optional(),
   colegiado_number: z.string().min(1).max(50),
   specialty: z.string().max(100).optional(),
+  selected_plan: z.enum(['doctor_individual', 'clinic_complete']).optional(),
   // Storage key returned after uploading the DPI image to the presigned URL
   dpi_document_key: z.string().max(500).optional(),
 })

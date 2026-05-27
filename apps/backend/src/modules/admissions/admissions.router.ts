@@ -2,12 +2,18 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
+import { requireTenantCapability } from '../../shared/services/limits.service.ts'
 import { AdmitPatientSchema, DischargePatientSchema } from './admissions.schema.ts'
 import * as svc from './admissions.service.ts'
 
 const router = new Hono()
 
 router.use('*', requireAuth)
+router.use('*', async (c, next) => {
+  const { tenant_id } = c.get('auth')
+  await requireTenantCapability(tenant_id, 'hospital.census', 'El censo hospitalario está disponible en Clínica Completa.')
+  await next()
+})
 
 // ─── Census ───────────────────────────────────────────────────────────────────
 

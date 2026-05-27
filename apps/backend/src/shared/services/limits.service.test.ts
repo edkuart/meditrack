@@ -4,25 +4,30 @@ import { PLAN_LIMITS } from './limits.service.ts'
 describe('PLAN_LIMITS constants', () => {
   it('free plan has restrictive caps', () => {
     expect(PLAN_LIMITS.free.max_patients).toBe(50)
-    expect(PLAN_LIMITS.free.max_staff).toBe(3)
+    expect(PLAN_LIMITS.free.max_staff).toBe(1)
   })
 
-  it('pro plan has generous but finite caps', () => {
-    expect(PLAN_LIMITS.pro.max_patients).toBe(2000)
-    expect(PLAN_LIMITS.pro.max_staff).toBe(20)
-    // Pro caps must exceed free caps
-    expect(PLAN_LIMITS.pro.max_patients).toBeGreaterThan(PLAN_LIMITS.free.max_patients)
-    expect(PLAN_LIMITS.pro.max_staff).toBeGreaterThan(PLAN_LIMITS.free.max_staff)
+  it('doctor individual plan has consultorio caps', () => {
+    expect(PLAN_LIMITS.doctor_individual.max_patients).toBe(500)
+    expect(PLAN_LIMITS.doctor_individual.max_staff).toBe(1)
+    expect(PLAN_LIMITS.doctor_individual.max_patients).toBeGreaterThan(PLAN_LIMITS.free.max_patients)
   })
 
-  it('enterprise plan signals unlimited with -1', () => {
+  it('clinic complete plan has team-oriented caps', () => {
+    expect(PLAN_LIMITS.clinic_complete.max_patients).toBe(2500)
+    expect(PLAN_LIMITS.clinic_complete.max_staff).toBe(12)
+    expect(PLAN_LIMITS.clinic_complete.max_patients).toBeGreaterThan(PLAN_LIMITS.doctor_individual.max_patients)
+    expect(PLAN_LIMITS.clinic_complete.max_staff).toBeGreaterThan(PLAN_LIMITS.doctor_individual.max_staff)
+  })
+
+  it('legacy enterprise plan still signals unlimited with -1', () => {
     expect(PLAN_LIMITS.enterprise.max_patients).toBe(-1)
     expect(PLAN_LIMITS.enterprise.max_staff).toBe(-1)
   })
 
   it('all expected plan tiers exist', () => {
     expect(Object.keys(PLAN_LIMITS)).toEqual(
-      expect.arrayContaining(['free', 'pro', 'enterprise']),
+      expect.arrayContaining(['free', 'doctor_individual', 'clinic_complete', 'pro', 'enterprise']),
     )
   })
 
@@ -33,9 +38,9 @@ describe('PLAN_LIMITS constants', () => {
     }
   })
 
-  it('limits are ordered free < pro (enterprise excluded as -1 = unlimited)', () => {
-    // A free clinic should hit the cap well before a pro clinic
-    expect(PLAN_LIMITS.free.max_patients).toBeLessThan(PLAN_LIMITS.pro.max_patients)
-    expect(PLAN_LIMITS.free.max_staff).toBeLessThan(PLAN_LIMITS.pro.max_staff)
+  it('limits are ordered free < doctor individual < clinic complete', () => {
+    expect(PLAN_LIMITS.free.max_patients).toBeLessThan(PLAN_LIMITS.doctor_individual.max_patients)
+    expect(PLAN_LIMITS.doctor_individual.max_patients).toBeLessThan(PLAN_LIMITS.clinic_complete.max_patients)
+    expect(PLAN_LIMITS.doctor_individual.max_staff).toBeLessThan(PLAN_LIMITS.clinic_complete.max_staff)
   })
 })

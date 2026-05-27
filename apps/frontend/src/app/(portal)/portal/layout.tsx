@@ -39,9 +39,9 @@ export default function PortalInnerLayout({ children }: { children: React.ReactN
       {children}
       <nav className="portal-bottom-nav" aria-label="Navegación principal">
         <NavBtn icon={Home}          label="Hoy"        href="/portal"           active={pathname === '/portal'} />
-        <NavBtn icon={Pill}          label="Plan"       href="/portal/treatment" active={pathname === '/portal/treatment'} />
-        <NavBtn icon={ClipboardList} label="Consultas"  href="/portal/history"   active={pathname === '/portal/history'} />
-        <NavBtn icon={FileText}      label="Documentos" href="/portal/documents" active={pathname === '/portal/documents'} />
+        <NavBtn icon={Pill}          label="Plan"       href="/portal/treatment" active={pathname.startsWith('/portal/treatment')} />
+        <NavBtn icon={ClipboardList} label="Consultas"  href="/portal/history"   active={pathname.startsWith('/portal/history')} />
+        <NavBtn icon={FileText}      label="Documentos" href="/portal/documents" active={pathname.startsWith('/portal/documents')} />
         <NavBtn icon={FlaskConical}  label="Lab"        href="/portal/lab"       active={pathname.startsWith('/portal/lab')} />
       </nav>
     </div>

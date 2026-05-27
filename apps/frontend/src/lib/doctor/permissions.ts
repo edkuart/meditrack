@@ -33,6 +33,9 @@ export const PERMISSIONS = {
   REFERRAL_READ: 'referral.read',
   REFERRAL_WRITE: 'referral.write',
 
+  APPOINTMENT_READ: 'appointment.read',
+  APPOINTMENT_WRITE: 'appointment.write',
+
   STAFF_MANAGE: 'staff.manage',
   HOSPITAL_MANAGE: 'hospital.manage',
   ANALYTICS_READ: 'analytics.read',
@@ -68,6 +71,8 @@ const ALL_CLINICAL: Permission[] = [
   PERMISSIONS.ADMISSION_WRITE,
   PERMISSIONS.REFERRAL_READ,
   PERMISSIONS.REFERRAL_WRITE,
+  PERMISSIONS.APPOINTMENT_READ,
+  PERMISSIONS.APPOINTMENT_WRITE,
 ]
 
 export const ROLE_PERMISSIONS: Record<string, ReadonlySet<Permission>> = {
@@ -85,6 +90,8 @@ export const ROLE_PERMISSIONS: Record<string, ReadonlySet<Permission>> = {
     PERMISSIONS.TREATMENT_ADHERENCE_READ,
     PERMISSIONS.HOSPITAL_CENSUS_READ,
     PERMISSIONS.REFERRAL_READ,
+    PERMISSIONS.APPOINTMENT_READ,
+    PERMISSIONS.APPOINTMENT_WRITE,
   ]),
   WARD_NURSE: new Set([
     PERMISSIONS.PATIENT_READ,
@@ -116,6 +123,8 @@ export const ROLE_PERMISSIONS: Record<string, ReadonlySet<Permission>> = {
   RECEPTIONIST: new Set([
     PERMISSIONS.PATIENT_READ,
     PERMISSIONS.PATIENT_WRITE,
+    PERMISSIONS.APPOINTMENT_READ,
+    PERMISSIONS.APPOINTMENT_WRITE,
   ]),
   ASSISTANT: new Set([
     PERMISSIONS.PATIENT_READ,
@@ -136,4 +145,12 @@ export function hasPermission(
   if (effectivePermissions) return effectivePermissions.includes(permission)
   if (!role) return false
   return ROLE_PERMISSIONS[role]?.has(permission) ?? false
+}
+
+export function hasCapability(
+  capabilities: readonly string[] | undefined | null,
+  capability?: string,
+): boolean {
+  if (!capability) return true
+  return capabilities?.includes(capability) ?? false
 }

@@ -1,6 +1,17 @@
-import { eq, and, isNull, isNotNull, count, desc } from 'drizzle-orm'
+import { eq, and, isNull, isNotNull, count, desc, gt, gte, lte, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
-import { db, users, tenants, refreshTokens, platformPasswordTickets, passwordResetTokens, auditLogs } from '../../shared/db/index.ts'
+import {
+  db,
+  users,
+  tenants,
+  patients,
+  refreshTokens,
+  platformPasswordTickets,
+  passwordResetTokens,
+  auditLogs,
+  tenantAccessGrants,
+  billingInvoices,
+} from '../../shared/db/index.ts'
 import {
   signAccessToken,
   generateRefreshToken,
@@ -10,7 +21,8 @@ import {
 } from '../../shared/services/token.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { sendEmail } from '../../shared/services/email.service.ts'
-import { UnauthorizedError, ForbiddenError, NotFoundError } from '../../shared/errors.ts'
+import { getAiUsageStatus } from '../ai-usage/ai-usage.service.ts'
+import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors.ts'
 import {
   decryptSecret,
   encryptSecret,
@@ -24,16 +36,27 @@ import type {
   AdminLoginInput,
   AdminMfaVerifyInput,
   RejectDoctorInput,
+  UpdateUserStatusInput,
   ListUsersQueryInput,
   ListTenantsQueryInput,
+  ListCommercialAccountsQueryInput,
   ListPasswordTicketsQueryInput,
   ListAdminAuditLogsQueryInput,
   UpdateTenantInput,
+  CreateTenantAccessGrantInput,
+  RevokeTenantAccessGrantInput,
   UpdatePasswordTicketInput,
 } from './admin.schema.ts'
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
 const SUPPORT_RESET_EXPIRES_MINUTES = 30
+
+const TRIAL_DURATION_DAYS: Record<Exclude<CreateTenantAccessGrantInput['duration'], 'custom'>, number> = {
+  '1_day': 1,
+  '7_days': 7,
+  '30_days': 30,
+  '365_days': 365,
+}
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -298,8 +321,19 @@ export async function listPasswordTickets(query: ListPasswordTicketsQueryInput) 
     db.query.platformPasswordTickets.findMany({
       where: whereClause,
       with: {
-        tenant: { columns: { id: true, name: true, slug: true } },
-        user: { columns: { id: true, email: true, first_name: true, last_name: true, role: true } },
+        tenant: { columns: { id: true, name: true, slug: true, plan_type: true, status: true } },
+        user: {
+          columns: {
+            id: true,
+            email: true,
+            first_name: true,
+            last_name: true,
+            role: true,
+            is_active: true,
+            is_verified: true,
+            last_login_at: true,
+          },
+        },
         resolver: { columns: { id: true, email: true, first_name: true, last_name: true } },
       },
       orderBy: [desc(platformPasswordTickets.created_at)],
@@ -311,8 +345,54 @@ export async function listPasswordTickets(query: ListPasswordTicketsQueryInput) 
       : db.select({ total: count() }).from(platformPasswordTickets),
   ])
 
+  const data = await Promise.all(rows.map(async (ticket) => {
+    const [openTicketsRows, recentAudit] = await Promise.all([
+      db.select({ total: count() })
+        .from(platformPasswordTickets)
+        .where(and(
+          eq(platformPasswordTickets.requester_email, ticket.requester_email),
+          eq(platformPasswordTickets.status, 'OPEN'),
+        )),
+      ticket.tenant_id
+        ? db.query.auditLogs.findMany({
+            where: eq(auditLogs.tenant_id, ticket.tenant_id),
+            columns: {
+              id: true,
+              action: true,
+              resource_type: true,
+              actor_email: true,
+              created_at: true,
+            },
+            orderBy: [desc(auditLogs.created_at)],
+            limit: 3,
+          })
+        : Promise.resolve([]),
+    ])
+
+    return {
+      ...ticket,
+      support_context: {
+        open_tickets_for_email: Number(openTicketsRows[0]?.total ?? 0),
+        user_status: ticket.user
+          ? {
+              is_active: ticket.user.is_active,
+              is_verified: ticket.user.is_verified,
+              last_login_at: ticket.user.last_login_at,
+            }
+          : null,
+        tenant_status: ticket.tenant
+          ? {
+              plan_type: ticket.tenant.plan_type,
+              status: ticket.tenant.status,
+            }
+          : null,
+        recent_audit: recentAudit,
+      },
+    }
+  }))
+
   return {
-    data: rows,
+    data,
     meta: {
       total: Number(totalRows[0]?.total ?? 0),
       page: query.page,
@@ -494,8 +574,10 @@ export async function listPendingDoctors(query: ListUsersQueryInput) {
         specialty: true,
         dpi_document_key: true,
         is_verified: true,
+        is_active: true,
         verification_rejected_at: true,
         verification_rejected_reason: true,
+        last_login_at: true,
         created_at: true,
         role: true,
         tenant_id: true,
@@ -573,6 +655,54 @@ export async function rejectDoctor(userId: string, input: RejectDoctorInput, adm
   return { message: 'Doctor registration rejected' }
 }
 
+export async function updateUserStatus(userId: string, input: UpdateUserStatusInput, adminId: string) {
+  if (userId === adminId && !input.is_active) {
+    throw new ForbiddenError('No puedes desactivar tu propio usuario administrador.', 'SELF_DEACTIVATION_FORBIDDEN')
+  }
+
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+  })
+  if (!user) throw new NotFoundError('User')
+  if (user.role === 'SUPER_ADMIN' && !input.is_active) {
+    throw new ForbiddenError('No se puede desactivar un SUPER_ADMIN desde esta acción operativa.', 'SUPER_ADMIN_DEACTIVATION_FORBIDDEN')
+  }
+  const actor = await getAdminAuditActor(adminId)
+
+  const [updated] = await db.update(users)
+    .set({ is_active: input.is_active, updated_at: new Date() })
+    .where(eq(users.id, userId))
+    .returning()
+
+  if (!input.is_active) {
+    await db.update(refreshTokens)
+      .set({ is_revoked: true })
+      .where(eq(refreshTokens.user_id, userId))
+  }
+
+  await createAuditLog({
+    tenant_id: user.tenant_id,
+    actor_id: adminId,
+    actor_type: 'USER',
+    actor_email: actor.email,
+    action: input.is_active ? 'SETTINGS_CHANGED' : 'USER_DEACTIVATED',
+    resource_type: 'USER',
+    resource_id: userId,
+    changes: {
+      before: { is_active: user.is_active },
+      after: { is_active: updated.is_active },
+    },
+    context: {
+      action: input.is_active ? 'USER_REACTIVATED' : 'USER_DEACTIVATED',
+      reason: input.reason,
+      target_email: user.email,
+      target_role: user.role,
+    },
+  })
+
+  return sanitizeAdminUser(updated)
+}
+
 // ─── Tenants ───────────────────────────────────────────────────────────────────
 
 export async function listTenants(query: ListTenantsQueryInput) {
@@ -587,8 +717,31 @@ export async function listTenants(query: ListTenantsQueryInput) {
     db.select({ total: count() }).from(tenants),
   ])
 
+  const data = await Promise.all(rows.map(async (tenant) => {
+    const [owner, staffRows, patientRows, lastLogin] = await Promise.all([
+      findTenantOwner(tenant.id),
+      db.select({ total: count() }).from(users).where(and(eq(users.tenant_id, tenant.id), eq(users.is_active, true))),
+      db.select({ total: count() }).from(patients).where(and(eq(patients.tenant_id, tenant.id), eq(patients.is_active, true))),
+      db.query.users.findFirst({
+        where: eq(users.tenant_id, tenant.id),
+        columns: { last_login_at: true },
+        orderBy: [desc(users.last_login_at)],
+      }),
+    ])
+
+    return {
+      ...tenant,
+      owner: owner ?? null,
+      usage: {
+        staff: Number(staffRows[0]?.total ?? 0),
+        patients: Number(patientRows[0]?.total ?? 0),
+      },
+      last_login_at: lastLogin?.last_login_at ?? null,
+    }
+  }))
+
   return {
-    data: rows,
+    data,
     meta: {
       total: Number(totalRows[0]?.total ?? 0),
       page: query.page,
@@ -603,9 +756,10 @@ export async function updateTenant(tenantId: string, input: UpdateTenantInput, a
   })
   if (!tenant) throw new NotFoundError('Tenant')
   const actor = await getAdminAuditActor(adminId)
+  const { reason, ...tenantUpdate } = input
 
   const [updated] = await db.update(tenants)
-    .set({ ...input, updated_at: new Date() })
+    .set({ ...tenantUpdate, updated_at: new Date() })
     .where(eq(tenants.id, tenantId))
     .returning()
 
@@ -621,10 +775,340 @@ export async function updateTenant(tenantId: string, input: UpdateTenantInput, a
       before: { plan_type: tenant.plan_type, status: tenant.status },
       after: { plan_type: updated.plan_type, status: updated.status },
     },
-    context: { action: 'TENANT_UPDATED', fields: Object.keys(input) },
+    context: { action: 'TENANT_UPDATED', fields: Object.keys(tenantUpdate), reason },
   })
 
   return updated
+}
+
+export async function listCommercialAccounts(query: ListCommercialAccountsQueryInput) {
+  await expireExpiredTenantAccessGrants()
+
+  const offset = (query.page - 1) * query.limit
+  const now = new Date()
+  const expiringUntil = addDays(now, 3)
+
+  const [
+    rows,
+    totalRows,
+    commercialSummary,
+  ] = await Promise.all([
+    db.query.tenants.findMany({
+      orderBy: [desc(tenants.created_at)],
+      limit: query.limit,
+      offset,
+    }),
+    db.select({ total: count() }).from(tenants),
+    getCommercialSummary(now, expiringUntil),
+  ])
+
+  const data = await Promise.all(rows.map(async (tenant) => {
+    const [
+      owner,
+      activeGrant,
+      grantHistory,
+      staffRows,
+      patientRows,
+      aiUsage,
+      billingSummary,
+      latestInvoice,
+      latestPendingInvoice,
+    ] = await Promise.all([
+      findTenantOwner(tenant.id),
+      db.query.tenantAccessGrants.findFirst({
+        where: and(
+          eq(tenantAccessGrants.tenant_id, tenant.id),
+          eq(tenantAccessGrants.status, 'active'),
+          lte(tenantAccessGrants.starts_at, now),
+          gt(tenantAccessGrants.ends_at, now),
+        ),
+        orderBy: [desc(tenantAccessGrants.ends_at)],
+      }),
+      db.query.tenantAccessGrants.findMany({
+        where: eq(tenantAccessGrants.tenant_id, tenant.id),
+        orderBy: [desc(tenantAccessGrants.created_at)],
+        limit: 5,
+      }),
+      db.select({ total: count() }).from(users).where(and(eq(users.tenant_id, tenant.id), eq(users.is_active, true))),
+      db.select({ total: count() }).from(patients).where(and(eq(patients.tenant_id, tenant.id), eq(patients.is_active, true))),
+      getAiUsageStatus(tenant.id),
+      getTenantBillingSummary(tenant.id),
+      db.query.billingInvoices.findFirst({
+        where: eq(billingInvoices.tenant_id, tenant.id),
+        orderBy: [desc(billingInvoices.created_at)],
+      }),
+      db.query.billingInvoices.findFirst({
+        where: and(eq(billingInvoices.tenant_id, tenant.id), eq(billingInvoices.status, 'pending')),
+        orderBy: [desc(billingInvoices.created_at)],
+      }),
+    ])
+    const latestGrant = grantHistory[0] ?? null
+    const daysRemaining = activeGrant ? Math.ceil((activeGrant.ends_at.getTime() - now.getTime()) / 86_400_000) : null
+    const trialStatus = activeGrant
+      ? (daysRemaining !== null && daysRemaining <= 3 ? 'expiring' : 'active')
+      : latestGrant?.status === 'expired'
+        ? 'expired'
+        : latestGrant?.status === 'converted'
+          ? 'converted'
+          : 'none'
+
+    return {
+      tenant,
+      owner,
+      active_grant: activeGrant ?? null,
+      grant_history: grantHistory,
+      commercial_state: {
+        trial_status: trialStatus,
+        days_remaining: daysRemaining,
+        latest_grant_status: latestGrant?.status ?? null,
+        latest_grant_ended_at: latestGrant?.ends_at ?? null,
+      },
+      usage: {
+        organizations: 1,
+        staff: Number(staffRows[0]?.total ?? 0),
+        patients: Number(patientRows[0]?.total ?? 0),
+        ai: aiUsage,
+      },
+      billing: {
+        revenue_paid_gtq: billingSummary.revenue_paid_gtq,
+        revenue_pending_gtq: billingSummary.revenue_pending_gtq,
+        paid_invoice_count: billingSummary.paid_invoice_count,
+        pending_invoice_count: billingSummary.pending_invoice_count,
+        latest_invoice: latestInvoice ?? null,
+        latest_pending_invoice: latestPendingInvoice ?? null,
+      },
+    }
+  }))
+
+  return {
+    data,
+    meta: {
+      total: Number(totalRows[0]?.total ?? 0),
+      page: query.page,
+      limit: query.limit,
+    },
+    summary: commercialSummary,
+  }
+}
+
+export async function createTenantAccessGrant(tenantId: string, input: CreateTenantAccessGrantInput, adminId: string) {
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+  })
+  if (!tenant) throw new NotFoundError('Tenant')
+
+  const actor = await getAdminAuditActor(adminId)
+  const startsAt = new Date()
+  const endsAt = input.duration === 'custom'
+    ? new Date(input.ends_at as string)
+    : addDays(startsAt, TRIAL_DURATION_DAYS[input.duration])
+
+  if (Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
+    throw new ValidationError('La fecha de finalización debe ser posterior al inicio de la prueba.')
+  }
+
+  await db.update(tenantAccessGrants)
+    .set({
+      status: 'revoked',
+      revoked_by: adminId,
+      revoked_at: startsAt,
+      updated_at: startsAt,
+    })
+    .where(and(eq(tenantAccessGrants.tenant_id, tenantId), eq(tenantAccessGrants.status, 'active')))
+
+  const [grant] = await db.insert(tenantAccessGrants).values({
+    tenant_id: tenantId,
+    grant_type: input.grant_type,
+    plan_type: input.plan_type,
+    starts_at: startsAt,
+    ends_at: endsAt,
+    reason: input.reason,
+    notes: input.notes,
+    max_ai_units_monthly: input.max_ai_units_monthly,
+    max_organizations: input.max_organizations,
+    max_staff: input.max_staff,
+    max_patients: input.max_patients,
+    granted_by: adminId,
+  }).returning()
+
+  await createAuditLog({
+    tenant_id: tenantId,
+    actor_id: adminId,
+    actor_type: 'USER',
+    actor_email: actor.email,
+    action: 'SETTINGS_CHANGED',
+    resource_type: 'TENANT_ACCESS_GRANT',
+    resource_id: grant.id,
+    changes: {
+      before: null,
+      after: {
+        grant_type: grant.grant_type,
+        plan_type: grant.plan_type,
+        starts_at: grant.starts_at,
+        ends_at: grant.ends_at,
+      },
+    },
+    context: {
+      action: 'TENANT_ACCESS_GRANTED',
+      tenant_name: tenant.name,
+      duration: input.duration,
+      reason: input.reason,
+    },
+  })
+
+  return grant
+}
+
+export async function revokeTenantAccessGrant(grantId: string, input: RevokeTenantAccessGrantInput, adminId: string) {
+  const grant = await db.query.tenantAccessGrants.findFirst({
+    where: eq(tenantAccessGrants.id, grantId),
+  })
+  if (!grant) throw new NotFoundError('Tenant access grant')
+
+  const actor = await getAdminAuditActor(adminId)
+  const revokedAt = new Date()
+
+  const [updated] = await db.update(tenantAccessGrants)
+    .set({
+      status: 'revoked',
+      revoked_by: adminId,
+      revoked_at: revokedAt,
+      updated_at: revokedAt,
+    })
+    .where(eq(tenantAccessGrants.id, grantId))
+    .returning()
+
+  await createAuditLog({
+    tenant_id: grant.tenant_id,
+    actor_id: adminId,
+    actor_type: 'USER',
+    actor_email: actor.email,
+    action: 'SETTINGS_CHANGED',
+    resource_type: 'TENANT_ACCESS_GRANT',
+    resource_id: grantId,
+    changes: {
+      before: { status: grant.status, revoked_at: grant.revoked_at },
+      after: { status: updated.status, revoked_at: updated.revoked_at },
+    },
+    context: {
+      action: 'TENANT_ACCESS_REVOKED',
+      reason: input.reason,
+    },
+  })
+
+  return updated
+}
+
+export async function expireExpiredTenantAccessGrants() {
+  const now = new Date()
+
+  await db.update(tenantAccessGrants)
+    .set({
+      status: 'expired',
+      updated_at: now,
+    })
+    .where(and(
+      eq(tenantAccessGrants.status, 'active'),
+      lte(tenantAccessGrants.ends_at, now),
+    ))
+}
+
+async function getCommercialSummary(now: Date, expiringUntil: Date) {
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0))
+  const [
+    activeTrials,
+    expiringTrials,
+    expiredTrials,
+    convertedTrials,
+    revokedTrials,
+    paidDoctorTenants,
+    paidClinicTenants,
+    paidRevenue,
+    paidRevenueThisMonth,
+    pendingRevenue,
+    paidDoctorRevenue,
+    paidClinicRevenue,
+  ] = await Promise.all([
+    db.select({ total: count() }).from(tenantAccessGrants).where(and(
+      eq(tenantAccessGrants.status, 'active'),
+      gt(tenantAccessGrants.ends_at, now),
+    )),
+    db.select({ total: count() }).from(tenantAccessGrants).where(and(
+      eq(tenantAccessGrants.status, 'active'),
+      gt(tenantAccessGrants.ends_at, now),
+      lte(tenantAccessGrants.ends_at, expiringUntil),
+    )),
+    db.select({ total: count() }).from(tenantAccessGrants).where(eq(tenantAccessGrants.status, 'expired')),
+    db.select({ total: count() }).from(tenantAccessGrants).where(eq(tenantAccessGrants.status, 'converted')),
+    db.select({ total: count() }).from(tenantAccessGrants).where(eq(tenantAccessGrants.status, 'revoked')),
+    db.select({ total: count() }).from(tenants).where(eq(tenants.plan_type, 'doctor_individual')),
+    db.select({ total: count() }).from(tenants).where(eq(tenants.plan_type, 'clinic_complete')),
+    sumInvoiceAmount(and(eq(billingInvoices.status, 'paid'))),
+    sumInvoiceAmount(and(eq(billingInvoices.status, 'paid'), gte(billingInvoices.paid_at, monthStart))),
+    sumInvoiceAmount(and(eq(billingInvoices.status, 'pending'))),
+    sumInvoiceAmount(and(eq(billingInvoices.status, 'paid'), eq(billingInvoices.plan_type, 'doctor_individual'))),
+    sumInvoiceAmount(and(eq(billingInvoices.status, 'paid'), eq(billingInvoices.plan_type, 'clinic_complete'))),
+  ])
+
+  const converted = Number(convertedTrials[0]?.total ?? 0)
+  const expired = Number(expiredTrials[0]?.total ?? 0)
+  const revoked = Number(revokedTrials[0]?.total ?? 0)
+  const completed = converted + expired + revoked
+
+  return {
+    trials: {
+      active: Number(activeTrials[0]?.total ?? 0),
+      expiring: Number(expiringTrials[0]?.total ?? 0),
+      expired,
+      converted,
+      revoked,
+      conversion_rate: completed > 0 ? Math.round((converted / completed) * 100) : 0,
+    },
+    paid_tenants: {
+      doctor_individual: Number(paidDoctorTenants[0]?.total ?? 0),
+      clinic_complete: Number(paidClinicTenants[0]?.total ?? 0),
+      total: Number(paidDoctorTenants[0]?.total ?? 0) + Number(paidClinicTenants[0]?.total ?? 0),
+    },
+    revenue: {
+      paid_total_gtq: paidRevenue,
+      paid_this_month_gtq: paidRevenueThisMonth,
+      pending_gtq: pendingRevenue,
+      by_plan: {
+        doctor_individual_gtq: paidDoctorRevenue,
+        clinic_complete_gtq: paidClinicRevenue,
+      },
+    },
+  }
+}
+
+async function getTenantBillingSummary(tenantId: string) {
+  const [
+    paidRevenue,
+    pendingRevenue,
+    paidInvoices,
+    pendingInvoices,
+  ] = await Promise.all([
+    sumInvoiceAmount(and(eq(billingInvoices.tenant_id, tenantId), eq(billingInvoices.status, 'paid'))),
+    sumInvoiceAmount(and(eq(billingInvoices.tenant_id, tenantId), eq(billingInvoices.status, 'pending'))),
+    db.select({ total: count() }).from(billingInvoices).where(and(eq(billingInvoices.tenant_id, tenantId), eq(billingInvoices.status, 'paid'))),
+    db.select({ total: count() }).from(billingInvoices).where(and(eq(billingInvoices.tenant_id, tenantId), eq(billingInvoices.status, 'pending'))),
+  ])
+
+  return {
+    revenue_paid_gtq: paidRevenue,
+    revenue_pending_gtq: pendingRevenue,
+    paid_invoice_count: Number(paidInvoices[0]?.total ?? 0),
+    pending_invoice_count: Number(pendingInvoices[0]?.total ?? 0),
+  }
+}
+
+async function sumInvoiceAmount(where: ReturnType<typeof and>) {
+  const [row] = await db
+    .select({ total: sql<string>`coalesce(sum(${billingInvoices.amount_gtq}), 0)` })
+    .from(billingInvoices)
+    .where(where)
+
+  return Number(row?.total ?? 0)
 }
 
 // ─── Metrics ───────────────────────────────────────────────────────────────────
@@ -714,6 +1198,37 @@ async function getAdminAuditActor(adminId: string) {
   }
 
   return actor
+}
+
+async function findTenantOwner(tenantId: string) {
+  const admin = await db.query.users.findFirst({
+    where: and(eq(users.tenant_id, tenantId), eq(users.role, 'ADMIN_CLINIC')),
+    columns: {
+      id: true,
+      email: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+    },
+  })
+  if (admin) return admin
+
+  return db.query.users.findFirst({
+    where: and(eq(users.tenant_id, tenantId), eq(users.role, 'DOCTOR')),
+    columns: {
+      id: true,
+      email: true,
+      first_name: true,
+      last_name: true,
+      role: true,
+    },
+  })
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date)
+  next.setUTCDate(next.getUTCDate() + days)
+  return next
 }
 
 function sanitizeAdminUser(user: typeof users.$inferSelect) {

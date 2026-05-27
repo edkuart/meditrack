@@ -43,3 +43,30 @@ export async function fetchClinicNotifications(
   const json = await res.json()
   return { data: json.data ?? [], meta: json.meta ?? { total: 0, failed: 0 } }
 }
+
+export type PatientNotificationEntry = {
+  id: string
+  channel: NotificationChannel
+  type: NotificationType
+  status: NotificationStatus
+  recipient: string
+  attempt_count: number
+  last_attempt_at: string | null
+  next_retry_at: string | null
+  sent_at: string | null
+  delivered_at: string | null
+  failed_reason: string | null
+  created_at: string
+}
+
+export async function fetchPatientNotifications(
+  token: string,
+  patientId: string,
+): Promise<PatientNotificationEntry[]> {
+  const res = await fetch(`${API}/patients/${patientId}/notifications`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`patient notifications fetch failed: ${res.status}`)
+  const json = await res.json()
+  return json.data ?? []
+}

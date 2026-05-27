@@ -1,6 +1,6 @@
-import { pgTable, uuid, varchar, text, jsonb, boolean, timestamp, pgEnum } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, jsonb, timestamp, pgEnum } from 'drizzle-orm/pg-core'
 
-export const planTypeEnum = pgEnum('plan_type', ['free', 'pro', 'enterprise'])
+export const planTypeEnum = pgEnum('plan_type', ['free', 'doctor_individual', 'clinic_complete', 'pro', 'enterprise'])
 export const tenantStatusEnum = pgEnum('tenant_status', ['active', 'suspended', 'cancelled'])
 export const tenantTypeEnum = pgEnum('tenant_type', ['CLINIC', 'HOSPITAL'])
 

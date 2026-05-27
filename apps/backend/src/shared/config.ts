@@ -62,7 +62,20 @@ export const config = {
   stripe: {
     secretKey: optional('STRIPE_SECRET_KEY', ''),
     proPriceId: optional('STRIPE_PRO_PRICE_ID', ''),
+    doctorIndividualPriceId: optional('STRIPE_DOCTOR_INDIVIDUAL_PRICE_ID', optional('STRIPE_PRO_PRICE_ID', '')),
+    clinicCompletePriceId: optional('STRIPE_CLINIC_COMPLETE_PRICE_ID', ''),
     webhookSecret: optional('STRIPE_WEBHOOK_SECRET', ''),
+  },
+
+  payments: {
+    provider: optional('PAYMENT_PROVIDER', 'recurrente'),
+    recurrente: {
+      apiBase: optional('RECURRENTE_API_BASE', 'https://app.recurrente.com/api'),
+      secretKey: optional('RECURRENTE_SECRET_KEY', ''),
+      publicKey: optional('RECURRENTE_PUBLIC_KEY', ''),
+      webhookSecret: optional('RECURRENTE_WEBHOOK_SECRET', ''),
+      webhookMaxSkewSeconds: Number(optional('RECURRENTE_WEBHOOK_MAX_SKEW_SECONDS', '300')),
+    },
   },
 
   ai: {

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
+import { requireTenantCapability } from '../../shared/services/limits.service.ts'
 import {
   getPatientConsents,
   recordConsent,
@@ -64,6 +65,7 @@ router.delete(
   requirePermission(PERMISSIONS.HOSPITAL_MANAGE),
   async (c) => {
     const { tenant_id, sub, email } = c.get('auth')
+    await requireTenantCapability(tenant_id, 'compliance.center', 'El centro de cumplimiento avanzado está disponible en Clínica Completa.')
     const data = await anonymizePatient(tenant_id, c.req.param('patientId')!, sub, email)
     return c.json({ success: true, data })
   },

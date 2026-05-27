@@ -8,13 +8,14 @@ import {
   QrCode, Link2, Loader2, ExternalLink, Download, MessageCircle,
   Activity, CalendarClock, ClipboardList, Pill, Stethoscope, UserRound,
   ShieldCheck, Trash2, AlertTriangle, Copy, FlaskConical, BookOpen, Pencil,
-  Ruler, Scale, X, ArrowUpDown, CheckCircle, XCircle, Send, BedDouble, LogOut,
+  Ruler, Scale, X, ArrowUpDown, CheckCircle, XCircle, Send, BedDouble, LogOut, Bell,
+  Mail, Clock, AlertCircle as AlertCircleIcon,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
 import {
   getPatient, listEncounters, createEncounter, listDocuments,
-  generatePortalAccess, getPatientFhirBundle, listPatientTreatments,
+  generatePortalAccess, revokePortalAccess, getPatientFhirBundle, listPatientTreatments,
   listPatientCheckIns, listPatientProblems, createPatientProblem,
   listPatientBackground, listPatientBackgroundHistory, retirePatientBackground, upsertPatientBackground,
   listPatientVitalSigns, createPatientVitalSigns, getPatientClinicalWorkspace,
@@ -31,6 +32,8 @@ import {
   type PatientConsent, type ConsentType,
 } from '@/lib/doctor/compliance-api'
 import { listLabOrders, ORDER_STATUS_CONFIG, type LabOrder } from '@/lib/doctor/lab-api'
+import { fetchPatientNotifications, type PatientNotificationEntry, type NotificationStatus, type NotificationChannel } from '@/lib/doctor/notifications-api'
+import { listPatientAppointments, createAppointment, confirmAppointment, completeAppointment, noShowAppointment, cancelAppointment as cancelAppt, type Appointment as ApptType, type AppointmentType as ApptTypeEnum, type AppointmentStatus as ApptStatus } from '@/lib/doctor/appointments-api'
 import { listDepartments, type Department } from '@/lib/doctor/departments-api'
 import { DocumentUploader } from '@/components/doctor/DocumentUploader'
 import { DocumentList } from '@/components/doctor/DocumentList'
@@ -203,12 +206,15 @@ function PortalAccessSection({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
+  const [expiresInDays, setExpiresInDays] = useState(30)
+  const [confirmRevoke, setConfirmRevoke] = useState(false)
+  const [revoking, setRevoking] = useState(false)
 
   const activeTreatments = treatments.filter(t => t.status === 'ACTIVE')
+  const hasActiveAccess = !!result && new Date(result.expires_at) > new Date()
 
   useEffect(() => {
     let cancelled = false
-
     async function hydrateSavedAccess() {
       try {
         const raw = window.localStorage.getItem(portalAccessStorageKey(patientId))
@@ -232,7 +238,6 @@ function PortalAccessSection({
         window.localStorage.removeItem(portalAccessStorageKey(patientId))
       }
     }
-
     void hydrateSavedAccess()
     return () => { cancelled = true }
   }, [patientId])
@@ -243,7 +248,7 @@ function PortalAccessSection({
     setCopied(false)
     setQrDataUrl(null)
     try {
-      const data = await generatePortalAccess(token, patientId, channel)
+      const data = await generatePortalAccess(token, patientId, channel, expiresInDays)
       setResult(data)
       window.localStorage.setItem(portalAccessStorageKey(patientId), JSON.stringify(data))
       if (channel === 'qr' && 'qr_data' in data) {
@@ -258,7 +263,7 @@ function PortalAccessSection({
   }
 
   async function copyLink() {
-    if (!result || !('access_url' in result)) return
+    if (!result?.access_url) return
     try {
       await navigator.clipboard.writeText(withFreshPortalSession(result.access_url))
       setCopied(true)
@@ -274,95 +279,205 @@ function PortalAccessSection({
     window.open(withFreshPortalSession(result.access_url), '_blank', 'noopener,noreferrer')
   }
 
+  async function handleRevoke() {
+    setRevoking(true)
+    setError('')
+    try {
+      await revokePortalAccess(token, patientId)
+      setResult(null)
+      setQrDataUrl(null)
+      setConfirmRevoke(false)
+      window.localStorage.removeItem(portalAccessStorageKey(patientId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo revocar el acceso')
+    } finally {
+      setRevoking(false)
+    }
+  }
+
+  const CHANNELS = [
+    {
+      channel: 'magic_link' as const,
+      icon: Link2,
+      label: 'Link directo',
+      desc: 'URL para compartir por email, mensaje o QR propio.',
+    },
+    {
+      channel: 'whatsapp' as const,
+      icon: MessageCircle,
+      label: 'WhatsApp',
+      desc: 'Envía link y PIN de respaldo al celular del paciente.',
+      badge: 'Recomendado',
+    },
+    {
+      channel: 'qr' as const,
+      icon: QrCode,
+      label: 'Código QR',
+      desc: 'Escaneable en consulta o para imprimir y entregar.',
+    },
+  ]
+
   return (
     <ClinicalPanel title="Acceso al portal del paciente" icon={Link2} accent="green" collapsible defaultOpen={false}>
-      <div className="flex flex-col gap-4 p-5">
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--mt-muted)]">Tratamientos activos</p>
-            <p className="mt-1 text-2xl font-semibold text-[var(--mt-text)]">{activeTreatments.length}</p>
+      <div className="flex flex-col gap-5 p-5">
+
+        {/* Status row */}
+        <div className="flex gap-3">
+          <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-4 py-3 text-center">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--mt-muted)]">Activos</p>
+            <p className="mt-0.5 text-2xl font-semibold text-[var(--mt-text)]">{activeTreatments.length}</p>
           </div>
-          <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-4 py-3 md:col-span-2">
+          <div className="flex-1 rounded-xl border border-[var(--mt-border)] bg-[var(--mt-elevated)] px-4 py-3">
             <p className="text-xs font-medium uppercase tracking-wide text-[var(--mt-muted)]">Estado del acceso</p>
             <p className="mt-1 text-sm text-[var(--mt-text-2)]">
-              {result
-                ? `Link disponible hasta ${new Date(result.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                : 'Genera un enlace directo, QR o WhatsApp con link y PIN de respaldo.'}
+              {hasActiveAccess
+                ? `Activo · expira ${new Date(result!.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                : 'Sin acceso activo. Genera un enlace para que el paciente entre al portal.'}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {[
-            { channel: 'magic_link' as const, label: 'Link directo',   icon: <Link2 size={14} /> },
-            { channel: 'qr' as const,         label: 'QR directo',     icon: <QrCode size={14} /> },
-            { channel: 'whatsapp' as const,   label: 'Enviar WhatsApp',icon: <MessageCircle size={14} /> },
-          ].map(({ channel, label, icon }) => (
+        {/* Channel cards */}
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--mt-muted)]">Método de acceso</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {CHANNELS.map(({ channel, icon: Icon, label, desc, badge }) => (
+              <button
+                key={channel}
+                onClick={() => generate(channel)}
+                disabled={!!loading}
+                className="relative flex flex-col items-start gap-1.5 rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3 text-left transition-all hover:border-[var(--mt-primary-mist)] hover:bg-[var(--mt-elevated)] disabled:opacity-50"
+              >
+                {badge && (
+                  <span className="absolute right-2 top-2 rounded-full bg-[var(--mt-primary-subtle)] px-2 py-0.5 text-[10px] font-bold text-[var(--mt-primary)]">
+                    {badge}
+                  </span>
+                )}
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--mt-elevated)]">
+                  {loading === channel
+                    ? <Loader2 size={16} className="animate-spin text-[var(--mt-primary)]" />
+                    : <Icon size={16} className="text-[var(--mt-text-2)]" />}
+                </div>
+                <p className="text-sm font-semibold text-[var(--mt-text)]">{label}</p>
+                <p className="text-xs leading-relaxed text-[var(--mt-muted)]">{desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Expiration chips */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-[var(--mt-muted)]">Validez del acceso:</span>
+          {[7, 30, 90].map(days => (
             <button
-              key={channel}
-              onClick={() => generate(channel)}
-              disabled={!!loading}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-medium text-[var(--mt-text-2)] transition-colors hover:border-[var(--mt-primary-mist)] hover:text-[var(--mt-primary)] disabled:opacity-50"
+              key={days}
+              onClick={() => setExpiresInDays(days)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                expiresInDays === days
+                  ? 'border-[var(--mt-primary-mist)] bg-[var(--mt-primary-subtle)] text-[var(--mt-primary)]'
+                  : 'border-[var(--mt-border)] bg-[var(--mt-surface)] text-[var(--mt-text-2)] hover:border-[var(--mt-primary-mist)]'
+              }`}
             >
-              {loading === channel ? <Loader2 size={14} className="animate-spin" /> : icon}
-              {label}
+              {days} días
             </button>
           ))}
         </div>
 
-        {error && <p className="rounded-lg bg-[var(--mt-danger-subtle)] px-3 py-2 text-sm text-[var(--mt-danger)]">{error}</p>}
+        {/* Error */}
+        {error && (
+          <p className="rounded-lg bg-[var(--mt-danger-subtle)] px-3 py-2 text-sm text-[var(--mt-danger)]">{error}</p>
+        )}
 
+        {/* Result panel */}
         {result && (
           <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-success-subtle)] p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase text-[var(--mt-success)]">
-                {result.channel === 'whatsapp' ? 'WhatsApp enviado al paciente' : 'Link directo listo para entregar'}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-[var(--mt-success)]">
+                {result.channel === 'whatsapp' ? '✓ WhatsApp enviado al paciente' : '✓ Acceso listo para entregar'}
               </p>
               <p className="text-xs text-[var(--mt-muted)]">
                 Expira: {new Date(result.expires_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             </div>
-            <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-              {qrDataUrl && (
-                <div className="flex justify-center rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3">
-                  <img src={qrDataUrl} alt="QR de acceso directo al portal" className="h-48 w-48 rounded-lg" />
+
+            {/* QR image */}
+            {qrDataUrl && (
+              <div className="mb-4 flex justify-center">
+                <div className="rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)] p-3">
+                  <img src={qrDataUrl} alt="QR de acceso directo al portal" className="h-52 w-52 rounded-lg" />
                 </div>
-              )}
-              <div className="flex min-w-0 flex-col justify-center gap-3">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    readOnly
-                    value={withFreshPortalSession(result.access_url)}
-                    className="min-w-0 flex-1 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-xs text-[var(--mt-text-2)]"
-                  />
-                  <button
-                    onClick={copyLink}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-medium text-[var(--mt-text-2)] transition-colors hover:border-[var(--mt-border)] hover:bg-[var(--mt-elevated)]"
-                  >
-                    <Copy size={14} />
-                    {copied ? 'Copiado' : 'Copiar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openAccessLink}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-medium text-[var(--mt-text-2)] transition-colors hover:border-[var(--mt-border)] hover:bg-[var(--mt-elevated)]"
-                  >
-                    <ExternalLink size={14} />
-                    Probar acceso
-                  </button>
-                </div>
-                <p className="text-xs text-[var(--mt-muted)]">
-                  {result.channel === 'whatsapp'
-                    ? 'El mensaje incluye este link directo y un PIN de respaldo para el paciente.'
-                    : 'El paciente entra con este link sin escribir ID ni PIN.'}
-                </p>
-                {result.pin && (
-                  <p className="text-xs font-medium text-[var(--mt-success)]">PIN enviado: {result.pin}</p>
-                )}
               </div>
+            )}
+
+            {/* WhatsApp PIN — prominent display */}
+            {'pin' in result && result.pin && (
+              <div className="mb-4 rounded-xl border border-[var(--mt-border)] bg-[var(--mt-surface)] px-4 py-3">
+                <p className="text-xs font-medium text-[var(--mt-muted)]">PIN de respaldo enviado al paciente</p>
+                <p className="mt-1 font-mono text-3xl font-bold tracking-[0.25em] text-[var(--mt-text)]">{result.pin}</p>
+                <p className="mt-1 text-xs text-[var(--mt-muted)]">El paciente puede usar este PIN si el link no funciona.</p>
+              </div>
+            )}
+
+            {/* URL + actions */}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                readOnly
+                value={withFreshPortalSession(result.access_url)}
+                className="min-w-0 flex-1 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 py-2 text-xs text-[var(--mt-text-2)]"
+              />
+              <button
+                onClick={copyLink}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-medium text-[var(--mt-text-2)] transition-colors hover:bg-[var(--mt-elevated)]"
+              >
+                <Copy size={14} />
+                {copied ? 'Copiado' : 'Copiar'}
+              </button>
+              <button
+                onClick={openAccessLink}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--mt-border)] bg-[var(--mt-surface)] px-3 text-sm font-medium text-[var(--mt-text-2)] transition-colors hover:bg-[var(--mt-elevated)]"
+              >
+                <ExternalLink size={14} />
+                Probar
+              </button>
             </div>
           </div>
         )}
+
+        {/* Revoke section */}
+        {hasActiveAccess && (
+          <div className="border-t border-[var(--mt-border)] pt-4">
+            {confirmRevoke ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl bg-[var(--mt-danger-subtle)] px-4 py-3">
+                <p className="flex-1 text-sm text-[var(--mt-danger)]">
+                  El paciente perderá acceso al portal inmediatamente. ¿Confirmar?
+                </p>
+                <button
+                  onClick={handleRevoke}
+                  disabled={revoking}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--mt-danger)] px-3 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {revoking ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Revocar
+                </button>
+                <button
+                  onClick={() => setConfirmRevoke(false)}
+                  className="text-sm text-[var(--mt-text-2)] hover:text-[var(--mt-text)]"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmRevoke(true)}
+                className="flex items-center gap-2 text-sm text-[var(--mt-muted)] transition-colors hover:text-[var(--mt-danger)]"
+              >
+                <Trash2 size={14} />
+                Revocar acceso del paciente
+              </button>
+            )}
+          </div>
+        )}
+
       </div>
     </ClinicalPanel>
   )
@@ -694,21 +809,23 @@ function PatientBiometricsSection({
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
-type PatientTab = 'summary' | 'historia' | 'biometrics' | 'encounters' | 'treatments' | 'adherence' | 'documents' | 'lab' | 'referrals' | 'admissions' | 'access' | 'compliance'
+type PatientTab = 'summary' | 'historia' | 'biometrics' | 'encounters' | 'treatments' | 'adherence' | 'documents' | 'lab' | 'referrals' | 'admissions' | 'access' | 'appointments' | 'notifications' | 'compliance'
 
 const TABS: Array<{ id: PatientTab; label: string; icon: typeof FileText }> = [
-  { id: 'summary',      label: 'Resumen',        icon: Activity      },
-  { id: 'historia',     label: 'Historia',        icon: BookOpen      },
-  { id: 'biometrics',   label: 'Biometría',       icon: Scale         },
-  { id: 'encounters',   label: 'Consultas',       icon: Stethoscope   },
-  { id: 'treatments',   label: 'Tratamientos',    icon: Pill          },
-  { id: 'adherence',    label: 'Adherencia',      icon: CalendarClock },
-  { id: 'documents',    label: 'Documentos',      icon: FileText      },
-  { id: 'lab',          label: 'Laboratorio',     icon: FlaskConical  },
-  { id: 'referrals',    label: 'Referencias',      icon: ArrowUpDown   },
-  { id: 'admissions',   label: 'Internamiento',   icon: BedDouble     },
-  { id: 'access',       label: 'Portal',          icon: Link2         },
-  { id: 'compliance',   label: 'Cumplimiento',    icon: ShieldCheck   },
+  { id: 'summary',       label: 'Resumen',        icon: Activity      },
+  { id: 'historia',      label: 'Historia',        icon: BookOpen      },
+  { id: 'biometrics',    label: 'Biometría',       icon: Scale         },
+  { id: 'encounters',    label: 'Consultas',       icon: Stethoscope   },
+  { id: 'treatments',    label: 'Tratamientos',    icon: Pill          },
+  { id: 'adherence',     label: 'Adherencia',      icon: CalendarClock },
+  { id: 'documents',     label: 'Documentos',      icon: FileText      },
+  { id: 'lab',           label: 'Laboratorio',     icon: FlaskConical  },
+  { id: 'referrals',     label: 'Referencias',     icon: ArrowUpDown   },
+  { id: 'admissions',    label: 'Internamiento',   icon: BedDouble     },
+  { id: 'access',        label: 'Portal',          icon: Link2         },
+  { id: 'appointments',  label: 'Citas',           icon: CalendarClock },
+  { id: 'notifications', label: 'Mensajes',        icon: Bell          },
+  { id: 'compliance',    label: 'Cumplimiento',    icon: ShieldCheck   },
 ]
 
 const WORKFLOW_STAGE_LABELS: Record<PatientClinicalWorkspace['workflow']['stage'], string> = {
@@ -755,6 +872,10 @@ export default function PatientProfilePage() {
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [admissions, setAdmissions] = useState<Admission[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [patientNotifications, setPatientNotifications] = useState<PatientNotificationEntry[]>([])
+  const [loadingPatientNotifs, setLoadingPatientNotifs] = useState(false)
+  const [patientAppointments, setPatientAppointments] = useState<ApptType[]>([])
+  const [loadingPatientAppts, setLoadingPatientAppts] = useState(false)
   const [loadingPage, setLoadingPage] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<PatientTab>('summary')
@@ -884,6 +1005,24 @@ export default function PatientProfilePage() {
     }, 50)
     return () => window.clearTimeout(id)
   }, [activeTab, focusAdmissions])
+
+  useEffect(() => {
+    if (activeTab !== 'notifications' || !token || patientNotifications.length > 0) return
+    setLoadingPatientNotifs(true)
+    fetchPatientNotifications(token, patientId)
+      .then(setPatientNotifications)
+      .catch(() => {})
+      .finally(() => setLoadingPatientNotifs(false))
+  }, [activeTab, token, patientId, patientNotifications.length])
+
+  useEffect(() => {
+    if (activeTab !== 'appointments' || !token || patientAppointments.length > 0) return
+    setLoadingPatientAppts(true)
+    listPatientAppointments(token, patientId)
+      .then(setPatientAppointments)
+      .catch(() => {})
+      .finally(() => setLoadingPatientAppts(false))
+  }, [activeTab, token, patientId, patientAppointments.length])
 
   // Handle deep-link URL params: ?openTab=admissions&referralId=xxx
   useEffect(() => {
@@ -2722,6 +2861,29 @@ export default function PatientProfilePage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB: APPOINTMENTS                                                      */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'appointments' && token && (
+        <PatientAppointmentsTab
+          appointments={patientAppointments}
+          loading={loadingPatientAppts}
+          token={token}
+          patientId={patientId}
+          onUpdate={updated => setPatientAppointments(prev => prev.map(a => a.id === updated.id ? updated : a))}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* TAB: NOTIFICATIONS                                                     */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'notifications' && (
+        <PatientNotificationsTab
+          entries={patientNotifications}
+          loading={loadingPatientNotifs}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* TAB: COMPLIANCE                                                        */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'compliance' && (
@@ -2899,5 +3061,291 @@ export default function PatientProfilePage() {
         </div>
       )}
     </ClinicalPage>
+  )
+}
+
+// ─── Patient Notifications Tab ────────────────────────────────────────────────
+
+const NOTIF_TYPE_LABELS: Record<string, string> = {
+  DOSE_REMINDER:      'Recordatorio de dosis',
+  DOSE_MISSED:        'Dosis perdida',
+  TREATMENT_STARTING: 'Tratamiento iniciado',
+  TREATMENT_ENDING:   'Tratamiento por terminar',
+  APPOINTMENT:        'Cita médica',
+  WELCOME:            'Bienvenida al portal',
+  MAGIC_LINK:         'Acceso al portal',
+}
+
+const NOTIF_STATUS_CONFIG: Record<NotificationStatus, { bg: string; fg: string; label: string }> = {
+  SENT:      { bg: '#ecfdf5', fg: '#047857', label: 'Enviado'   },
+  DELIVERED: { bg: '#dcfce7', fg: '#15803d', label: 'Entregado' },
+  QUEUED:    { bg: '#fffbeb', fg: '#b45309', label: 'En cola'   },
+  FAILED:    { bg: '#fef2f2', fg: '#b91c1c', label: 'Fallido'   },
+  BOUNCED:   { bg: '#fef2f2', fg: '#991b1b', label: 'Rebotado'  },
+}
+
+const NOTIF_CHANNEL_ICON: Record<NotificationChannel, typeof Mail> = {
+  email:    Mail,
+  whatsapp: MessageCircle,
+  sms:      MessageCircle,
+  push:     Bell,
+}
+
+function relNotifTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return 'Ahora'
+  if (mins < 60) return `hace ${mins} min`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `hace ${hrs}h`
+  return `hace ${Math.floor(hrs / 24)} días`
+}
+
+// ─── Patient Appointments Tab ─────────────────────────────────────────────────
+
+const APPT_TYPE_LABELS: Record<ApptTypeEnum, string> = {
+  CONSULTATION: 'Consulta', FOLLOW_UP: 'Seguimiento', PROCEDURE: 'Procedimiento',
+  CHECK_UP: 'Control', EMERGENCY: 'Urgencia', TELECONSULT: 'Teleconsulta',
+}
+
+const APPT_STATUS_CONFIG: Record<ApptStatus, { bg: string; fg: string; label: string }> = {
+  SCHEDULED:   { bg: '#eff6ff', fg: '#1d4ed8', label: 'Programada'  },
+  CONFIRMED:   { bg: '#f0fdf4', fg: '#15803d', label: 'Confirmada'  },
+  IN_PROGRESS: { bg: '#fffbeb', fg: '#b45309', label: 'En consulta' },
+  COMPLETED:   { bg: '#f8fafc', fg: '#475569', label: 'Completada'  },
+  CANCELLED:   { bg: '#fef2f2', fg: '#b91c1c', label: 'Cancelada'   },
+  NO_SHOW:     { bg: '#fdf4ff', fg: '#7e22ce', label: 'No asistió'  },
+}
+
+function PatientAppointmentsTab({
+  appointments, loading, token, patientId, onUpdate,
+}: {
+  appointments: ApptType[]
+  loading: boolean
+  token: string
+  patientId: string
+  onUpdate: (a: ApptType) => void
+}) {
+  if (loading) {
+    return (
+      <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', margin: '0 auto 12px', border: '3px solid var(--mt-primary-mist)', borderTopColor: 'var(--mt-primary)', animation: 'spin 1s linear infinite' }} />
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--mt-muted)' }}>Cargando citas…</p>
+      </div>
+    )
+  }
+
+  if (appointments.length === 0) {
+    return (
+      <div style={{ padding: '56px 20px', textAlign: 'center' }}>
+        <div style={{ width: 48, height: 48, borderRadius: 14, margin: '0 auto 14px', background: 'var(--mt-primary-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <CalendarClock size={20} color="var(--mt-primary)" />
+        </div>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--mt-text)' }}>Sin citas registradas</p>
+        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mt-muted)' }}>Las citas programadas para este paciente aparecerán aquí.</p>
+      </div>
+    )
+  }
+
+  async function act(id: string, fn: () => Promise<ApptType>) {
+    try { onUpdate(await fn()) } catch {}
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {appointments
+        .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
+        .map(appt => {
+          const s = APPT_STATUS_CONFIG[appt.status]
+          const dt = new Date(appt.scheduled_at)
+          const canAct = appt.status !== 'COMPLETED' && appt.status !== 'CANCELLED' && appt.status !== 'NO_SHOW'
+          return (
+            <div key={appt.id} style={{
+              background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+              borderRadius: 12, padding: '14px 16px',
+              display: 'flex', flexDirection: 'column', gap: 8,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: 'var(--mt-text)' }}>
+                    {dt.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    <span style={{ marginLeft: 8, fontWeight: 500, color: 'var(--mt-text-2)' }}>
+                      {dt.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    </span>
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--mt-muted)' }}>
+                    {APPT_TYPE_LABELS[appt.type]} · {appt.duration_minutes} min
+                    {appt.doctor && ` · Dr. ${appt.doctor.first_name} ${appt.doctor.last_name}`}
+                  </p>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: s.bg, color: s.fg, whiteSpace: 'nowrap' }}>
+                  {s.label}
+                </span>
+              </div>
+              {appt.reason && <p style={{ margin: 0, fontSize: 13, color: 'var(--mt-text-2)' }}>{appt.reason}</p>}
+              {appt.cancelled_reason && (
+                <p style={{ margin: 0, fontSize: 12, color: '#b91c1c', background: '#fef2f2', borderRadius: 6, padding: '4px 8px' }}>
+                  Cancelada: {appt.cancelled_reason}
+                </p>
+              )}
+              {canAct && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {appt.status === 'SCHEDULED' && (
+                    <button onClick={() => act(appt.id, () => confirmAppointment(token, appt.id))} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 7, border: '1px solid #22c55e22', background: '#f0fdf4', color: '#15803d', cursor: 'pointer', fontWeight: 600 }}>
+                      Confirmar
+                    </button>
+                  )}
+                  {(appt.status === 'CONFIRMED' || appt.status === 'IN_PROGRESS') && (
+                    <button onClick={() => act(appt.id, () => completeAppointment(token, appt.id))} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 7, border: '1px solid #3b82f622', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer', fontWeight: 600 }}>
+                      Completar
+                    </button>
+                  )}
+                  <button onClick={() => act(appt.id, () => noShowAppointment(token, appt.id))} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 7, border: '1px solid #a855f722', background: '#fdf4ff', color: '#7e22ce', cursor: 'pointer', fontWeight: 600 }}>
+                    No asistió
+                  </button>
+                  <button onClick={() => act(appt.id, () => cancelAppt(token, appt.id))} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 7, border: '1px solid #ef444422', background: '#fef2f2', color: '#b91c1c', cursor: 'pointer', fontWeight: 600 }}>
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+    </div>
+  )
+}
+
+// ─── Patient Notifications Tab ────────────────────────────────────────────────
+
+function PatientNotificationsTab({
+  entries,
+  loading,
+}: {
+  entries: PatientNotificationEntry[]
+  loading: boolean
+}) {
+  if (loading) {
+    return (
+      <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%', margin: '0 auto 12px',
+          border: '3px solid var(--mt-primary-mist)',
+          borderTopColor: 'var(--mt-primary)',
+          animation: 'spin 1s linear infinite',
+        }} />
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--mt-muted)' }}>Cargando mensajes…</p>
+      </div>
+    )
+  }
+
+  if (entries.length === 0) {
+    return (
+      <div style={{ padding: '56px 20px', textAlign: 'center' }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: 14, margin: '0 auto 14px',
+          background: 'var(--mt-primary-subtle)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Bell size={20} color="var(--mt-primary)" />
+        </div>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--mt-text)' }}>Sin mensajes registrados</p>
+        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--mt-muted)' }}>
+          Los recordatorios de dosis y accesos al portal de este paciente aparecerán aquí.
+        </p>
+      </div>
+    )
+  }
+
+  const failed = entries.filter(e => e.status === 'FAILED' || e.status === 'BOUNCED').length
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {failed > 0 && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10,
+          background: '#fff1f2', border: '1px solid #fecdd3',
+          display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+        }}>
+          <AlertCircleIcon size={14} color="#b91c1c" style={{ flexShrink: 0 }} />
+          <span style={{ color: '#b91c1c', fontWeight: 500 }}>
+            {failed} mensaje{failed !== 1 ? 's' : ''} fallido{failed !== 1 ? 's' : ''} — verifica la configuración de envío.
+          </span>
+        </div>
+      )}
+
+      <div style={{
+        background: 'var(--mt-surface)',
+        border: '1px solid var(--mt-border)',
+        borderRadius: 14, overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '10px 16px', borderBottom: '1px solid var(--mt-border)',
+          background: 'var(--mt-bg)', fontSize: 12, fontWeight: 600,
+          color: 'var(--mt-muted)', textTransform: 'uppercase', letterSpacing: '0.07em',
+        }}>
+          {entries.length} mensaje{entries.length !== 1 ? 's' : ''} · más recientes primero
+        </div>
+
+        {entries.map((n, i) => {
+          const s = NOTIF_STATUS_CONFIG[n.status] ?? NOTIF_STATUS_CONFIG.QUEUED
+          const ChannelIcon = NOTIF_CHANNEL_ICON[n.channel] ?? Mail
+          const isCritical = n.status === 'FAILED' || n.status === 'BOUNCED'
+
+          return (
+            <div
+              key={n.id}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 12,
+                padding: '13px 16px',
+                borderBottom: i < entries.length - 1 ? '1px solid var(--mt-border)' : 'none',
+                background: isCritical ? '#fff8f8' : 'var(--mt-surface)',
+              }}
+            >
+              <div style={{
+                width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <ChannelIcon size={13} color={s.fg} />
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--mt-text)' }}>
+                    {NOTIF_TYPE_LABELS[n.type] ?? n.type}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                    background: s.bg, color: s.fg,
+                  }}>
+                    {s.label}
+                  </span>
+                  {n.attempt_count > 1 && (
+                    <span style={{ fontSize: 11, color: 'var(--mt-muted)' }}>
+                      {n.attempt_count} intentos
+                    </span>
+                  )}
+                </div>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--mt-muted)' }}>
+                  vía {n.channel}
+                  {n.sent_at && ` · enviado ${relNotifTime(n.sent_at)}`}
+                </p>
+                {n.failed_reason && (
+                  <p style={{
+                    margin: '5px 0 0', fontSize: 11.5, color: '#b91c1c',
+                    background: '#fef2f2', borderRadius: 6, padding: '3px 7px',
+                  }}>
+                    {n.failed_reason.length > 100 ? n.failed_reason.slice(0, 97) + '…' : n.failed_reason}
+                  </p>
+                )}
+              </div>
+
+              <span style={{ fontSize: 11.5, color: 'var(--mt-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {relNotifTime(n.created_at)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }

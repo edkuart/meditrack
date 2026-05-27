@@ -9,7 +9,7 @@ import { authPin } from '@/lib/portal/api'
 
 export default function PortalAuthPage() {
   const router = useRouter()
-  const [patientId, setPatientId] = useState('')
+  const [patientId, setPatientId] = useState<string | null>(null)
   const [pin, setPin]             = useState('')
   const [error, setError]         = useState('')
   const [loading, setLoading]     = useState(false)
@@ -33,6 +33,9 @@ export default function PortalAuthPage() {
       setLoading(false)
     }
   }
+
+  /* ── Still resolving URL params ── */
+  if (patientId === null) return null
 
   /* ── No patient ID in URL: direct access with no link ── */
   if (!patientId) {
@@ -116,10 +119,12 @@ export default function PortalAuthPage() {
               PIN de 6 dígitos
             </label>
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
               value={pin}
-              onChange={e => setPin(e.target.value.slice(0, 6))}
+              onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="000000"
               autoFocus
               style={{

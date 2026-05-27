@@ -81,8 +81,8 @@ describe('REST app critical routes', () => {
     expect(refresh.status).toBe(401)
     expect(logout.status).toBe(200)
     expect(logout.headers.getSetCookie()).toEqual([
-      'meditrack_admin_access=; Max-Age=0; Path=/api/v1/admin',
-      'meditrack_admin_refresh=; Max-Age=0; Path=/api/v1/admin',
+      'meditrack_admin_access=; Max-Age=0; Path=/api/v1/admin; SameSite=Lax',
+      'meditrack_admin_refresh=; Max-Age=0; Path=/api/v1/admin; SameSite=Lax',
     ])
   })
 

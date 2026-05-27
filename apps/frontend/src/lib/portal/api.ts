@@ -220,6 +220,25 @@ export async function getHistory(token: string) {
   }>>('/portal/history', token)
 }
 
+export interface EncounterDetail {
+  id: string
+  encounter_type: string
+  status: string
+  chief_complaint: string | null
+  subjective: string | null
+  objective: string | null
+  assessment: string | null
+  plan: string | null
+  summary: string | null
+  opened_at: string
+  closed_at: string | null
+  doctor: { first_name: string; last_name: string; specialty: string | null }
+}
+
+export async function getEncounterDetail(token: string, encounterId: string) {
+  return portalFetch<EncounterDetail>(`/portal/encounters/${encounterId}`, token)
+}
+
 export interface PatientDocument {
   id: string
   type: string

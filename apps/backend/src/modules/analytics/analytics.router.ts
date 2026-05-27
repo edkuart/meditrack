@@ -4,6 +4,7 @@ import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
 import { NotFoundError } from '../../shared/errors.ts'
 import { db, patients } from '../../shared/db/index.ts'
+import { requireTenantCapability } from '../../shared/services/limits.service.ts'
 import {
   getClinicSummary,
   getPatientAdherenceReport,
@@ -29,6 +30,7 @@ router.get('/analytics/clinic', requireAuth, requirePermission(PERMISSIONS.ANALY
 
 router.get('/analytics/clinic/trends', requireAuth, requirePermission(PERMISSIONS.ANALYTICS_READ), async (c) => {
   const { tenant_id } = c.get('auth')
+  await requireTenantCapability(tenant_id, 'analytics.advanced', 'Analytics avanzado está disponible en Clínica Completa.')
   const weeks = Math.min(52, Math.max(4, Number(c.req.query('weeks') ?? '12')))
   const data = await getClinicTrends(tenant_id, weeks)
   return c.json({ success: true, data })
@@ -38,6 +40,7 @@ router.get('/analytics/clinic/trends', requireAuth, requirePermission(PERMISSION
 
 router.get('/analytics/clinic/cohorts', requireAuth, requirePermission(PERMISSIONS.ANALYTICS_READ), async (c) => {
   const { tenant_id } = c.get('auth')
+  await requireTenantCapability(tenant_id, 'analytics.advanced', 'Analytics avanzado está disponible en Clínica Completa.')
   const period = Math.min(90, Math.max(7, Number(c.req.query('period') ?? '30')))
   const data = await getAdherenceCohorts(tenant_id, period)
   return c.json({ success: true, data })
@@ -47,6 +50,7 @@ router.get('/analytics/clinic/cohorts', requireAuth, requirePermission(PERMISSIO
 
 router.get('/analytics/export/patients', requireAuth, requirePermission(PERMISSIONS.ANALYTICS_READ), async (c) => {
   const { tenant_id } = c.get('auth')
+  await requireTenantCapability(tenant_id, 'audit.export', 'Las exportaciones administrativas están disponibles en Clínica Completa.')
   const csv = await buildPatientsCsv(tenant_id)
   const date = new Date().toISOString().substring(0, 10)
 

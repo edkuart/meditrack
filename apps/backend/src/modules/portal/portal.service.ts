@@ -503,6 +503,23 @@ export async function getPatientHistory(patientId: string) {
   })
 }
 
+export async function getEncounterDetailForPortal(patientId: string, encounterId: string) {
+  const enc = await db.query.encounters.findFirst({
+    where: and(eq(encounters.id, encounterId), eq(encounters.patient_id, patientId)),
+    columns: {
+      id: true, encounter_type: true, status: true,
+      chief_complaint: true, subjective: true, objective: true,
+      assessment: true, plan: true, summary: true,
+      opened_at: true, closed_at: true,
+    },
+    with: {
+      doctor: { columns: { first_name: true, last_name: true, specialty: true } },
+    },
+  })
+  if (!enc) throw new NotFoundError('Encounter')
+  return enc
+}
+
 export async function getPatientDocuments(patientId: string) {
   return db.query.documents.findMany({
     where: and(

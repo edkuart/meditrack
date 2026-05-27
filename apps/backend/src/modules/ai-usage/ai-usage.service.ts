@@ -1,8 +1,8 @@
 import { and, count, desc, eq, gte, sql } from 'drizzle-orm'
-import { aiUsageEvents, db, tenants } from '../../shared/db/index.ts'
+import { aiUsageEvents, db } from '../../shared/db/index.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
-import { PLAN_LIMITS } from '../../shared/services/limits.service.ts'
-import { AppError, NotFoundError } from '../../shared/errors.ts'
+import { getTenantEntitlements, PLAN_LIMITS } from '../../shared/services/limits.service.ts'
+import { AppError } from '../../shared/errors.ts'
 import { RecordAiUsageSchema } from './ai-usage.schema.ts'
 import type { RecordAiUsageInput } from './ai-usage.schema.ts'
 
@@ -10,15 +10,6 @@ type Plan = keyof typeof PLAN_LIMITS
 
 function monthStart(date = new Date()) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0))
-}
-
-async function getTenantPlan(tenantId: string): Promise<Plan> {
-  const tenant = await db.query.tenants.findFirst({
-    where: eq(tenants.id, tenantId),
-    columns: { plan_type: true },
-  })
-  if (!tenant) throw new NotFoundError('Tenant')
-  return tenant.plan_type as Plan
 }
 
 export function aiFeatureFromAssistMode(mode: string): RecordAiUsageInput['feature'] {
@@ -35,8 +26,9 @@ export function aiFeatureFromAssistMode(mode: string): RecordAiUsageInput['featu
 }
 
 export async function getAiUsageStatus(tenantId: string) {
-  const plan = await getTenantPlan(tenantId)
-  const limit = PLAN_LIMITS[plan].max_ai_units_monthly
+  const entitlements = await getTenantEntitlements(tenantId)
+  const plan = entitlements.plan as Plan
+  const limit = entitlements.limits.max_ai_units_monthly
   const since = monthStart()
 
   const [{ unitsUsed }] = await db
@@ -51,6 +43,8 @@ export async function getAiUsageStatus(tenantId: string) {
 
   return {
     plan,
+    base_plan: entitlements.base_plan,
+    access_grant: entitlements.access_grant,
     period: { starts_at: since },
     limit,
     used: Number(unitsUsed),

@@ -141,6 +141,12 @@ router.get('/portal/history', requirePatient, async (c) => {
   return c.json({ success: true, data })
 })
 
+router.get('/portal/encounters/:id', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.getEncounterDetailForPortal(p.sub, c.req.param('id')!)
+  return c.json({ success: true, data })
+})
+
 router.get('/portal/documents', requirePatient, async (c) => {
   const p = c.get('patient')
   const data = await portalService.getPatientDocuments(p.sub)

@@ -1,6 +1,6 @@
 import { createHmac } from 'crypto'
 import { describe, it, expect } from 'vitest'
-import { verifyStripeSignature } from './billing.service.ts'
+import { verifyRecurrenteSignature, verifyStripeSignature } from './billing.service.ts'
 import { AppError } from '../../shared/errors.ts'
 
 const TEST_SECRET = 'whsec_test_secret_for_unit_tests_only'
@@ -10,6 +10,22 @@ function makeSignature(body: string, secret: string, timestamp?: number): string
   const ts = timestamp ?? Math.floor(Date.now() / 1000)
   const mac = createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex')
   return `t=${ts},v1=${mac}`
+}
+
+const RECURRENTE_SECRET = `whsec_${Buffer.from('recurrente_test_secret').toString('base64')}`
+
+function makeRecurrenteHeaders(body: string, secret: string, timestamp?: number) {
+  const ts = String(timestamp ?? Math.floor(Date.now() / 1000))
+  const id = 'msg_test_123'
+  const secretPart = secret.startsWith('whsec_') ? secret.slice('whsec_'.length) : secret
+  const sig = createHmac('sha256', Buffer.from(secretPart, 'base64'))
+    .update(`${id}.${ts}.${body}`)
+    .digest('base64')
+  return {
+    'svix-id': id,
+    'svix-timestamp': ts,
+    'svix-signature': `v1,${sig}`,
+  }
 }
 
 describe('verifyStripeSignature', () => {
@@ -64,5 +80,30 @@ describe('verifyStripeSignature', () => {
       expect(err).toBeInstanceOf(AppError)
       expect((err as AppError).statusCode).toBe(400)
     }
+  })
+})
+
+describe('verifyRecurrenteSignature', () => {
+  it('accepts a valid Svix-style signature', () => {
+    const headers = makeRecurrenteHeaders(BODY, RECURRENTE_SECRET)
+    expect(() => verifyRecurrenteSignature(BODY, headers, RECURRENTE_SECRET)).not.toThrow()
+  })
+
+  it('throws INVALID_SIGNATURE when signature headers are missing', () => {
+    expect(() => verifyRecurrenteSignature(BODY, {}, RECURRENTE_SECRET))
+      .toThrowError(expect.objectContaining({ code: 'INVALID_SIGNATURE' }))
+  })
+
+  it('throws INVALID_SIGNATURE when the body has been tampered with', () => {
+    const headers = makeRecurrenteHeaders(BODY, RECURRENTE_SECRET)
+    expect(() => verifyRecurrenteSignature(`${BODY} `, headers, RECURRENTE_SECRET))
+      .toThrowError(expect.objectContaining({ code: 'INVALID_SIGNATURE' }))
+  })
+
+  it('throws STALE_EVENT when the timestamp exceeds the allowed window', () => {
+    const staleTs = Math.floor(Date.now() / 1000) - 301
+    const headers = makeRecurrenteHeaders(BODY, RECURRENTE_SECRET, staleTs)
+    expect(() => verifyRecurrenteSignature(BODY, headers, RECURRENTE_SECRET))
+      .toThrowError(expect.objectContaining({ code: 'STALE_EVENT' }))
   })
 })

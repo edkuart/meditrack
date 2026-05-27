@@ -43,6 +43,8 @@ export interface DoctorUser {
     permissions: string[]
   } | null
   permissions: string[]
+  tenant_plan: 'free' | 'doctor_individual' | 'clinic_complete' | 'pro' | 'enterprise'
+  tenant_capabilities: string[]
   specialty: string | null
   colegiado_number: string | null
   professional_id: string | null
@@ -76,6 +78,7 @@ export async function register(data: {
   colegiado_number: string
   professional_id?: string
   specialty?: string
+  selected_plan?: 'doctor_individual' | 'clinic_complete'
   dpi_document_key?: string
 }): Promise<AuthResult> {
   return publicFetch('/auth/register', {

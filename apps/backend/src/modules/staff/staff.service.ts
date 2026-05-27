@@ -5,7 +5,7 @@ import { departmentMembers } from '../../shared/db/schema/departments.ts'
 import { generateOpaqueToken, hashToken, signAccessToken, generateRefreshToken, refreshTokenExpiresAt } from '../../shared/services/token.service.ts'
 import { sendEmail } from '../../shared/services/email.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
-import { assertStaffLimit } from '../../shared/services/limits.service.ts'
+import { assertStaffLimit, getTenantEntitlements, requireTenantCapability } from '../../shared/services/limits.service.ts'
 import { ConflictError, NotFoundError, UnauthorizedError, ForbiddenError } from '../../shared/errors.ts'
 import type {
   InviteStaffInput,
@@ -123,6 +123,11 @@ export async function createCustomRole(
   creatorEmail: string,
   input: CreateCustomRoleInput,
 ) {
+  await requireTenantCapability(
+    tenantId,
+    'roles.custom',
+    'Los roles personalizados están disponibles en Clínica Completa.',
+  )
   const permissions = normalizePermissions(input.permissions)
   assertCustomRolePermissions(input.base_role, permissions)
   const existing = await db.query.customRoles.findFirst({
@@ -161,6 +166,11 @@ export async function updateCustomRole(
   roleId: string,
   input: UpdateCustomRoleInput,
 ) {
+  await requireTenantCapability(
+    tenantId,
+    'roles.custom',
+    'Los roles personalizados están disponibles en Clínica Completa.',
+  )
   const existing = await db.query.customRoles.findFirst({
     where: and(eq(customRoles.id, roleId), eq(customRoles.tenant_id, tenantId), eq(customRoles.is_active, true)),
   })
@@ -250,6 +260,11 @@ export async function inviteStaff(
   inviterName: string,
   input: InviteStaffInput,
 ) {
+  await requireTenantCapability(
+    tenantId,
+    'staff.invites',
+    'La invitación de personal está disponible en Clínica Completa.',
+  )
   await assertStaffLimit(tenantId)
 
   // Check email not already in system
@@ -533,9 +548,12 @@ export async function getFullUser(userId: string) {
         columns: { id: true, name: true, description: true, base_role: true, permissions: true },
       })
     : null
+  const entitlements = await getTenantEntitlements(rest.tenant_id)
   return {
     ...rest,
     tenant_type: tenant?.type ?? 'CLINIC',
+    tenant_plan: entitlements.plan,
+    tenant_capabilities: entitlements.capabilities,
     custom_role: customRole ? { ...customRole, permissions: normalizePermissions(customRole.permissions) } : null,
     permissions: await resolveEffectivePermissions(rest.tenant_id, rest.role, rest.custom_role_id),
   }

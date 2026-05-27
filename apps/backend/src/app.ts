@@ -36,6 +36,7 @@ import { referralsRouter } from './modules/referrals/referrals.router.ts'
 import { admissionsRouter } from './modules/admissions/admissions.router.ts'
 import { doctorNotificationsRouter } from './modules/doctor-notifications/doctor-notifications.router.ts'
 import { locationsRouter } from './modules/locations/locations.router.ts'
+import { appointmentsRouter } from './modules/appointments/appointments.router.ts'
 import { rateLimit } from './shared/middleware/rate-limit.middleware.ts'
 import { securityHeaders } from './shared/middleware/security.middleware.ts'
 import { requestContext, structuredRequestLogger } from './shared/middleware/observability.middleware.ts'
@@ -143,6 +144,7 @@ export function createApp() {
   app.route('/api/v1', accessRouter)
   app.route('/api/v1', referralsRouter)
   app.route('/api/v1', admissionsRouter)
+  app.route('/api/v1', appointmentsRouter)
   app.route('/api/v1', locationsRouter)
   app.route('/api/v1', doctorNotificationsRouter)
 

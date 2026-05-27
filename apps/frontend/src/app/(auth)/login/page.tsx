@@ -251,6 +251,15 @@ export default function LoginPage() {
     const password = fd.get('password') as string
     try {
       const user = await login(email, password)
+      const selectedPlan = window.localStorage.getItem('meditrack_selected_plan')
+      if (
+        user.is_verified &&
+        user.tenant_plan === 'free' &&
+        (selectedPlan === 'doctor_individual' || selectedPlan === 'clinic_complete')
+      ) {
+        router.replace(`/settings/billing?plan=${selectedPlan}`)
+        return
+      }
       router.replace(getDefaultClinicalPath(user))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')

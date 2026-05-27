@@ -177,8 +177,10 @@ export interface PendingDoctor {
   specialty: string | null
   dpi_document_key: string | null
   is_verified: boolean
+  is_active: boolean
   verification_rejected_at: string | null
   verification_rejected_reason: string | null
+  last_login_at: string | null
   created_at: string
   role: string
   tenant: { id: string; name: string; slug: string }
@@ -201,15 +203,140 @@ export async function rejectDoctor(userId: string, reason: string) {
   })
 }
 
+export async function updateAdminUserStatus(userId: string, isActive: boolean, reason?: string) {
+  return adminFetch<{ data: PendingDoctor }>(`/admin/users/${userId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_active: isActive, reason }),
+  })
+}
+
 // ─── Tenants ───────────────────────────────────────────────────────────────────
 
 export interface Tenant {
   id: string
   name: string
   slug: string
-  plan_type: 'free' | 'pro' | 'enterprise'
+  plan_type: PlanType
   status: 'active' | 'suspended' | 'cancelled'
   created_at: string
+  last_login_at?: string | null
+  owner?: {
+    id: string
+    email: string
+    first_name: string
+    last_name: string
+    role: string
+  } | null
+  usage?: {
+    staff: number
+    patients: number
+  }
+}
+
+export type PlanType = 'free' | 'doctor_individual' | 'clinic_complete' | 'pro' | 'enterprise'
+export type AccessGrantDuration = '1_day' | '7_days' | '30_days' | '365_days' | 'custom'
+
+export interface TenantAccessGrant {
+  id: string
+  tenant_id: string
+  grant_type: 'trial' | 'promo' | 'manual_override' | 'internal_demo'
+  plan_type: PlanType
+  status: 'active' | 'expired' | 'revoked' | 'converted'
+  starts_at: string
+  ends_at: string
+  reason: string
+  notes: string | null
+  max_ai_units_monthly: number | null
+  max_organizations: number | null
+  max_staff: number | null
+  max_patients: number | null
+}
+
+export interface CommercialAccount {
+  tenant: Tenant
+  owner: {
+    id: string
+    email: string
+    first_name: string
+    last_name: string
+    role: string
+  } | null
+  active_grant: TenantAccessGrant | null
+  grant_history: TenantAccessGrant[]
+  commercial_state: {
+    trial_status: 'active' | 'expiring' | 'expired' | 'converted' | 'none'
+    days_remaining: number | null
+    latest_grant_status: TenantAccessGrant['status'] | null
+    latest_grant_ended_at: string | null
+  }
+  usage: {
+    organizations: number
+    staff: number
+    patients: number
+    ai: {
+      plan: PlanType
+      base_plan: PlanType
+      access_grant: {
+        id: string
+        grant_type: string
+        starts_at: string
+        ends_at: string
+        reason: string
+      } | null
+      period: { starts_at: string }
+      limit: number
+      used: number
+      remaining: number
+      event_count: number
+    }
+  }
+  billing: {
+    revenue_paid_gtq: number
+    revenue_pending_gtq: number
+    paid_invoice_count: number
+    pending_invoice_count: number
+    latest_invoice: CommercialInvoice | null
+    latest_pending_invoice: CommercialInvoice | null
+  }
+}
+
+export interface CommercialInvoice {
+  id: string
+  tenant_id: string
+  invoice_number: string
+  status: 'pending' | 'paid' | 'overdue' | 'cancelled' | 'refunded'
+  plan_type: string
+  amount_gtq: string
+  currency: string
+  provider: 'recurrente' | 'stripe' | 'manual'
+  period_end: string | null
+  paid_at: string | null
+  created_at: string
+}
+
+export interface CommercialSummary {
+  trials: {
+    active: number
+    expiring: number
+    expired: number
+    converted: number
+    revoked: number
+    conversion_rate: number
+  }
+  paid_tenants: {
+    doctor_individual: number
+    clinic_complete: number
+    total: number
+  }
+  revenue: {
+    paid_total_gtq: number
+    paid_this_month_gtq: number
+    pending_gtq: number
+    by_plan: {
+      doctor_individual_gtq: number
+      clinic_complete_gtq: number
+    }
+  }
 }
 
 export async function fetchTenants(page = 1) {
@@ -218,10 +345,68 @@ export async function fetchTenants(page = 1) {
   )
 }
 
-export async function updateTenant(tenantId: string, data: Partial<Pick<Tenant, 'plan_type' | 'status'>>) {
+export async function updateTenant(tenantId: string, data: Partial<Pick<Tenant, 'plan_type' | 'status'>> & { reason?: string }) {
   return adminFetch(`/admin/tenants/${tenantId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
+  })
+}
+
+export async function fetchCommercialAccounts(page = 1) {
+  return adminFetch<{
+    data: CommercialAccount[]
+    meta: { total: number; page: number; limit: number }
+    summary: CommercialSummary
+  }>(
+    `/admin/commercial/accounts?page=${page}`
+  )
+}
+
+export async function expireCommercialAccessGrants() {
+  return adminFetch<{ data: { message: string } }>('/admin/commercial/access-grants/expire', {
+    method: 'POST',
+  })
+}
+
+export async function grantTenantAccess(
+  tenantId: string,
+  data: {
+    grant_type?: TenantAccessGrant['grant_type']
+    plan_type: Extract<PlanType, 'doctor_individual' | 'clinic_complete'>
+    duration: AccessGrantDuration
+    ends_at?: string
+    reason: string
+    notes?: string
+    max_ai_units_monthly?: number
+    max_organizations?: number
+    max_staff?: number
+    max_patients?: number
+  },
+) {
+  return adminFetch<{ data: TenantAccessGrant }>(`/admin/tenants/${tenantId}/access-grants`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function revokeTenantAccessGrant(grantId: string, reason: string) {
+  return adminFetch<{ data: TenantAccessGrant }>(`/admin/access-grants/${grantId}/revoke`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
+}
+
+export async function markAdminInvoicePaid(invoiceId: string, notes?: string) {
+  return adminFetch<{ data: { message: string } }>(`/admin/billing/invoices/${invoiceId}/mark-paid`, {
+    method: 'POST',
+    body: JSON.stringify({ notes }),
+  })
+}
+
+export async function cancelAdminInvoice(invoiceId: string, notes?: string) {
+  return adminFetch<{ data: { message: string } }>(`/admin/billing/invoices/${invoiceId}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ notes }),
   })
 }
 
@@ -240,8 +425,36 @@ export interface PasswordTicket {
   created_at: string
   updated_at: string
   resolved_at: string | null
-  tenant: { id: string; name: string; slug: string } | null
-  user: { id: string; email: string; first_name: string; last_name: string; role: string } | null
+  tenant: { id: string; name: string; slug: string; plan_type?: PlanType; status?: 'active' | 'suspended' | 'cancelled' } | null
+  user: {
+    id: string
+    email: string
+    first_name: string
+    last_name: string
+    role: string
+    is_active?: boolean
+    is_verified?: boolean
+    last_login_at?: string | null
+  } | null
+  support_context?: {
+    open_tickets_for_email: number
+    user_status: {
+      is_active: boolean
+      is_verified: boolean
+      last_login_at: string | null
+    } | null
+    tenant_status: {
+      plan_type: PlanType
+      status: 'active' | 'suspended' | 'cancelled'
+    } | null
+    recent_audit: Array<{
+      id: string
+      action: string
+      resource_type: string
+      actor_email: string | null
+      created_at: string
+    }>
+  }
 }
 
 export async function fetchPasswordTickets(status: PasswordTicketStatus | 'all' = 'OPEN', page = 1) {

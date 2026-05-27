@@ -1,18 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Clock, ShieldCheck, LogOut, RefreshCw } from 'lucide-react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Clock, CreditCard, ShieldCheck, LogOut, RefreshCw } from 'lucide-react'
 import { getMe, logoutSession, refreshSession } from '@/lib/doctor/api'
+import { getPricingPlan, type CommercialPlanCode } from '@/lib/pricing/plans'
 
 const TOKEN_KEY = 'meditrack_doctor_token'
 const REFRESH_TOKEN_KEY = 'meditrack_doctor_refresh_token'
 
 export default function PendingVerificationPage() {
+  return (
+    <Suspense fallback={null}>
+      <PendingVerificationContent />
+    </Suspense>
+  )
+}
+
+function PendingVerificationContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [checking, setChecking] = useState(false)
   const [rejectedReason, setRejectedReason] = useState<string | null>(null)
   const [sessionToken, setSessionToken] = useState<string | null>(null)
+  const requestedPlan = useMemo<CommercialPlanCode>(() => {
+    const storedPlan = typeof window === 'undefined' ? null : window.localStorage.getItem('meditrack_selected_plan')
+    const plan = searchParams.get('plan') ?? storedPlan
+    return plan === 'clinic_complete' ? 'clinic_complete' : 'doctor_individual'
+  }, [searchParams])
+  const requestedPlanData = useMemo(() => getPricingPlan(requestedPlan), [requestedPlan])
 
   useEffect(() => {
     localStorage.removeItem(TOKEN_KEY)
@@ -144,6 +160,29 @@ export default function PendingVerificationPage() {
               <span style={{ fontSize: 13, color: 'var(--mt-text-2)', lineHeight: 1.5 }}>{step}</span>
             </div>
           ))}
+        </div>
+
+        <div style={{
+          background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+          borderRadius: 12, padding: '16px 18px', marginBottom: 24,
+          textAlign: 'left', display: 'flex', gap: 12, alignItems: 'flex-start',
+        }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 9,
+            background: 'var(--mt-purple-subtle)', color: 'var(--mt-purple)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <CreditCard size={17} />
+          </div>
+          <div>
+            <p style={{ fontSize: 12, color: 'var(--mt-muted)', margin: 0 }}>Plan solicitado</p>
+            <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--mt-text)', margin: '3px 0 3px' }}>
+              {requestedPlanData.name} · {requestedPlanData.price}/mes
+            </p>
+            <p style={{ fontSize: 12.5, color: 'var(--mt-text-2)', lineHeight: 1.45, margin: 0 }}>
+              Cuando tu cuenta sea aprobada, te llevaremos a billing para completar el pago y activar el plan.
+            </p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>

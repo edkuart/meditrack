@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, CalendarDays, Stethoscope } from 'lucide-react'
+import { ArrowLeft, CalendarDays, ChevronRight, Stethoscope } from 'lucide-react'
 import { clearSession, getSession } from '@/lib/portal/session'
 import { getHistory, isUnauthorizedPortalError } from '@/lib/portal/api'
 
@@ -110,64 +110,54 @@ export default function HistoryPage() {
 function EncounterCard({ enc }: { enc: Encounter }) {
   const isOpen = enc.status !== 'CLOSED'
   return (
-    <div className="portal-plan-card">
-      <div style={{ padding: '14px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-          <div style={{
-            width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--mt-primary-subtle)', color: 'var(--mt-primary)',
-          }}>
-            <Stethoscope size={18} />
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--mt-text)', letterSpacing: '-0.01em' }}>
-                {TYPE_LABELS[enc.encounter_type] ?? enc.encounter_type}
-              </p>
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap', flexShrink: 0,
-                background: isOpen ? 'var(--mt-primary-subtle)' : 'var(--mt-elevated)',
-                color: isOpen ? 'var(--mt-primary)' : 'var(--mt-muted)',
-              }}>
-                {isOpen ? 'Abierta' : 'Cerrada'}
-              </span>
+    <Link href={`/portal/history/${enc.id}`} style={{ display: 'block', textDecoration: 'none' }}>
+      <div className="portal-plan-card" style={{ transition: 'box-shadow 0.15s ease' }}>
+        <div style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{
+              width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--mt-primary-subtle)', color: 'var(--mt-primary)',
+            }}>
+              <Stethoscope size={18} />
             </div>
 
-            <p style={{ margin: '3px 0 0', fontSize: 12.5, color: 'var(--mt-text-2)' }}>
-              Dr. {enc.doctor.first_name} {enc.doctor.last_name}
-              {enc.doctor.specialty && ` · ${enc.doctor.specialty}`}
-            </p>
-
-            <p style={{ margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--mt-muted)' }}>
-              <CalendarDays size={12} />
-              {new Date(enc.opened_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
-
-            {enc.chief_complaint && (
-              <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--mt-text-2)', lineHeight: 1.45 }}>
-                {enc.chief_complaint}
-              </p>
-            )}
-
-            {enc.summary && (
-              <div style={{
-                margin: '10px 0 0', padding: '10px 12px',
-                borderRadius: 12, background: 'var(--mt-elevated)',
-                border: '1px solid var(--mt-border)',
-              }}>
-                <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--mt-muted)' }}>
-                  Resumen
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--mt-text)', letterSpacing: '-0.01em' }}>
+                  {TYPE_LABELS[enc.encounter_type] ?? enc.encounter_type}
                 </p>
-                <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: 'var(--mt-text-2)' }}>
-                  {enc.summary}
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap',
+                    background: isOpen ? 'var(--mt-primary-subtle)' : 'var(--mt-elevated)',
+                    color: isOpen ? 'var(--mt-primary)' : 'var(--mt-muted)',
+                  }}>
+                    {isOpen ? 'Abierta' : 'Cerrada'}
+                  </span>
+                  <ChevronRight size={15} color="var(--mt-muted)" />
+                </div>
               </div>
-            )}
+
+              <p style={{ margin: '3px 0 0', fontSize: 12.5, color: 'var(--mt-text-2)' }}>
+                Dr. {enc.doctor.first_name} {enc.doctor.last_name}
+                {enc.doctor.specialty && ` · ${enc.doctor.specialty}`}
+              </p>
+
+              <p style={{ margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--mt-muted)' }}>
+                <CalendarDays size={12} />
+                {new Date(enc.opened_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+
+              {enc.chief_complaint && (
+                <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--mt-text-2)', lineHeight: 1.45 }}>
+                  {enc.chief_complaint}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   )
 }

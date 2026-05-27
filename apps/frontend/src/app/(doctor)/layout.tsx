@@ -35,6 +35,7 @@ import {
   BookOpen,
   UserCircle,
   Upload,
+  CalendarDays,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/doctor/auth-context'
 import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner'
@@ -46,7 +47,7 @@ import {
   fetchDoctorNotifications, markDoctorNotificationRead, markAllDoctorNotificationsRead,
   type DoctorNotification,
 } from '@/lib/doctor/referral-notifications-api'
-import { hasPermission, PERMISSIONS, type Permission } from '@/lib/doctor/permissions'
+import { hasCapability, hasPermission, PERMISSIONS, type Permission } from '@/lib/doctor/permissions'
 
 const ROLE_LABELS: Record<string, string> = {
   DOCTOR:        'Médico/a',
@@ -152,29 +153,32 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const can = (permission: Permission) => hasPermission(user?.role, permission, user?.permissions)
+  const canUse = (capability?: string) => hasCapability(user?.tenant_capabilities, capability)
 
   const main = [
     { href: '/dashboard',  icon: LayoutGrid,   label: 'Panel operativo', match: (p: string) => p === '/dashboard', permission: PERMISSIONS.PATIENT_READ },
+    { href: '/agenda',     icon: CalendarDays, label: 'Agenda',          match: (p: string) => p.startsWith('/agenda'), permission: PERMISSIONS.APPOINTMENT_READ },
     { href: '/patients',   icon: Users,         label: 'Pacientes',       match: (p: string) => p.startsWith('/patients'), permission: PERMISSIONS.PATIENT_READ },
     { href: '/lab',        icon: FlaskConical,  label: 'Laboratorio',     match: (p: string) => p.startsWith('/lab') && !p.startsWith('/lab/external'), permission: PERMISSIONS.LAB_ORDER_READ },
-    { href: '/lab/external', icon: Upload, label: 'Lab externo', match: (p: string) => p.startsWith('/lab/external'), permission: PERMISSIONS.LAB_ORDER_READ },
+    { href: '/lab/external', icon: Upload, label: 'Lab externo', match: (p: string) => p.startsWith('/lab/external'), permission: PERMISSIONS.LAB_ORDER_READ, capability: 'lab.external' },
     { href: '/referrals',  icon: ArrowUpDown,   label: 'Referencias',     match: (p: string) => p.startsWith('/referrals'), permission: PERMISSIONS.REFERRAL_READ },
-    { href: '/hospital',   icon: BedDouble,     label: 'Internados',      match: (p: string) => p.startsWith('/hospital'), permission: PERMISSIONS.HOSPITAL_CENSUS_READ },
+    { href: '/hospital',   icon: BedDouble,     label: 'Internados',      match: (p: string) => p.startsWith('/hospital'), permission: PERMISSIONS.HOSPITAL_CENSUS_READ, capability: 'hospital.census' },
     { href: '/clinical-intelligence', icon: BrainCircuit, label: 'Inteligencia clínica', match: (p: string) => p.startsWith('/clinical-intelligence'), permission: PERMISSIONS.PATIENT_SENSITIVE_READ },
-    { href: '/analytics',  icon: TrendingUp,    label: 'Analítica',       match: (p: string) => p.startsWith('/analytics'), permission: PERMISSIONS.ANALYTICS_READ },
-    { href: '/staff',      icon: UserCog,       label: 'Equipo clínico',  match: (p: string) => p === '/staff', permission: PERMISSIONS.STAFF_MANAGE },
+    { href: '/analytics',     icon: TrendingUp,    label: 'Analítica',          match: (p: string) => p.startsWith('/analytics'), permission: PERMISSIONS.ANALYTICS_READ, capability: 'analytics.advanced' },
+    { href: '/notifications', icon: Bell,           label: 'Notificaciones',     match: (p: string) => p.startsWith('/notifications'), permission: PERMISSIONS.PATIENT_READ },
+    { href: '/staff',         icon: UserCog,        label: 'Equipo clínico',     match: (p: string) => p === '/staff', permission: PERMISSIONS.STAFF_MANAGE, capability: 'staff.invites' },
   ]
 
   const config = [
     { href: '/settings/clinic',    icon: Building2,   label: 'Clínica', permission: PERMISSIONS.HOSPITAL_MANAGE },
-    { href: '/settings/hospital',  icon: Building2,   label: 'Config. hospital', permission: PERMISSIONS.HOSPITAL_MANAGE },
-    { href: '/settings/staff',     icon: UserCog,     label: 'Personal', permission: PERMISSIONS.STAFF_MANAGE },
-    { href: '/settings/locations', icon: MapPin,      label: 'Sedes', permission: PERMISSIONS.HOSPITAL_MANAGE },
+    { href: '/settings/hospital',  icon: Building2,   label: 'Config. hospital', permission: PERMISSIONS.HOSPITAL_MANAGE, capability: 'hospital.census' },
+    { href: '/settings/staff',     icon: UserCog,     label: 'Personal', permission: PERMISSIONS.STAFF_MANAGE, capability: 'staff.invites' },
+    { href: '/settings/locations', icon: MapPin,      label: 'Sedes', permission: PERMISSIONS.HOSPITAL_MANAGE, capability: 'hospital.census' },
     { href: '/settings/protocols', icon: BookOpen,   label: 'Protocolos', permission: PERMISSIONS.TREATMENT_WRITE },
     { href: '/settings/billing',   icon: CreditCard,  label: 'Plan y pagos', permission: PERMISSIONS.HOSPITAL_MANAGE },
-    { href: '/settings/audit',     icon: ShieldCheck, label: 'Auditoría', permission: PERMISSIONS.HOSPITAL_MANAGE },
+    { href: '/settings/audit',     icon: ShieldCheck, label: 'Auditoría', permission: PERMISSIONS.HOSPITAL_MANAGE, capability: 'audit.export' },
     { href: '/settings/sessions',  icon: Monitor,     label: 'Sesiones', permission: PERMISSIONS.PATIENT_READ },
-    { href: '/settings/compliance',icon: ShieldCheck, label: 'Cumplimiento', permission: PERMISSIONS.HOSPITAL_MANAGE },
+    { href: '/settings/compliance',icon: ShieldCheck, label: 'Cumplimiento', permission: PERMISSIONS.HOSPITAL_MANAGE, capability: 'compliance.center' },
   ]
 
   const doctorName = user ? `${user.first_name} ${user.last_name}` : ''
@@ -236,7 +240,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           letterSpacing: '0.1em', textTransform: 'uppercase',
         }}>Clínica</div>
         {main
-          .filter(item => can(item.permission))
+          .filter(item => can(item.permission) && canUse(item.capability))
           .map(item => (
             <NavItem
               key={item.href}
@@ -248,7 +252,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             />
           ))}
 
-        {config.some(item => can(item.permission)) && (
+        {config.some(item => can(item.permission) && canUse(item.capability)) && (
           <>
             <div style={{
               margin: '18px 10px 7px',
@@ -256,7 +260,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
               color: 'var(--mt-muted)',
               letterSpacing: '0.1em', textTransform: 'uppercase',
             }}>Configuración</div>
-            {config.filter(item => can(item.permission)).map(item => (
+            {config.filter(item => can(item.permission) && canUse(item.capability)).map(item => (
               <NavItem
                 key={item.href}
                 href={item.href}
@@ -597,15 +601,16 @@ function MobileNav() {
   const { user } = useAuth()
   const pathname = usePathname()
   const can = (permission: Permission) => hasPermission(user?.role, permission, user?.permissions)
+  const canUse = (capability?: string) => hasCapability(user?.tenant_capabilities, capability)
 
   const items = [
     { href: '/dashboard',              label: 'Panel',     icon: LayoutGrid,   active: pathname === '/dashboard', permission: PERMISSIONS.PATIENT_READ },
     { href: '/patients',               label: 'Pacientes', icon: Users,        active: pathname.startsWith('/patients'), permission: PERMISSIONS.PATIENT_READ },
     { href: '/lab',                    label: 'Lab',       icon: FlaskConical, active: pathname.startsWith('/lab'), permission: PERMISSIONS.LAB_ORDER_READ },
     { href: '/clinical-intelligence',  label: 'Clínica IA', icon: BrainCircuit, active: pathname.startsWith('/clinical-intelligence'), permission: PERMISSIONS.PATIENT_SENSITIVE_READ },
-    { href: '/staff',                  label: 'Equipo',    icon: UserCog,      active: pathname === '/staff', permission: PERMISSIONS.STAFF_MANAGE },
-    { href: '/analytics',              label: 'Stats',     icon: TrendingUp,   active: pathname.startsWith('/analytics'), permission: PERMISSIONS.ANALYTICS_READ },
-  ].filter(item => can(item.permission))
+    { href: '/staff',                  label: 'Equipo',    icon: UserCog,      active: pathname === '/staff', permission: PERMISSIONS.STAFF_MANAGE, capability: 'staff.invites' },
+    { href: '/analytics',              label: 'Stats',     icon: TrendingUp,   active: pathname.startsWith('/analytics'), permission: PERMISSIONS.ANALYTICS_READ, capability: 'analytics.advanced' },
+  ].filter(item => can(item.permission) && canUse(item.capability))
 
   return (
     <nav style={{

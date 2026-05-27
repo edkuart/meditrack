@@ -2,11 +2,17 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth } from '../../shared/middleware/auth.middleware.ts'
 import { PERMISSIONS, requirePermission } from '../../shared/permissions.ts'
+import { requireTenantCapability } from '../../shared/services/limits.service.ts'
 import { UpdateExtractedValueSchema } from './lab-external.schema.ts'
 import * as service from './lab-external.service.ts'
 
 const router = new Hono()
 router.use('*', requireAuth)
+router.use('*', async (c, next) => {
+  const { tenant_id } = c.get('auth')
+  await requireTenantCapability(tenant_id, 'lab.external', 'El laboratorio externo está disponible en Clínica Completa.')
+  await next()
+})
 
 // GET /lab/external-submissions — list for tenant (pending review first)
 router.get('/lab/external-submissions', requirePermission(PERMISSIONS.LAB_ORDER_READ), async (c) => {
