@@ -667,11 +667,17 @@ function DoctorGuard({ children }: { children: React.ReactNode }) {
   // Auto-close sidebar when navigating
   useEffect(() => { setSidebarOpen(false) }, [pathname])
 
+  const BILLING_PATHS = ['/settings/billing', '/settings/sessions']
+
   useEffect(() => {
     if (isLoading) return
     if (!token) { router.replace('/login'); return }
     if (user && !user.is_verified) { router.replace('/pending-verification'); return }
-  }, [token, user, isLoading, router])
+    if (user && user.tenant_plan === 'free' && !BILLING_PATHS.some(p => pathname.startsWith(p))) {
+      router.replace('/settings/billing')
+      return
+    }
+  }, [token, user, isLoading, router, pathname])
 
   if (isLoading) {
     return (

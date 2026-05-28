@@ -38,7 +38,7 @@ function PendingVerificationContent() {
       setSessionToken(next.access_token)
       return getMe(next.access_token)
     }).then(user => {
-      if (user.is_verified) { router.replace('/patients') }
+      if (user.is_verified) { router.replace('/settings/billing') }
       if (user.verification_rejected_at) { setRejectedReason(user.verification_rejected_reason ?? 'Sin razón especificada') }
     }).catch(() => {
       router.replace('/login')
@@ -51,7 +51,7 @@ function PendingVerificationContent() {
       setSessionToken(next.access_token)
       return next.access_token
     })).then(token => getMe(token)).then(user => {
-      if (user.is_verified) { router.replace('/patients'); return }
+      if (user.is_verified) { router.replace('/settings/billing'); return }
       if (user.verification_rejected_at) {
         setRejectedReason(user.verification_rejected_reason ?? 'Sin razón especificada')
       }

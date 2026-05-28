@@ -34,7 +34,7 @@ export async function register(input: RegisterInput) {
     name: input.clinic_name,
     slug: input.clinic_slug,
     type: input.tenant_type ?? 'CLINIC',
-    settings: input.selected_plan ? { requested_plan: input.selected_plan } : {},
+    settings: { requested_plan: input.selected_plan },
   }).returning()
 
   const [user] = await db.insert(users).values({
