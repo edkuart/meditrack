@@ -26,7 +26,17 @@ router.get('/settings/clinic', async (c) => {
 router.patch(
   '/settings/clinic',
   requirePermission(PERMISSIONS.HOSPITAL_MANAGE),
-  zValidator('json', z.object({ name: z.string().min(2).max(200) })),
+  zValidator('json', z.object({
+    name:           z.string().min(2).max(200),
+    phone:          z.string().max(30).optional(),
+    contact_email:  z.string().email().max(200).optional(),
+    address:        z.string().max(300).optional(),
+    city:           z.string().max(100).optional(),
+    country:        z.string().max(100).optional(),
+    specialty:      z.string().max(200).optional(),
+    website:        z.string().url().max(300).optional(),
+    business_hours: z.string().max(500).optional(),
+  })),
   async (c) => {
     const { tenant_id, sub, email } = c.get('auth')
     const data = await updateClinicProfile(tenant_id, sub, email, c.req.valid('json'))

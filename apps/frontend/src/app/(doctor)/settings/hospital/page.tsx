@@ -1,7 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Building2, Plus, Users, Trash2, Loader2, ChevronRight, X, Pencil, MapPin, UserPlus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import {
+  Building2, Plus, Users, Trash2, Loader2, ChevronRight, X,
+  Pencil, MapPin, UserPlus, BedDouble, ShieldCheck, BarChart3,
+  ArrowRight, CheckCircle2, AlertTriangle,
+} from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import {
   listDepartments, createDepartment, updateDepartment, deleteDepartment,
@@ -12,23 +17,128 @@ import {
 import { listLocations, type Location } from '@/lib/doctor/locations-api'
 import { listStaff, type StaffMember } from '@/lib/doctor/staff-api'
 import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
+import { normalizeBillingPlan } from '@/lib/pricing/plans'
 
 const DEPT_TYPES = Object.entries(DEPARTMENT_TYPE_LABELS)
 
-// ─── Upgrade banner ────────────────────────────────────────────────────────────
+const HOSPITAL_FEATURES = [
+  { icon: Building2,   label: 'Departamentos',         desc: 'Crea Laboratorio, Radiología, Farmacia y más' },
+  { icon: Users,       label: 'Roles especializados',  desc: 'Asigna roles por departamento y área clínica' },
+  { icon: BedDouble,   label: 'Censo hospitalario',    desc: 'Control de internados y camas en tiempo real' },
+  { icon: ShieldCheck, label: 'Acceso inter-depto',    desc: 'Comparte expedientes entre áreas de forma segura' },
+  { icon: BarChart3,   label: 'Analítica avanzada',    desc: 'Reportes por departamento, cohortes y adherencia' },
+]
 
-function UpgradeBanner({ token, onUpgraded }: { token: string; onUpgraded: () => void | Promise<void> }) {
+// ─── Plan required card ────────────────────────────────────────────────────────
+
+function PlanRequiredCard() {
+  const router = useRouter()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      {/* Aviso de plan */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 14,
+        background: 'var(--mt-warning-subtle, #fffbeb)',
+        border: '1px solid var(--mt-warning, #f59e0b)',
+        borderRadius: 12, padding: '16px 20px',
+      }}>
+        <AlertTriangle size={18} color="var(--mt-warning, #f59e0b)" style={{ flexShrink: 0, marginTop: 2 }} />
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--mt-text)', margin: '0 0 4px' }}>
+            El ambiente hospital requiere el plan Clínica Completa
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--mt-text-2)', margin: 0, lineHeight: 1.5 }}>
+            Tu plan actual no incluye esta función. Actualiza para desbloquear
+            departamentos, roles especializados, censo hospitalario y más.
+          </p>
+        </div>
+      </div>
+
+      {/* Features */}
+      <div style={{
+        borderRadius: 14, border: '1px solid var(--mt-border)',
+        background: 'var(--mt-surface)', overflow: 'hidden',
+      }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--mt-border)' }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--mt-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 4px' }}>
+            Incluido en Clínica Completa
+          </p>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--mt-text)', margin: 0 }}>
+            Ambiente hospital
+          </h2>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 0 }}>
+          {HOSPITAL_FEATURES.map(({ icon: Icon, label, desc }) => (
+            <div key={label} style={{
+              padding: '18px 24px',
+              borderRight: '1px solid var(--mt-border)',
+              borderBottom: '1px solid var(--mt-border)',
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 9,
+                background: 'var(--mt-primary-subtle)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 10,
+              }}>
+                <Icon size={16} color="var(--mt-primary)" />
+              </div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)', margin: '0 0 3px' }}>{label}</p>
+              <p style={{ fontSize: 12, color: 'var(--mt-muted)', margin: 0, lineHeight: 1.4 }}>{desc}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Precio y CTA */}
+        <div style={{
+          padding: '20px 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 16,
+          background: 'linear-gradient(135deg, var(--mt-primary-subtle) 0%, #ede9fe 100%)',
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--mt-text)' }}>Q1,200</span>
+              <span style={{ fontSize: 13, color: 'var(--mt-text-2)' }}>/ mes</span>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--mt-muted)', margin: '2px 0 0' }}>
+              Clínica Completa · hasta 12 usuarios · 2,500 pacientes
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/settings/billing')}
+            style={{
+              height: 44, padding: '0 24px', borderRadius: 10, border: 'none',
+              background: 'var(--mt-primary)', color: '#fff',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            Ver planes y actualizar <ArrowRight size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Activation card ───────────────────────────────────────────────────────────
+
+function ActivationCard({ token, onUpgraded }: { token: string; onUpgraded: () => void | Promise<void> }) {
+  const [confirming, setConfirming] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   async function handleUpgrade() {
-    if (!confirm('¿Confirmas convertir tu cuenta en un hospital? Esto habilitará departamentos, nuevos roles y funciones hospitalarias.')) return
     setLoading(true)
+    setError('')
     try {
       await upgradeTenantToHospital(token)
       await onUpgraded()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al actualizar')
+      setError(e instanceof Error ? e.message : 'Error al activar')
+      setConfirming(false)
     } finally {
       setLoading(false)
     }
@@ -38,48 +148,96 @@ function UpgradeBanner({ token, onUpgraded }: { token: string; onUpgraded: () =>
     <div style={{
       background: 'linear-gradient(135deg, var(--mt-primary-subtle) 0%, #ede9fe 100%)',
       border: '1px solid var(--mt-primary)',
-      borderRadius: 14, padding: '28px 32px',
+      borderRadius: 14, overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12, background: 'var(--mt-primary)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>
-          <Building2 size={22} color="#fff" />
-        </div>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--mt-text)', margin: '0 0 6px' }}>
-            Activar ambiente hospital
-          </h2>
-          <p style={{ fontSize: 14, color: 'var(--mt-text-2)', margin: '0 0 20px', lineHeight: 1.6 }}>
-            Tu cuenta está configurada como clínica. Al activar el ambiente hospital podrás crear departamentos
-            (Laboratorio, Radiología, Farmacia…), asignar roles especializados y compartir expedientes entre áreas.
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 20 }}>
-            {['Departamentos ilimitados', 'Roles especializados', 'Acceso inter-departamental', 'Red de doctores'].map(f => (
-              <div key={f} style={{
-                background: 'rgba(255,255,255,.7)', borderRadius: 8,
-                padding: '8px 12px', fontSize: 12, color: 'var(--mt-text)',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-                <span style={{ color: 'var(--mt-primary)', fontSize: 14 }}>✓</span> {f}
-              </div>
-            ))}
+      <div style={{ padding: '28px 32px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12, background: 'var(--mt-primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <Building2 size={22} color="#fff" />
           </div>
-          {error && <p style={{ fontSize: 13, color: 'var(--mt-danger)', marginBottom: 12 }}>{error}</p>}
-          <button
-            onClick={handleUpgrade}
-            disabled={loading}
-            style={{
-              height: 42, padding: '0 24px', borderRadius: 8, border: 'none',
-              background: 'var(--mt-primary)', color: '#fff',
-              fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.75 : 1,
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-            }}
-          >
-            {loading ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Activando...</> : <><Building2 size={15} /> Activar ambiente hospital</>}
-          </button>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--mt-text)', margin: '0 0 6px' }}>
+              Activar ambiente hospital
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--mt-text-2)', margin: '0 0 20px', lineHeight: 1.6 }}>
+              Tu plan incluye esta función. Al activarlo podrás crear departamentos,
+              asignar roles especializados y gestionar el censo hospitalario.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8, marginBottom: 24 }}>
+              {HOSPITAL_FEATURES.map(({ label }) => (
+                <div key={label} style={{
+                  background: 'rgba(255,255,255,.7)', borderRadius: 8,
+                  padding: '7px 12px', fontSize: 12, color: 'var(--mt-text)',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <CheckCircle2 size={13} color="var(--mt-primary)" /> {label}
+                </div>
+              ))}
+            </div>
+
+            {error && (
+              <p style={{ fontSize: 13, color: 'var(--mt-danger)', marginBottom: 14 }}>{error}</p>
+            )}
+
+            {!confirming ? (
+              <button
+                onClick={() => setConfirming(true)}
+                style={{
+                  height: 42, padding: '0 24px', borderRadius: 8, border: 'none',
+                  background: 'var(--mt-primary)', color: '#fff',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                }}
+              >
+                <Building2 size={15} /> Activar ambiente hospital
+              </button>
+            ) : (
+              <div style={{
+                background: 'rgba(255,255,255,.85)', borderRadius: 10,
+                border: '1px solid var(--mt-border)', padding: '16px 20px',
+                display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 440,
+              }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)', margin: 0 }}>
+                  ¿Confirmar activación?
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--mt-text-2)', margin: 0, lineHeight: 1.5 }}>
+                  Este cambio es permanente. Tu cuenta pasará de modo clínica a modo hospital
+                  y no se puede revertir desde la interfaz.
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={handleUpgrade}
+                    disabled={loading}
+                    style={{
+                      height: 36, padding: '0 18px', borderRadius: 7, border: 'none',
+                      background: 'var(--mt-primary)', color: '#fff',
+                      fontSize: 13, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+                      opacity: loading ? 0.7 : 1,
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}
+                  >
+                    {loading ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+                    Sí, activar
+                  </button>
+                  <button
+                    onClick={() => { setConfirming(false); setError('') }}
+                    disabled={loading}
+                    style={{
+                      height: 36, padding: '0 16px', borderRadius: 7,
+                      border: '1px solid var(--mt-border)', background: 'none',
+                      fontSize: 13, color: 'var(--mt-muted)', cursor: 'pointer',
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -506,6 +664,8 @@ export default function HospitalSettingsPage() {
   const [loading, setLoading] = useState(true)
 
   const isAdmin = hasPermission(user?.role, PERMISSIONS.HOSPITAL_MANAGE, user?.permissions)
+  const plan = normalizeBillingPlan(user?.tenant_plan)
+  const canActivate = plan === 'clinic_complete'
 
   const load = useCallback(async (forceHospital = false) => {
     if (!token) return
@@ -551,20 +711,25 @@ export default function HospitalSettingsPage() {
       </div>
 
       {!isHospital ? (
-        isAdmin
-          ? <UpgradeBanner token={token!} onUpgraded={async () => { setIsHospital(true); await refreshUser().catch(() => {}); await load(true) }} />
-          : (
-            <div style={{
-              background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
-              borderRadius: 12, padding: '28px 24px', textAlign: 'center',
-            }}>
-              <Building2 size={32} color="var(--mt-muted)" style={{ margin: '0 auto 12px' }} />
-              <p style={{ fontSize: 14, color: 'var(--mt-text-2)', margin: 0 }}>
-                Tu institución aún no ha activado el ambiente hospital.
-                Contacta al administrador para habilitarlo.
-              </p>
-            </div>
-          )
+        !isAdmin ? (
+          <div style={{
+            background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+            borderRadius: 12, padding: '28px 24px', textAlign: 'center',
+          }}>
+            <Building2 size={32} color="var(--mt-muted)" style={{ margin: '0 auto 12px' }} />
+            <p style={{ fontSize: 14, color: 'var(--mt-text-2)', margin: 0 }}>
+              Tu institución aún no ha activado el ambiente hospital.
+              Contacta al administrador para habilitarlo.
+            </p>
+          </div>
+        ) : canActivate ? (
+          <ActivationCard
+            token={token!}
+            onUpgraded={async () => { setIsHospital(true); await refreshUser().catch(() => {}); await load(true) }}
+          />
+        ) : (
+          <PlanRequiredCard />
+        )
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>

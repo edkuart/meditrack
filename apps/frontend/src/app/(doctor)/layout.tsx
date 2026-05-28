@@ -171,7 +171,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
   const config = [
     { href: '/settings/clinic',    icon: Building2,   label: 'Clínica', permission: PERMISSIONS.HOSPITAL_MANAGE },
-    { href: '/settings/hospital',  icon: Building2,   label: 'Config. hospital', permission: PERMISSIONS.HOSPITAL_MANAGE, capability: 'hospital.census' },
+    { href: '/settings/hospital',  icon: Building2,   label: 'Hospital', permission: PERMISSIONS.HOSPITAL_MANAGE },
     { href: '/settings/staff',     icon: UserCog,     label: 'Personal', permission: PERMISSIONS.STAFF_MANAGE, capability: 'staff.invites' },
     { href: '/settings/locations', icon: MapPin,      label: 'Sedes', permission: PERMISSIONS.HOSPITAL_MANAGE, capability: 'hospital.census' },
     { href: '/settings/protocols', icon: BookOpen,   label: 'Protocolos', permission: PERMISSIONS.TREATMENT_WRITE },

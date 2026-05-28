@@ -16,24 +16,48 @@ async function apiFetch<T>(path: string, token: string, options?: RequestInit): 
 
 // ─── Clinic profile ───────────────────────────────────────────────────────────
 
+export interface ClinicSettings {
+  phone?: string
+  contact_email?: string
+  address?: string
+  city?: string
+  country?: string
+  specialty?: string
+  website?: string
+  business_hours?: string
+}
+
 export interface ClinicProfile {
   id: string
   name: string
   slug: string
   plan_type: 'free' | 'pro' | 'enterprise'
   status: string
+  settings: ClinicSettings
   subscription_current_period_end: string | null
   created_at: string
+}
+
+export interface UpdateClinicInput {
+  name: string
+  phone?: string
+  contact_email?: string
+  address?: string
+  city?: string
+  country?: string
+  specialty?: string
+  website?: string
+  business_hours?: string
 }
 
 export async function getClinicProfile(token: string): Promise<ClinicProfile> {
   return apiFetch('/settings/clinic', token)
 }
 
-export async function updateClinicProfile(token: string, name: string): Promise<ClinicProfile> {
+export async function updateClinicProfile(token: string, input: UpdateClinicInput): Promise<ClinicProfile> {
   return apiFetch('/settings/clinic', token, {
     method: 'PATCH',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(input),
   })
 }
 

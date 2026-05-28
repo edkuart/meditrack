@@ -1216,19 +1216,43 @@ export default function AdminDashboardPage() {
                         ))}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleTenantStatus(tenant.id, tenant.status === 'active' ? 'suspended' : 'active')}
-                      disabled={tenant.status === 'cancelled'}
-                      style={{
-                        height: 32, padding: '0 14px', borderRadius: 8,
-                        border: '1px solid #334155', background: 'transparent',
-                        color: tenant.status === 'cancelled' ? '#475569' : '#94a3b8', fontSize: 12, fontWeight: 700,
-                        cursor: tenant.status === 'cancelled' ? 'not-allowed' : 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
-                      }}
-                    >
-                      {tenant.status === 'active' ? <><AlertTriangle size={13} />Suspender</> : <><CheckCircle2 size={13} />Activar</>}
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', flexShrink: 0 }}>
+                      {/* Plan selector */}
+                      <select
+                        value={tenant.plan_type}
+                        onChange={async e => {
+                          const plan = e.target.value as Tenant['plan_type']
+                          if (plan === tenant.plan_type) return
+                          await updateTenant(tenant.id, { plan_type: plan })
+                          setTenants(prev => prev.map(t => t.id === tenant.id ? { ...t, plan_type: plan } : t))
+                        }}
+                        style={{
+                          height: 32, padding: '0 10px', borderRadius: 8,
+                          border: '1px solid #334155', background: '#0f172a',
+                          color: '#60a5fa', fontSize: 12, fontWeight: 700,
+                          cursor: 'pointer', minWidth: 150,
+                        }}
+                      >
+                        <option value="free">Gratuito</option>
+                        <option value="doctor_individual">Doctor Individual</option>
+                        <option value="clinic_complete">Clínica Completa</option>
+                        <option value="enterprise">Enterprise</option>
+                      </select>
+                      {/* Status toggle */}
+                      <button
+                        onClick={() => handleTenantStatus(tenant.id, tenant.status === 'active' ? 'suspended' : 'active')}
+                        disabled={tenant.status === 'cancelled'}
+                        style={{
+                          height: 32, padding: '0 14px', borderRadius: 8,
+                          border: '1px solid #334155', background: 'transparent',
+                          color: tenant.status === 'cancelled' ? '#475569' : '#94a3b8', fontSize: 12, fontWeight: 700,
+                          cursor: tenant.status === 'cancelled' ? 'not-allowed' : 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 6,
+                        }}
+                      >
+                        {tenant.status === 'active' ? <><AlertTriangle size={13} />Suspender</> : <><CheckCircle2 size={13} />Activar</>}
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {visibleTenants.length === 0 && (

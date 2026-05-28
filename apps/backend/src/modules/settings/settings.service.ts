@@ -5,6 +5,17 @@ import { NotFoundError } from '../../shared/errors.ts'
 
 // ─── Clinic profile ───────────────────────────────────────────────────────────
 
+export interface ClinicSettings {
+  phone?: string
+  contact_email?: string
+  address?: string
+  city?: string
+  country?: string
+  specialty?: string
+  website?: string
+  business_hours?: string
+}
+
 export async function getClinicProfile(tenantId: string) {
   const tenant = await db.query.tenants.findFirst({
     where: eq(tenants.id, tenantId),
@@ -14,6 +25,7 @@ export async function getClinicProfile(tenantId: string) {
       slug: true,
       plan_type: true,
       status: true,
+      settings: true,
       subscription_current_period_end: true,
       created_at: true,
     },
@@ -22,20 +34,42 @@ export async function getClinicProfile(tenantId: string) {
   return tenant
 }
 
+export interface UpdateClinicInput {
+  name: string
+  phone?: string
+  contact_email?: string
+  address?: string
+  city?: string
+  country?: string
+  specialty?: string
+  website?: string
+  business_hours?: string
+}
+
 export async function updateClinicProfile(
   tenantId: string,
   actorId: string,
   actorEmail: string,
-  input: { name: string },
+  input: UpdateClinicInput,
 ) {
   const existing = await db.query.tenants.findFirst({
     where: eq(tenants.id, tenantId),
-    columns: { id: true, name: true },
+    columns: { id: true, name: true, settings: true },
   })
   if (!existing) throw new NotFoundError('Clinic')
 
+  const { name, ...settingsFields } = input
+  const prevSettings = (existing.settings ?? {}) as ClinicSettings
+  const newSettings: ClinicSettings = { ...prevSettings }
+
+  for (const key of Object.keys(settingsFields) as (keyof ClinicSettings)[]) {
+    const val = settingsFields[key]
+    if (val !== undefined) newSettings[key] = val
+    else delete newSettings[key]
+  }
+
   await db.update(tenants)
-    .set({ name: input.name, updated_at: new Date() })
+    .set({ name, settings: newSettings, updated_at: new Date() })
     .where(eq(tenants.id, tenantId))
 
   await createAuditLog({
@@ -46,10 +80,13 @@ export async function updateClinicProfile(
     action: 'SETTINGS_CHANGED',
     resource_type: 'TENANT',
     resource_id: tenantId,
-    changes: { before: { name: existing.name }, after: { name: input.name } },
+    changes: {
+      before: { name: existing.name, settings: prevSettings },
+      after: { name, settings: newSettings },
+    },
   })
 
-  return { ...existing, name: input.name }
+  return { ...existing, name, settings: newSettings }
 }
 
 // ─── Audit log viewer ─────────────────────────────────────────────────────────
