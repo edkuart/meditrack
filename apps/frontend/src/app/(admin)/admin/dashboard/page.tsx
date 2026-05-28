@@ -447,6 +447,182 @@ const planLabels: Record<string, string> = {
   enterprise: 'Enterprise',
 }
 
+const DURATION_OPTIONS: Array<{ value: AccessGrantDuration; label: string }> = [
+  { value: '30_days',  label: '30 días'  },
+  { value: '365_days', label: '1 año'    },
+  { value: 'custom',   label: 'Fecha personalizada' },
+]
+
+function FreeAccessPanel({ tenant, onGranted }: {
+  tenant: Tenant
+  onGranted: (newPlan: PlanType) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [plan, setPlan] = useState<Extract<PlanType, 'doctor_individual' | 'clinic_complete'>>('doctor_individual')
+  const [duration, setDuration] = useState<AccessGrantDuration>('30_days')
+  const [customDate, setCustomDate] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleGrant(e: React.FormEvent) {
+    e.preventDefault()
+    if (reason.trim().length < 20) {
+      setError('La justificación debe tener al menos 20 caracteres.')
+      return
+    }
+    if (duration === 'custom' && !customDate) {
+      setError('Selecciona una fecha de expiración.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await grantTenantAccess(tenant.id, {
+        grant_type: 'manual_override',
+        plan_type: plan,
+        duration,
+        ends_at: duration === 'custom' ? new Date(customDate).toISOString() : undefined,
+        reason: reason.trim(),
+      })
+      onGranted(plan)
+      setOpen(false)
+      setReason('')
+      setDuration('30_days')
+      setCustomDate('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al otorgar acceso')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          marginTop: 10, width: '100%', height: 34, borderRadius: 8,
+          border: '1px dashed #334155', background: 'transparent',
+          color: '#a78bfa', fontSize: 12, fontWeight: 600,
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}
+      >
+        <Gift size={13} /> Conceder acceso sin pago
+      </button>
+    )
+  }
+
+  return (
+    <form
+      onSubmit={handleGrant}
+      style={{
+        marginTop: 10, borderRadius: 10,
+        border: '1px solid #7c3aed', background: 'rgba(124,58,237,.08)',
+        padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Gift size={13} /> Acceso manual sin pago
+        </span>
+        <button type="button" onClick={() => { setOpen(false); setError('') }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 2 }}>
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* Plan + duración */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div>
+          <label style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700, display: 'block', marginBottom: 4 }}>Plan</label>
+          <select
+            value={plan}
+            onChange={e => setPlan(e.target.value as typeof plan)}
+            style={{ width: '100%', height: 32, borderRadius: 7, border: '1px solid #334155', background: '#0f172a', color: '#f1f5f9', fontSize: 12, padding: '0 8px' }}
+          >
+            <option value="doctor_individual">Doctor Individual</option>
+            <option value="clinic_complete">Clínica Completa</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700, display: 'block', marginBottom: 4 }}>Duración</label>
+          <select
+            value={duration}
+            onChange={e => setDuration(e.target.value as AccessGrantDuration)}
+            style={{ width: '100%', height: 32, borderRadius: 7, border: '1px solid #334155', background: '#0f172a', color: '#f1f5f9', fontSize: 12, padding: '0 8px' }}
+          >
+            {DURATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {duration === 'custom' && (
+        <div>
+          <label style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700, display: 'block', marginBottom: 4 }}>Fecha de expiración</label>
+          <input
+            type="date"
+            value={customDate}
+            onChange={e => setCustomDate(e.target.value)}
+            min={new Date().toISOString().split('T')[0]}
+            required
+            style={{ width: '100%', height: 32, borderRadius: 7, border: '1px solid #334155', background: '#0f172a', color: '#f1f5f9', fontSize: 12, padding: '0 8px', boxSizing: 'border-box' }}
+          />
+        </div>
+      )}
+
+      {/* Justificación */}
+      <div>
+        <label style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+          Justificación <span style={{ color: '#f87171' }}>*</span>
+        </label>
+        <textarea
+          value={reason}
+          onChange={e => { setReason(e.target.value); setError('') }}
+          placeholder="Explica por qué se concede este acceso sin pago... (mín. 20 caracteres)"
+          required
+          rows={3}
+          style={{
+            width: '100%', borderRadius: 7, border: '1px solid #334155',
+            background: '#0f172a', color: '#f1f5f9', fontSize: 12,
+            padding: '8px 10px', resize: 'vertical', boxSizing: 'border-box',
+            fontFamily: 'inherit',
+          }}
+        />
+        <div style={{ fontSize: 11, color: reason.trim().length < 20 ? '#64748b' : '#34d399', marginTop: 2 }}>
+          {reason.trim().length}/20 mínimo
+        </div>
+      </div>
+
+      {error && <p style={{ fontSize: 12, color: '#f87171', margin: 0 }}>{error}</p>}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="submit"
+          disabled={busy || reason.trim().length < 20}
+          style={{
+            flex: 1, height: 34, borderRadius: 7, border: 'none',
+            background: busy || reason.trim().length < 20 ? '#334155' : '#7c3aed',
+            color: busy || reason.trim().length < 20 ? '#64748b' : '#fff',
+            fontSize: 12, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}
+        >
+          {busy ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Gift size={13} />}
+          {busy ? 'Aplicando…' : 'Confirmar acceso'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setError('') }}
+          style={{ height: 34, padding: '0 14px', borderRadius: 7, border: '1px solid #334155', background: 'none', color: '#64748b', fontSize: 12, cursor: 'pointer' }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  )
+}
+
 function CommercialAccountRow({ account, onRefresh }: {
   account: CommercialAccount
   onRefresh: () => Promise<void>
@@ -1215,6 +1391,13 @@ export default function AdminDashboardPage() {
                           </div>
                         ))}
                       </div>
+
+                      {tenant.plan_type === 'free' && (
+                        <FreeAccessPanel
+                          tenant={tenant}
+                          onGranted={newPlan => setTenants(prev => prev.map(t => t.id === tenant.id ? { ...t, plan_type: newPlan } : t))}
+                        />
+                      )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', flexShrink: 0 }}>
                       {/* Plan selector */}
