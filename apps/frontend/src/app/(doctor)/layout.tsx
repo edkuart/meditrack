@@ -166,7 +166,6 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     { href: '/clinical-intelligence', icon: BrainCircuit, label: 'Inteligencia clínica', match: (p: string) => p.startsWith('/clinical-intelligence'), permission: PERMISSIONS.PATIENT_SENSITIVE_READ },
     { href: '/analytics',     icon: TrendingUp,    label: 'Analítica',          match: (p: string) => p.startsWith('/analytics'), permission: PERMISSIONS.ANALYTICS_READ, capability: 'analytics.advanced' },
     { href: '/notifications', icon: Bell,           label: 'Notificaciones',     match: (p: string) => p.startsWith('/notifications'), permission: PERMISSIONS.PATIENT_READ },
-    { href: '/staff',         icon: UserCog,        label: 'Equipo clínico',     match: (p: string) => p === '/staff', permission: PERMISSIONS.STAFF_MANAGE, capability: 'staff.invites' },
   ]
 
   const config = [
