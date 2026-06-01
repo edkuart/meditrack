@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ShieldCheck, Users, Building2, Clock, CheckCircle2,
-  XCircle, LogOut, Loader2, AlertTriangle,
+  XCircle, X, LogOut, Loader2, AlertTriangle,
   KeyRound, FileClock, Gift, Sparkles,
 } from 'lucide-react'
 import {
