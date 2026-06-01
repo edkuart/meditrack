@@ -11,6 +11,7 @@ export type AppointmentType =
 export type AppointmentStatus =
   | 'SCHEDULED'
   | 'CONFIRMED'
+  | 'WAITING'
   | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED'
@@ -130,6 +131,10 @@ export async function updateAppointment(
 
 export async function confirmAppointment(token: string, id: string): Promise<Appointment> {
   return apiFetch<Appointment>(token, `/appointments/${id}/confirm`, { method: 'POST' })
+}
+
+export async function waitingAppointment(token: string, id: string): Promise<Appointment> {
+  return apiFetch<Appointment>(token, `/appointments/${id}/waiting`, { method: 'POST' })
 }
 
 export async function completeAppointment(token: string, id: string): Promise<Appointment> {

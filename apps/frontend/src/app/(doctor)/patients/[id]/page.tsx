@@ -18,6 +18,7 @@ import {
   generatePortalAccess, revokePortalAccess, getPatientFhirBundle, listPatientTreatments,
   listPatientCheckIns, listPatientProblems, createPatientProblem,
   listPatientBackground, listPatientBackgroundHistory, retirePatientBackground, upsertPatientBackground,
+  searchIcd10, type Icd10Result,
   listPatientVitalSigns, createPatientVitalSigns, getPatientClinicalWorkspace,
   listPatientReferrals, createReferral, listStaff,
   listPatientAdmissions, admitPatient, dischargePatient,
@@ -893,6 +894,10 @@ export default function PatientProfilePage() {
   const [newProblemTitle, setNewProblemTitle] = useState('')
   const [newProblemStatus, setNewProblemStatus] = useState<ProblemStatus>('ACTIVE')
   const [newProblemIcd10, setNewProblemIcd10] = useState('')
+  const [newProblemIcd10Desc, setNewProblemIcd10Desc] = useState('')
+  const [icd10Suggestions, setIcd10Suggestions] = useState<Icd10Result[]>([])
+  const [icd10Query, setIcd10Query] = useState('')
+  const [showIcd10Dropdown, setShowIcd10Dropdown] = useState(false)
   const [creatingProblem, setCreatingProblem] = useState(false)
   const [problemError, setProblemError] = useState('')
 
@@ -1101,6 +1106,26 @@ export default function PatientProfilePage() {
     }
   }
 
+  // ICD-10 typeahead — debounced 300ms
+  useEffect(() => {
+    if (!token || icd10Query.length < 2) { setIcd10Suggestions([]); return }
+    const timer = setTimeout(async () => {
+      const results = await searchIcd10(token, icd10Query).catch(() => [])
+      setIcd10Suggestions(results)
+      setShowIcd10Dropdown(results.length > 0)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [icd10Query, token])
+
+  function selectIcd10(entry: Icd10Result) {
+    setNewProblemIcd10(entry.code)
+    setNewProblemIcd10Desc(entry.description)
+    if (!newProblemTitle.trim()) setNewProblemTitle(entry.description)
+    setIcd10Query('')
+    setIcd10Suggestions([])
+    setShowIcd10Dropdown(false)
+  }
+
   async function handleCreateProblem(e: React.FormEvent) {
     e.preventDefault()
     if (!token || !newProblemTitle.trim()) return
@@ -1111,11 +1136,13 @@ export default function PatientProfilePage() {
         title: newProblemTitle.trim(),
         status: newProblemStatus,
         icd10_code: newProblemIcd10.trim() || undefined,
+        icd10_description: newProblemIcd10Desc.trim() || undefined,
       })
       setProblems(prev => [...prev, p].sort((a, b) => a.problem_number - b.problem_number))
       setShowNewProblem(false)
       setNewProblemTitle('')
       setNewProblemIcd10('')
+      setNewProblemIcd10Desc('')
       setNewProblemStatus('ACTIVE')
     } catch (err) {
       setProblemError(err instanceof Error ? err.message : 'Error al agregar el problema')
@@ -1563,19 +1590,19 @@ export default function PatientProfilePage() {
         </ClinicalInsight>
       )}
 
-      {/* ── Metric chips ── */}
+      {/* ── Metric chips — Adherencia PRIMERO como signo vital clínico ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }} className="sm:grid-cols-4">
-        <MTStatChip icon={Stethoscope} label="Consultas" value={encounters.length} tone="blue" />
-        <MTStatChip
-          icon={Pill} label="Tratamientos" value={activeTreatments.length}
-          helper={draftTreatments.length > 0 ? `${draftTreatments.length} borrador(es)` : `${treatments.length} totales`}
-          tone={activeTreatments.length > 0 ? 'green' : 'slate'}
-        />
         <MTStatChip
           icon={CalendarClock} label="Adherencia"
           value={adherence && adherence.total > 0 ? `${adherence.overall_score}%` : '—'}
           helper={adherence && adherence.total > 0 ? `${adherence.confirmed}/${adherence.total} dosis` : 'Sin datos'}
           tone={adherence && adherence.total > 0 ? adherenceTone : 'slate'}
+        />
+        <MTStatChip icon={Stethoscope} label="Consultas" value={encounters.length} tone="blue" />
+        <MTStatChip
+          icon={Pill} label="Tratamientos" value={activeTreatments.length}
+          helper={draftTreatments.length > 0 ? `${draftTreatments.length} borrador(es)` : `${treatments.length} totales`}
+          tone={activeTreatments.length > 0 ? 'green' : 'slate'}
         />
         <MTStatChip
           icon={Activity} label="Seguimiento"
@@ -1965,14 +1992,53 @@ export default function PatientProfilePage() {
                       <option value="RESOLVED">Resuelto</option>
                     </select>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className={labelClass}>Código ICD-10 (opcional)</label>
+                  <div className="flex flex-col gap-1" style={{ position: 'relative' }}>
+                    <label className={labelClass}>
+                      Diagnóstico ICD-10 / CIE-10 (opcional)
+                    </label>
                     <input
-                      value={newProblemIcd10}
-                      onChange={e => setNewProblemIcd10(e.target.value)}
-                      placeholder="Ej: I10"
+                      value={icd10Query || (newProblemIcd10 ? `${newProblemIcd10}${newProblemIcd10Desc ? ' — ' + newProblemIcd10Desc : ''}` : '')}
+                      onChange={e => {
+                        setIcd10Query(e.target.value)
+                        if (!e.target.value) { setNewProblemIcd10(''); setNewProblemIcd10Desc('') }
+                        setShowIcd10Dropdown(true)
+                      }}
+                      onFocus={() => { if (icd10Suggestions.length > 0) setShowIcd10Dropdown(true) }}
+                      onBlur={() => setTimeout(() => setShowIcd10Dropdown(false), 150)}
+                      placeholder="Buscar por nombre o código (ej: hipertensión, I10)"
                       className={fieldClass}
+                      autoComplete="off"
                     />
+                    {showIcd10Dropdown && icd10Suggestions.length > 0 && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                        background: 'var(--mt-surface)', border: '1px solid var(--mt-border)',
+                        borderRadius: 10, boxShadow: 'var(--mt-shadow-lg)',
+                        maxHeight: 220, overflowY: 'auto', marginTop: 2,
+                      }}>
+                        {icd10Suggestions.map(s => (
+                          <button
+                            key={s.code}
+                            type="button"
+                            onMouseDown={() => selectIcd10(s)}
+                            style={{
+                              display: 'flex', width: '100%', gap: 10, padding: '8px 12px',
+                              textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
+                              borderBottom: '1px solid var(--mt-border)', fontFamily: 'var(--mt-font)',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--mt-elevated)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                          >
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--mt-primary)', flexShrink: 0, minWidth: 40 }}>
+                              {s.code}
+                            </span>
+                            <span style={{ fontSize: 12.5, color: 'var(--mt-text)', lineHeight: 1.4 }}>
+                              {s.description}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {problemError && <p className="text-xs text-[var(--mt-danger)]">{problemError}</p>}
@@ -3109,12 +3175,13 @@ const APPT_TYPE_LABELS: Record<ApptTypeEnum, string> = {
 }
 
 const APPT_STATUS_CONFIG: Record<ApptStatus, { bg: string; fg: string; label: string }> = {
-  SCHEDULED:   { bg: '#eff6ff', fg: '#1d4ed8', label: 'Programada'  },
-  CONFIRMED:   { bg: '#f0fdf4', fg: '#15803d', label: 'Confirmada'  },
-  IN_PROGRESS: { bg: '#fffbeb', fg: '#b45309', label: 'En consulta' },
-  COMPLETED:   { bg: '#f8fafc', fg: '#475569', label: 'Completada'  },
-  CANCELLED:   { bg: '#fef2f2', fg: '#b91c1c', label: 'Cancelada'   },
-  NO_SHOW:     { bg: '#fdf4ff', fg: '#7e22ce', label: 'No asistió'  },
+  SCHEDULED:   { bg: '#EFF6FF', fg: '#1D4ED8', label: 'Programada'  },
+  CONFIRMED:   { bg: '#ECFDF5', fg: '#1E7E34', label: 'Confirmada'  },
+  WAITING:     { bg: '#FFF7ED', fg: '#92400E', label: 'En sala'      },
+  IN_PROGRESS: { bg: '#FFFBEB', fg: '#92600A', label: 'En consulta' },
+  COMPLETED:   { bg: '#F1F5F9', fg: '#334155', label: 'Completada'  },
+  CANCELLED:   { bg: '#FEF2F2', fg: '#C0392B', label: 'Cancelada'   },
+  NO_SHOW:     { bg: '#FDF4FF', fg: '#7E22CE', label: 'No asistió'  },
 }
 
 function PatientAppointmentsTab({

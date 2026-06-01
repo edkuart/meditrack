@@ -84,6 +84,11 @@ router.post('/appointments/:id/confirm',  requirePermission(PERMISSIONS.APPOINTM
   return c.json({ success: true, data: await svc.confirmAppointment(tenant_id, c.req.param('id')!) })
 })
 
+router.post('/appointments/:id/waiting', requirePermission(PERMISSIONS.APPOINTMENT_WRITE), async (c) => {
+  const { tenant_id } = c.get('auth')
+  return c.json({ success: true, data: await svc.waitingAppointment(tenant_id, c.req.param('id')!) })
+})
+
 router.post('/appointments/:id/start', requirePermission(PERMISSIONS.APPOINTMENT_WRITE), async (c) => {
   const { tenant_id } = c.get('auth')
   return c.json({ success: true, data: await svc.startAppointment(tenant_id, c.req.param('id')!) })

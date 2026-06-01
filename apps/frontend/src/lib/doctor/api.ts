@@ -929,6 +929,14 @@ export async function listPatientBackground(token: string, patientId: string): P
   return doctorFetch(`/patients/${patientId}/background`, token)
 }
 
+// ─── ICD-10 search ────────────────────────────────────────────────────────────
+
+export interface Icd10Result { code: string; description: string }
+
+export async function searchIcd10(token: string, q: string): Promise<Icd10Result[]> {
+  return doctorFetch(`/icd10/search?q=${encodeURIComponent(q)}`, token)
+}
+
 export async function listPatientBackgroundHistory(token: string, patientId: string): Promise<PatientBackground[]> {
   return doctorFetch(`/patients/${patientId}/background/history`, token)
 }

@@ -630,6 +630,40 @@ export async function getPortalAppointments(patientId: string, tenantId: string)
   return { upcoming, past }
 }
 
+export async function cancelAppointmentFromPortal(patientId: string, tenantId: string, appointmentId: string, reason: string) {
+  const appt = await db.query.appointments.findFirst({
+    where: and(
+      eq(appointments.id, appointmentId),
+      eq(appointments.patient_id, patientId),
+      eq(appointments.tenant_id, tenantId),
+    ),
+    columns: { id: true, status: true, scheduled_at: true },
+  })
+
+  if (!appt) throw new NotFoundError('Appointment')
+
+  if (appt.status === 'CANCELLED' || appt.status === 'COMPLETED' || appt.status === 'NO_SHOW') {
+    throw new AppError(409, 'APPOINTMENT_NOT_CANCELLABLE', 'Esta cita no puede ser cancelada en su estado actual')
+  }
+
+  // Guardrail: only allow cancellation ≥24h before scheduled time
+  const hoursUntil = (new Date(appt.scheduled_at).getTime() - Date.now()) / 3600000
+  if (hoursUntil < 24) {
+    throw new AppError(403, 'CANCELLATION_WINDOW_CLOSED',
+      'Solo puedes cancelar con al menos 24 horas de anticipación. Contacta al consultorio directamente.',
+      { hours_remaining: Math.round(hoursUntil) },
+    )
+  }
+
+  const [updated] = await db
+    .update(appointments)
+    .set({ status: 'CANCELLED', cancelled_reason: reason, updated_at: new Date() })
+    .where(eq(appointments.id, appointmentId))
+    .returning()
+
+  return updated
+}
+
 export async function confirmAppointmentAttendance(patientId: string, tenantId: string, appointmentId: string) {
   const appt = await db.query.appointments.findFirst({
     where: and(

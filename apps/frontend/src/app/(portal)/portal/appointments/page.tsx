@@ -21,6 +21,7 @@ import { getSession, clearSession } from '@/lib/portal/session'
 import {
   getPortalAppointments,
   confirmAppointmentAttendance,
+  cancelAppointmentFromPortal,
   isUnauthorizedPortalError,
   type PortalAppointment,
 } from '@/lib/portal/api'
@@ -60,24 +61,59 @@ function formatApptDate(isoString: string) {
   return { label: `${day} · ${time}`, isToday }
 }
 
+const CANCEL_REASONS = [
+  'Conflicto de horario',
+  'Me siento mejor',
+  'Emergencia personal',
+  'Dificultad para llegar',
+  'Otro motivo',
+]
+
 function AppointmentCard({
   appt,
   onConfirm,
+  onCancel,
 }: {
   appt: PortalAppointment
   onConfirm?: (id: string) => Promise<void>
+  onCancel?: (id: string, reason: string) => Promise<void>
 }) {
   const [confirming, setConfirming] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
+
   const { label: dateLabel, isToday } = formatApptDate(appt.scheduled_at)
   const statusCfg = APPT_STATUS_CONFIG[appt.status] ?? APPT_STATUS_CONFIG.SCHEDULED
   const StatusIcon = statusCfg.icon
   const canConfirm = appt.status === 'SCHEDULED' && onConfirm
   const isCancelled = appt.status === 'CANCELLED' || appt.status === 'NO_SHOW'
 
+  // Cancelación solo disponible ≥24h antes
+  const hoursUntil = (new Date(appt.scheduled_at).getTime() - Date.now()) / 3600000
+  const canCancel = onCancel &&
+    (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') &&
+    hoursUntil >= 24
+
   async function handleConfirm() {
     if (!onConfirm) return
     setConfirming(true)
     try { await onConfirm(appt.id) } finally { setConfirming(false) }
+  }
+
+  async function handleCancel() {
+    if (!onCancel || !cancelReason) return
+    setCancelling(true)
+    setCancelError('')
+    try {
+      await onCancel(appt.id, cancelReason)
+      setShowCancelModal(false)
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : 'Error al cancelar. Intenta de nuevo.')
+    } finally {
+      setCancelling(false)
+    }
   }
 
   return (
@@ -170,6 +206,98 @@ function AppointmentCard({
           }
         </button>
       )}
+
+      {/* Cancel — friction guardrail: reason required, ≥24h only */}
+      {canCancel && !showCancelModal && (
+        <button
+          type="button"
+          onClick={() => setShowCancelModal(true)}
+          style={{
+            marginTop: 6, width: '100%', borderRadius: 12,
+            padding: '9px 16px', border: '1px solid var(--mt-border)',
+            background: 'var(--mt-surface)', color: 'var(--mt-text-2)',
+            fontSize: 13, fontWeight: 700, fontFamily: 'var(--mt-font)', cursor: 'pointer',
+          }}
+        >
+          Cancelar cita
+        </button>
+      )}
+
+      {/* Cancel <24h notice */}
+      {onCancel && !canCancel && !isCancelled &&
+        (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') && hoursUntil < 24 && (
+        <p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--mt-muted)', textAlign: 'center' }}>
+          Para cancelar con menos de 24 horas, llama al consultorio directamente.
+        </p>
+      )}
+
+      {/* Cancel confirmation modal — friction level 1 */}
+      {showCancelModal && (
+        <div style={{
+          marginTop: 10, padding: 14, borderRadius: 12,
+          background: '#FEF2F2', border: '1px solid #FECACA',
+        }}>
+          <p style={{ margin: '0 0 10px', fontSize: 13.5, fontWeight: 800, color: '#7F1D1D' }}>
+            ¿Seguro que quieres cancelar esta cita?
+          </p>
+          <p style={{ margin: '0 0 10px', fontSize: 12.5, color: '#991B1B' }}>
+            Selecciona el motivo de cancelación:
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+            {CANCEL_REASONS.map(r => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setCancelReason(r)}
+                style={{
+                  borderRadius: 10, border: `1.5px solid ${cancelReason === r ? '#C0392B' : '#FECACA'}`,
+                  background: cancelReason === r ? '#C0392B' : 'var(--mt-surface)',
+                  color: cancelReason === r ? '#fff' : '#991B1B',
+                  padding: '10px 12px', textAlign: 'left', fontFamily: 'var(--mt-font)',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44,
+                }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          {cancelError && (
+            <p style={{ margin: '0 0 8px', fontSize: 12.5, color: '#C0392B', fontWeight: 600 }}>
+              {cancelError}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => { setShowCancelModal(false); setCancelReason(''); setCancelError('') }}
+              style={{
+                flex: 1, borderRadius: 10, border: '1px solid var(--mt-border)',
+                background: 'var(--mt-surface)', color: 'var(--mt-text-2)',
+                padding: '10px', fontSize: 13, fontWeight: 700, fontFamily: 'var(--mt-font)', cursor: 'pointer',
+              }}
+            >
+              Mantener cita
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={!cancelReason || cancelling}
+              style={{
+                flex: 1, borderRadius: 10, border: 'none',
+                background: cancelReason && !cancelling ? '#C0392B' : '#F5A0A0',
+                color: '#fff', padding: '10px', fontSize: 13, fontWeight: 800,
+                fontFamily: 'var(--mt-font)', cursor: (!cancelReason || cancelling) ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              {cancelling
+                ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Cancelando…</>
+                : 'Confirmar cancelación'
+              }
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -208,6 +336,19 @@ export default function AppointmentsPage() {
     const session = getSession()
     if (!session) return
     const updated = await confirmAppointmentAttendance(session.token, appointmentId)
+    setAppts(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        upcoming: prev.upcoming.map(a => a.id === updated.id ? { ...a, status: updated.status } : a),
+      }
+    })
+  }
+
+  async function handleCancel(appointmentId: string, reason: string) {
+    const session = getSession()
+    if (!session) return
+    const updated = await cancelAppointmentFromPortal(session.token, appointmentId, reason)
     setAppts(prev => {
       if (!prev) return prev
       return {
@@ -276,7 +417,7 @@ export default function AppointmentsPage() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {appts.upcoming.map(appt => (
-                    <AppointmentCard key={appt.id} appt={appt} onConfirm={handleConfirm} />
+                    <AppointmentCard key={appt.id} appt={appt} onConfirm={handleConfirm} onCancel={handleCancel} />
                   ))}
                 </div>
               )}

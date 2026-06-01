@@ -153,6 +153,7 @@ async function setStatus(
 }
 
 export const confirmAppointment  = (tenantId: string, id: string) => setStatus(tenantId, id, 'CONFIRMED')
+export const waitingAppointment  = (tenantId: string, id: string) => setStatus(tenantId, id, 'WAITING')
 export const startAppointment    = (tenantId: string, id: string) => setStatus(tenantId, id, 'IN_PROGRESS')
 export const completeAppointment = (tenantId: string, id: string) => setStatus(tenantId, id, 'COMPLETED')
 export const noShowAppointment   = (tenantId: string, id: string) => setStatus(tenantId, id, 'NO_SHOW')

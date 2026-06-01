@@ -5,12 +5,12 @@ import Link from 'next/link'
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock, MapPin,
   Plus, RefreshCw, Stethoscope, User, X, Check, AlertCircle,
-  UserX, Loader2, CheckCircle2, XCircle, Activity,
+  UserX, Loader2, CheckCircle2, XCircle, Activity, Sofa,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
 import {
-  listAppointments, createAppointment, confirmAppointment,
+  listAppointments, createAppointment, confirmAppointment, waitingAppointment,
   completeAppointment, noShowAppointment, cancelAppointment,
   type Appointment, type AppointmentType, type AppointmentStatus,
 } from '@/lib/doctor/appointments-api'
@@ -32,12 +32,13 @@ const TYPE_OPTIONS: AppointmentType[] = [
 ]
 
 const STATUS_CONFIG: Record<AppointmentStatus, { bg: string; fg: string; label: string; dot: string; icon: React.ElementType }> = {
-  SCHEDULED:   { bg: '#EFF6FF', fg: '#1D4ED8', label: 'Programada',  dot: '#1D4ED8', icon: Clock },        // 6.7:1
-  CONFIRMED:   { bg: '#ECFDF5', fg: '#1E7E34', label: 'Confirmada',  dot: '#1E7E34', icon: CheckCircle2 }, // 4.7:1
-  IN_PROGRESS: { bg: '#FFFBEB', fg: '#92600A', label: 'En consulta', dot: '#92600A', icon: Activity },     // 5.2:1
-  COMPLETED:   { bg: '#F1F5F9', fg: '#334155', label: 'Completada',  dot: '#64748B', icon: CheckCircle2 }, // 9.8:1
-  CANCELLED:   { bg: '#FEF2F2', fg: '#C0392B', label: 'Cancelada',   dot: '#C0392B', icon: XCircle },      // 4.8:1
-  NO_SHOW:     { bg: '#FDF4FF', fg: '#7E22CE', label: 'No asistió',  dot: '#7E22CE', icon: UserX },        // 6.8:1
+  SCHEDULED:   { bg: '#EFF6FF', fg: '#1D4ED8', label: 'Programada',    dot: '#1D4ED8', icon: Clock },        // 6.7:1
+  CONFIRMED:   { bg: '#ECFDF5', fg: '#1E7E34', label: 'Confirmada',    dot: '#1E7E34', icon: CheckCircle2 }, // 4.7:1
+  WAITING:     { bg: '#FFF7ED', fg: '#92400E', label: 'En sala',       dot: '#C2410C', icon: Sofa },         // 5.8:1
+  IN_PROGRESS: { bg: '#FFFBEB', fg: '#92600A', label: 'En consulta',   dot: '#92600A', icon: Activity },     // 5.2:1
+  COMPLETED:   { bg: '#F1F5F9', fg: '#334155', label: 'Completada',    dot: '#64748B', icon: CheckCircle2 }, // 9.8:1
+  CANCELLED:   { bg: '#FEF2F2', fg: '#C0392B', label: 'Cancelada',     dot: '#C0392B', icon: XCircle },      // 4.8:1
+  NO_SHOW:     { bg: '#FDF4FF', fg: '#7E22CE', label: 'No asistió',    dot: '#7E22CE', icon: UserX },        // 6.8:1
 }
 
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 07:00 – 19:00
@@ -457,10 +458,14 @@ function ApptCard({
               onClick={() => act(() => confirmAppointment(token, appt.id))} />
           )}
           {(appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') && (
+            <ActionBtn icon={Sofa} label="En sala" color="amber" disabled={acting}
+              onClick={() => act(() => waitingAppointment(token, appt.id))} />
+          )}
+          {appt.status === 'WAITING' && (
             <ActionBtn icon={Stethoscope} label="En consulta" color="amber" disabled={acting}
               onClick={() => act(() => (fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001/api/v1'}/appointments/${appt.id}/start`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(j => j.data)))} />
           )}
-          {(appt.status === 'CONFIRMED' || appt.status === 'IN_PROGRESS') && (
+          {(appt.status === 'WAITING' || appt.status === 'IN_PROGRESS') && (
             <ActionBtn icon={Check} label="Completar" color="blue" disabled={acting}
               onClick={() => act(() => completeAppointment(token, appt.id))} />
           )}
@@ -593,6 +598,7 @@ export default function AgendaPage() {
     total:     filtered.length,
     confirmed: filtered.filter(a => a.status === 'CONFIRMED').length,
     pending:   filtered.filter(a => a.status === 'SCHEDULED').length,
+    waiting:   filtered.filter(a => a.status === 'WAITING').length,
     completed: filtered.filter(a => a.status === 'COMPLETED').length,
   }
 
@@ -693,8 +699,9 @@ export default function AgendaPage() {
         {/* Stat chips */}
         {[
           { label: 'Total', value: counts.total, color: 'var(--mt-text)' },
-          { label: 'Pendientes', value: counts.pending, color: '#1d4ed8' },
-          { label: 'Confirmadas', value: counts.confirmed, color: '#15803d' },
+          { label: 'Pendientes', value: counts.pending, color: '#1D4ED8' },
+          { label: 'Confirmadas', value: counts.confirmed, color: '#1E7E34' },
+          { label: 'En sala', value: counts.waiting, color: '#92400E' },
           { label: 'Completadas', value: counts.completed, color: 'var(--mt-muted)' },
         ].map(chip => (
           <div key={chip.label} style={{

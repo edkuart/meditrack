@@ -196,6 +196,52 @@ function UploadForm({ orderId, onSuccess, onCancel }: {
   )
 }
 
+// ─── Horizontal bar visualization — WCAG-compliant ───────────────────────────
+
+function ResultBar({ numericValue, refMin, refMax, status }: {
+  numericValue: number; refMin: number; refMax: number; status: string
+}) {
+  const margin = Math.max((refMax - refMin) * 0.5, 0.5)
+  const chartMin = refMin - margin
+  const chartMax = refMax + margin
+  const chartRange = chartMax - chartMin
+  if (chartRange <= 0) return null
+
+  const normalLeft  = ((refMin - chartMin) / chartRange) * 100
+  const normalWidth = ((refMax - refMin)   / chartRange) * 100
+  const markerPos   = Math.max(2, Math.min(98, ((numericValue - chartMin) / chartRange) * 100))
+
+  const markerColor = status === 'CRITICAL_HIGH' || status === 'CRITICAL_LOW' ? '#C0392B'
+    : status === 'HIGH' || status === 'LOW' ? '#92600A'
+    : '#1E7E34'
+
+  return (
+    <div aria-hidden style={{ marginTop: 8 }}>
+      <div style={{ position: 'relative', height: 8, background: '#E2E8F0', borderRadius: 999 }}>
+        {/* Normal zone (green) */}
+        <div style={{
+          position: 'absolute', top: 0, height: '100%',
+          left: `${normalLeft}%`, width: `${normalWidth}%`,
+          background: '#A7F3D0', borderRadius: 999,
+        }} />
+        {/* Result marker */}
+        <div style={{
+          position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)',
+          left: `${markerPos}%`,
+          width: 14, height: 14, borderRadius: '50%',
+          background: markerColor, border: '2.5px solid #fff',
+          boxShadow: `0 1px 4px ${markerColor}55`,
+        }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+        <span style={{ fontSize: 10, color: 'var(--mt-muted)' }}>{refMin}</span>
+        <span style={{ fontSize: 10, color: '#1E7E34', fontWeight: 600 }}>Normal</span>
+        <span style={{ fontSize: 10, color: 'var(--mt-muted)' }}>{refMax}</span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Results panel ────────────────────────────────────────────────────────────
 
 function ResultsPanel({ order }: { order: PatientLabOrder }) {
@@ -275,30 +321,46 @@ function ResultsPanel({ order }: { order: PatientLabOrder }) {
               </div>
               {results.map((r, i) => {
                 const cfg = RESULT_STATUS_CONFIG[r.status]
-                const val = r.numeric_value ?? r.value
+                const numVal = r.numeric_value !== null ? parseFloat(r.numeric_value) : NaN
+                const numMin = r.ref_min !== null ? parseFloat(r.ref_min) : NaN
+                const numMax = r.ref_max !== null ? parseFloat(r.ref_max) : NaN
+                const hasBar = !isNaN(numVal) && !isNaN(numMin) && !isNaN(numMax) && numMin < numMax
                 return (
                   <div key={i} style={{
-                    display: 'flex', alignItems: 'center', padding: '10px 16px', gap: 12,
+                    padding: hasBar ? '10px 16px 12px' : '10px 16px',
                     borderBottom: i < results.length - 1 ? '1px solid var(--mt-elevated)' : 'none',
                   }}>
-                    <div style={{ flex: 1, fontSize: 13.5, color: 'var(--mt-text)' }}>{r.parameter_name}</div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: cfg.color }}>
-                        {val ?? '—'}{r.unit ? ` ${r.unit}` : ''}
+                    {/* Row: name + value + status */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1, fontSize: 13.5, color: 'var(--mt-text)' }}>{r.parameter_name}</div>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: cfg.color }}>
+                        {r.value ?? r.numeric_value ?? '—'}{r.unit ? ` ${r.unit}` : ''}
                       </span>
-                      {r.ref_min && r.ref_max && (
-                        <div style={{ fontSize: 11.5, color: 'var(--mt-muted)', marginTop: 2 }}>
-                          Ref: {r.ref_min}–{r.ref_max}
-                        </div>
+                      {r.status !== 'PENDING' && (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                          fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 999, flexShrink: 0,
+                          color: cfg.color, background: `${cfg.color}18`,
+                          border: `1px solid ${cfg.color}30`,
+                        }}>
+                          {cfg.label}
+                        </span>
                       )}
                     </div>
-                    {r.status !== 'PENDING' && (
-                      <span style={{
-                        fontSize: 11.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, flexShrink: 0,
-                        color: cfg.color, background: `${cfg.color}18`,
-                      }}>
-                        {cfg.label}
-                      </span>
+                    {/* Bar visualization */}
+                    {hasBar && (
+                      <ResultBar
+                        numericValue={numVal}
+                        refMin={numMin}
+                        refMax={numMax}
+                        status={r.status}
+                      />
+                    )}
+                    {/* Fallback: text ref range when no bar */}
+                    {!hasBar && r.ref_min && r.ref_max && (
+                      <div style={{ fontSize: 11.5, color: 'var(--mt-muted)', marginTop: 3 }}>
+                        Rango normal: {r.ref_min}–{r.ref_max}{r.unit ? ` ${r.unit}` : ''}
+                      </div>
                     )}
                   </div>
                 )

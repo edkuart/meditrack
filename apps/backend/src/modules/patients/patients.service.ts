@@ -59,56 +59,83 @@ async function generateMrn(tenantId: string): Promise<string> {
 
 // ─── Search ────────────────────────────────────────────────────────────────────
 
+const PATIENT_COLS = {
+  id:            patients.id,
+  mrn:           patients.mrn,
+  first_name:    patients.first_name,
+  last_name:     patients.last_name,
+  date_of_birth: patients.date_of_birth,
+  sex:           patients.sex,
+  phone:         patients.phone,
+  email:         patients.email,
+  id_number:     patients.id_number,
+  tags:          patients.tags,
+  is_active:     patients.is_active,
+  created_at:    patients.created_at,
+} as const
+
 export async function searchPatients(tenantId: string, input: SearchPatientsInput) {
   const { q, page, limit } = input
   const offset = (page - 1) * limit
-
   const baseWhere = eq(patients.tenant_id, tenantId)
 
-  const searchWhere = q
-    ? or(
-        sql`LOWER(${patients.first_name} || ' ' || ${patients.last_name}) LIKE LOWER(${'%' + q + '%'})`,
-        sql`LOWER(${patients.last_name} || ' ' || ${patients.first_name}) LIKE LOWER(${'%' + q + '%'})`,
-        ilike(patients.id_number, `%${q}%`),
-        ilike(patients.phone, `%${q}%`),
-        ilike(patients.mrn, `%${q}%`),
-      )
-    : undefined
+  // No query — return recent patients
+  if (!q?.trim()) {
+    const [rows, [{ total }]] = await Promise.all([
+      db.select(PATIENT_COLS).from(patients).where(baseWhere)
+        .orderBy(desc(patients.created_at)).limit(limit).offset(offset),
+      db.select({ total: count() }).from(patients).where(baseWhere),
+    ])
+    return { patients: rows, meta: { page, limit, total: Number(total), pages: Math.ceil(Number(total) / limit) } }
+  }
 
-  const where = searchWhere ? and(baseWhere, searchWhere) : baseWhere
+  const qNorm = q.trim()
+
+  // Short queries (≤2 chars): prefix match with unaccent
+  if (qNorm.length <= 2) {
+    const shortWhere = and(
+      baseWhere,
+      or(
+        sql`unaccent(lower(${patients.first_name})) LIKE unaccent(lower(${qNorm + '%'}))`,
+        sql`unaccent(lower(${patients.last_name})) LIKE unaccent(lower(${qNorm + '%'}))`,
+        ilike(patients.id_number, `%${qNorm}%`),
+        ilike(patients.phone, `%${qNorm}%`),
+        ilike(patients.mrn, `%${qNorm}%`),
+      ),
+    )
+    const [rows, [{ total }]] = await Promise.all([
+      db.select(PATIENT_COLS).from(patients).where(shortWhere)
+        .orderBy(patients.last_name, patients.first_name).limit(limit).offset(offset),
+      db.select({ total: count() }).from(patients).where(shortWhere),
+    ])
+    return { patients: rows, meta: { page, limit, total: Number(total), pages: Math.ceil(Number(total) / limit) } }
+  }
+
+  // Full fuzzy search — trigram similarity (pg_trgm + unaccent) + exact ID/phone/MRN fallback
+  const fuzzyWhere = and(
+    baseWhere,
+    or(
+      sql`unaccent(lower(${patients.first_name} || ' ' || ${patients.last_name})) % unaccent(lower(${qNorm}))`,
+      sql`unaccent(lower(${patients.last_name} || ' ' || ${patients.first_name})) % unaccent(lower(${qNorm}))`,
+      ilike(patients.id_number, `%${qNorm}%`),
+      ilike(patients.phone, `%${qNorm}%`),
+      ilike(patients.mrn, `%${qNorm}%`),
+    ),
+  )
+
+  const scoreExpr = sql`greatest(
+    similarity(unaccent(lower(${patients.first_name} || ' ' || ${patients.last_name})), unaccent(lower(${qNorm}))),
+    similarity(unaccent(lower(${patients.last_name} || ' ' || ${patients.first_name})), unaccent(lower(${qNorm})))
+  )`
 
   const [rows, [{ total }]] = await Promise.all([
-    db
-      .select({
-        id: patients.id,
-        mrn: patients.mrn,
-        first_name: patients.first_name,
-        last_name: patients.last_name,
-        date_of_birth: patients.date_of_birth,
-        sex: patients.sex,
-        phone: patients.phone,
-        email: patients.email,
-        id_number: patients.id_number,
-        tags: patients.tags,
-        is_active: patients.is_active,
-        created_at: patients.created_at,
-      })
-      .from(patients)
-      .where(where)
-      .orderBy(desc(patients.created_at))
-      .limit(limit)
-      .offset(offset),
-
-    db
-      .select({ total: count() })
-      .from(patients)
-      .where(where),
+    db.select(PATIENT_COLS).from(patients).where(fuzzyWhere)
+      .orderBy(sql`${scoreExpr} DESC`, patients.last_name, patients.first_name)
+      .limit(limit).offset(offset),
+    db.select({ total: count() }).from(patients).where(fuzzyWhere),
   ])
 
-  return {
-    patients: rows,
-    meta: { page, limit, total: Number(total), pages: Math.ceil(Number(total) / limit) },
-  }
+  return { patients: rows, meta: { page, limit, total: Number(total), pages: Math.ceil(Number(total) / limit) } }
 }
 
 // ─── Create ────────────────────────────────────────────────────────────────────

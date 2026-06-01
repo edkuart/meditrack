@@ -17,6 +17,7 @@ export const appointmentTypeEnum = pgEnum('appointment_type', [
 export const appointmentStatusEnum = pgEnum('appointment_status', [
   'SCHEDULED',
   'CONFIRMED',
+  'WAITING',
   'IN_PROGRESS',
   'COMPLETED',
   'CANCELLED',

@@ -206,6 +206,14 @@ router.post('/portal/appointments/:id/confirm-attendance', requirePatient, async
   return c.json({ success: true, data })
 })
 
+router.post('/portal/appointments/:id/cancel', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const body = await c.req.json().catch(() => ({}))
+  const reason = (body.reason as string | undefined)?.trim() || 'Cancelado por el paciente'
+  const data = await portalService.cancelAppointmentFromPortal(p.sub, p.tenant_id, c.req.param('id')!, reason)
+  return c.json({ success: true, data })
+})
+
 router.get('/portal/adherence', requirePatient, async (c) => {
   const p = c.get('patient')
   const data = await portalService.getAdherenceForPortal(p.sub)

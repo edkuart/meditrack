@@ -1,0 +1,1 @@
+ALTER TYPE "public"."appointment_status" ADD VALUE 'WAITING' BEFORE 'IN_PROGRESS';

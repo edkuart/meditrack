@@ -12,12 +12,16 @@ import {
   getEncounter, updateEncounter, closeEncounter, createTreatment, activateTreatment,
   generatePortalAccess, listClinicalProtocols,
   runEncounterAiAssist,
+  listPatientBackground,
+  listPatientProblems,
   type AccessResult,
   type AiAssistMode,
   type ClinicalProtocol,
   type Encounter,
   type EncounterWorkflowStage,
   type TreatmentPlan,
+  type PatientBackground,
+  type PatientProblem,
 } from '@/lib/doctor/api'
 import {
   listAiUsageEvents,
@@ -818,6 +822,8 @@ export default function EncounterPage() {
   const [treatment, setTreatment] = useState<TreatmentPlan | null>(null)
   const [protocols, setProtocols] = useState<ClinicalProtocol[]>(FALLBACK_PROTOCOLS)
   const [loading, setLoading] = useState(true)
+  const [patientAllergies, setPatientAllergies] = useState<PatientBackground[]>([])
+  const [activeProblems, setActiveProblems] = useState<PatientProblem[]>([])
 
   // Notes editing
   const [notes, setNotes] = useState('')
@@ -871,10 +877,14 @@ export default function EncounterPage() {
     setLoading(true)
     autosaveReadyRef.current = false
     try {
-      const [enc, protocolList] = await Promise.all([
+      const [enc, protocolList, backgrounds, problems] = await Promise.all([
         getEncounter(token, encId),
         listClinicalProtocols(token).catch(() => FALLBACK_PROTOCOLS),
+        listPatientBackground(token, patientId).catch(() => []),
+        listPatientProblems(token, patientId).catch(() => []),
       ])
+      setPatientAllergies(backgrounds.filter((b: PatientBackground) => b.category === 'ALERGIAS'))
+      setActiveProblems((problems as PatientProblem[]).filter((p: PatientProblem) => p.status === 'ACTIVE' || p.status === 'CHRONIC'))
       setEncounter(enc)
       setTreatment(enc.treatment_plan ?? null)
       setNotes(enc.notes ?? '')
@@ -1179,9 +1189,21 @@ export default function EncounterPage() {
     }
   }
 
-  // Ctrl+Enter → guardar notas desde cualquier campo
+  // Refs para auto-guardado (se actualizan más abajo, después de hasUnsavedNotes)
+  const hasUnsavedNotesRef = useRef(false)
+  const savingNotesRef = useRef(false)
   const saveNotesRef = useRef(handleSaveNotes)
   saveNotesRef.current = handleSaveNotes
+
+  useEffect(() => {
+    if (!encounter || isClosedEncounterStatus(encounter.status)) return
+    const id = window.setInterval(() => {
+      if (hasUnsavedNotesRef.current && !savingNotesRef.current && autosaveReadyRef.current) {
+        saveNotesRef.current()
+      }
+    }, 30000)
+    return () => window.clearInterval(id)
+  }, [encounter])
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
@@ -1422,6 +1444,10 @@ export default function EncounterPage() {
     plan !== (encounter.plan ?? '') ||
     workflowStage !== getWorkflowStage(encounter.metadata)
 
+  // Actualizar refs del auto-guardado (deben estar después de hasUnsavedNotes)
+  hasUnsavedNotesRef.current = hasUnsavedNotes
+  savingNotesRef.current = savingNotes
+
   return (
     <ClinicalPage size="compact">
       <ClinicalHeader
@@ -1498,6 +1524,82 @@ export default function EncounterPage() {
         <ClinicalInsight tone="blue" title="Consulta en progreso">
           Faltan: {missingCloseItems.map(item => item.label).join(', ')}. Puedes guardar el avance y continuar después.
         </ClinicalInsight>
+      )}
+
+      {/* ── Panel de contexto clínico — seguridad de prescripción ── */}
+      {(patientAllergies.length > 0 || activeProblems.length > 0 || (treatment && treatment.medications.length > 0)) && (
+        <ClinicalPanel
+          title="Contexto del paciente"
+          icon={AlertTriangle}
+          accent={patientAllergies.length > 0 ? 'red' : 'slate'}
+          collapsible
+          defaultOpen={patientAllergies.length > 0}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 16px 14px' }}>
+            {/* Alergias — siempre expandido si hay */}
+            {patientAllergies.length > 0 && (
+              <div style={{
+                background: '#FEF2F2', border: '1px solid #FECACA',
+                borderRadius: 8, padding: '8px 12px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <AlertTriangle size={13} color="#C0392B" aria-hidden />
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#C0392B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Alergias registradas ({patientAllergies.length})
+                  </span>
+                </div>
+                {patientAllergies.map(a => (
+                  <p key={a.id} style={{ margin: '2px 0 0', fontSize: 12.5, color: '#7F1D1D', lineHeight: 1.5 }}>
+                    {a.content}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {/* Problemas activos / crónicos */}
+            {activeProblems.length > 0 && (
+              <div>
+                <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--mt-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Problemas activos · {activeProblems.length}
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {activeProblems.map(p => (
+                    <span key={p.id} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      fontSize: 11.5, fontWeight: 600, padding: '3px 9px', borderRadius: 999,
+                      background: p.status === 'CHRONIC' ? '#FFFBEB' : 'var(--mt-primary-subtle)',
+                      color: p.status === 'CHRONIC' ? '#92600A' : 'var(--mt-primary)',
+                      border: `1px solid ${p.status === 'CHRONIC' ? '#FDE68A' : 'var(--mt-primary-mist)'}`,
+                    }}>
+                      #{p.problem_number} {p.title}
+                      {p.icd10_code ? <span style={{ opacity: 0.65 }}> · {p.icd10_code}</span> : null}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Medicamentos del plan activo */}
+            {treatment && treatment.medications.length > 0 && (
+              <div>
+                <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--mt-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Medicamentos en plan · {treatment.medications.length}
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {treatment.medications.map(m => (
+                    <span key={m.id} style={{
+                      fontSize: 11.5, fontWeight: 600, padding: '3px 9px', borderRadius: 999,
+                      background: 'var(--mt-success-subtle)', color: '#1E7E34',
+                      border: '1px solid #A7F3D0',
+                    }}>
+                      {m.drug_name} {m.dose_amount}{m.dose_unit}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </ClinicalPanel>
       )}
 
       <ClinicalPanel
@@ -1617,6 +1719,7 @@ export default function EncounterPage() {
                 done={Boolean(subjective.trim() || encounter.chief_complaint?.trim())}
               >
                 <textarea
+                  autoFocus={workflowStage === 'INTAKE' || workflowStage === 'SUBJECTIVE'}
                   value={subjective}
                   onChange={e => { setSubjective(e.target.value); setWorkflowStage('SUBJECTIVE') }}
                   rows={5}
@@ -1702,12 +1805,18 @@ export default function EncounterPage() {
 
             <div className="flex items-center justify-end gap-3">
               {notesSaved && (
-                <span style={{ fontSize: 12, color: 'var(--mt-success, #047857)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 12, color: '#1E7E34', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <CheckCircle size={13} />
                   Guardado
                 </span>
               )}
-              {!notesSaved && localDraftNotice && (
+              {!notesSaved && savingNotes && (
+                <span style={{ fontSize: 12, color: 'var(--mt-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                  Guardando…
+                </span>
+              )}
+              {!notesSaved && !savingNotes && localDraftNotice && (
                 <span className="text-xs text-[var(--mt-muted)]">{localDraftNotice}</span>
               )}
               <ClinicalButton

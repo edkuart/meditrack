@@ -308,3 +308,10 @@ export async function confirmAppointmentAttendance(token: string, appointmentId:
     body: JSON.stringify({}),
   })
 }
+
+export async function cancelAppointmentFromPortal(token: string, appointmentId: string, reason: string) {
+  return portalFetch<PortalAppointment>(`/portal/appointments/${appointmentId}/cancel`, token, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
+}
