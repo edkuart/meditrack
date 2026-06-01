@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -898,6 +898,7 @@ export default function PatientProfilePage() {
   const [icd10Suggestions, setIcd10Suggestions] = useState<Icd10Result[]>([])
   const [icd10Query, setIcd10Query] = useState('')
   const [showIcd10Dropdown, setShowIcd10Dropdown] = useState(false)
+  const icd10Ref = useRef<HTMLDivElement>(null)
   const [creatingProblem, setCreatingProblem] = useState(false)
   const [problemError, setProblemError] = useState('')
 
@@ -1108,7 +1109,7 @@ export default function PatientProfilePage() {
 
   // ICD-10 typeahead — debounced 300ms
   useEffect(() => {
-    if (!token || icd10Query.length < 2) { setIcd10Suggestions([]); return }
+    if (!token || icd10Query.length < 2) { setIcd10Suggestions([]); setShowIcd10Dropdown(false); return }
     const timer = setTimeout(async () => {
       const results = await searchIcd10(token, icd10Query).catch(() => [])
       setIcd10Suggestions(results)
@@ -1116,6 +1117,17 @@ export default function PatientProfilePage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [icd10Query, token])
+
+  // Cierra el dropdown al hacer click fuera del contenedor
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (icd10Ref.current && !icd10Ref.current.contains(e.target as Node)) {
+        setShowIcd10Dropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [])
 
   function selectIcd10(entry: Icd10Result) {
     setNewProblemIcd10(entry.code)
@@ -1992,7 +2004,7 @@ export default function PatientProfilePage() {
                       <option value="RESOLVED">Resuelto</option>
                     </select>
                   </div>
-                  <div className="flex flex-col gap-1" style={{ position: 'relative' }}>
+                  <div ref={icd10Ref} className="flex flex-col gap-1" style={{ position: 'relative' }}>
                     <label className={labelClass}>
                       Diagnóstico ICD-10 / CIE-10 (opcional)
                     </label>
@@ -2001,10 +2013,10 @@ export default function PatientProfilePage() {
                       onChange={e => {
                         setIcd10Query(e.target.value)
                         if (!e.target.value) { setNewProblemIcd10(''); setNewProblemIcd10Desc('') }
-                        setShowIcd10Dropdown(true)
                       }}
-                      onFocus={() => { if (icd10Suggestions.length > 0) setShowIcd10Dropdown(true) }}
-                      onBlur={() => setTimeout(() => setShowIcd10Dropdown(false), 150)}
+                      onKeyDown={e => {
+                        if (e.key === 'Escape') { setShowIcd10Dropdown(false); setIcd10Query('') }
+                      }}
                       placeholder="Buscar por nombre o código (ej: hipertensión, I10)"
                       className={fieldClass}
                       autoComplete="off"
