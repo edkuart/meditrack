@@ -6,11 +6,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
+  Activity,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  Clock,
   Loader2,
   MapPin,
+  XCircle,
+  UserX,
 } from 'lucide-react'
 import { MTLogo } from '@/components/doctor/clinical-ui'
 import { getSession, clearSession } from '@/lib/portal/session'
@@ -30,13 +34,13 @@ const APPT_TYPE_LABELS: Record<string, string> = {
   TELECONSULT: 'Teleconsulta',
 }
 
-const APPT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  SCHEDULED:   { label: 'Agendada',   color: 'var(--mt-primary)', bg: 'var(--mt-primary-subtle)' },
-  CONFIRMED:   { label: 'Confirmada', color: '#047857',            bg: 'var(--mt-success-subtle)' },
-  IN_PROGRESS: { label: 'En curso',   color: '#B45309',            bg: '#FFFBEB' },
-  COMPLETED:   { label: 'Completada', color: '#374151',            bg: 'var(--mt-elevated)' },
-  CANCELLED:   { label: 'Cancelada',  color: '#9CA3AF',            bg: 'var(--mt-elevated)' },
-  NO_SHOW:     { label: 'No asistí',  color: '#9CA3AF',            bg: 'var(--mt-elevated)' },
+const APPT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
+  SCHEDULED:   { label: 'Agendada',   color: '#1D4ED8', bg: '#EFF6FF', icon: Clock },        // 6.7:1
+  CONFIRMED:   { label: 'Confirmada', color: '#1E7E34', bg: '#ECFDF5', icon: CheckCircle2 }, // 4.7:1
+  IN_PROGRESS: { label: 'En curso',   color: '#92600A', bg: '#FFFBEB', icon: Activity },     // 5.2:1
+  COMPLETED:   { label: 'Completada', color: '#334155', bg: '#F1F5F9', icon: CheckCircle2 }, // 9.8:1
+  CANCELLED:   { label: 'Cancelada',  color: '#C0392B', bg: '#FEF2F2', icon: XCircle },      // 4.8:1
+  NO_SHOW:     { label: 'No asistí',  color: '#7E22CE', bg: '#FDF4FF', icon: UserX },        // 6.8:1
 }
 
 function formatApptDate(isoString: string) {
@@ -66,6 +70,7 @@ function AppointmentCard({
   const [confirming, setConfirming] = useState(false)
   const { label: dateLabel, isToday } = formatApptDate(appt.scheduled_at)
   const statusCfg = APPT_STATUS_CONFIG[appt.status] ?? APPT_STATUS_CONFIG.SCHEDULED
+  const StatusIcon = statusCfg.icon
   const canConfirm = appt.status === 'SCHEDULED' && onConfirm
   const isCancelled = appt.status === 'CANCELLED' || appt.status === 'NO_SHOW'
 
@@ -105,11 +110,13 @@ function AppointmentCard({
           </div>
         </div>
         <span style={{
-          borderRadius: 999, padding: '3px 10px', flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          borderRadius: 999, padding: '3px 8px 3px 6px', flexShrink: 0,
           fontSize: 11, fontWeight: 800,
           color: statusCfg.color, background: statusCfg.bg,
           border: `1px solid ${statusCfg.color}22`,
         }}>
+          <StatusIcon size={10} strokeWidth={2.5} aria-hidden />
           {statusCfg.label}
         </span>
       </div>

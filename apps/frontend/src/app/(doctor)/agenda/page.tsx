@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock, MapPin,
   Plus, RefreshCw, Stethoscope, User, X, Check, AlertCircle,
-  UserX, Loader2,
+  UserX, Loader2, CheckCircle2, XCircle, Activity,
 } from 'lucide-react'
 import { useAuth } from '@/lib/doctor/auth-context'
 import { hasPermission, PERMISSIONS } from '@/lib/doctor/permissions'
@@ -31,13 +31,13 @@ const TYPE_OPTIONS: AppointmentType[] = [
   'CONSULTATION', 'FOLLOW_UP', 'PROCEDURE', 'CHECK_UP', 'EMERGENCY', 'TELECONSULT',
 ]
 
-const STATUS_CONFIG: Record<AppointmentStatus, { bg: string; fg: string; label: string; dot: string }> = {
-  SCHEDULED:   { bg: '#eff6ff', fg: '#1d4ed8', label: 'Programada',   dot: '#3b82f6' },
-  CONFIRMED:   { bg: '#f0fdf4', fg: '#15803d', label: 'Confirmada',   dot: '#22c55e' },
-  IN_PROGRESS: { bg: '#fffbeb', fg: '#b45309', label: 'En consulta',  dot: '#f59e0b' },
-  COMPLETED:   { bg: '#f8fafc', fg: '#475569', label: 'Completada',   dot: '#94a3b8' },
-  CANCELLED:   { bg: '#fef2f2', fg: '#b91c1c', label: 'Cancelada',    dot: '#ef4444' },
-  NO_SHOW:     { bg: '#fdf4ff', fg: '#7e22ce', label: 'No asistió',   dot: '#a855f7' },
+const STATUS_CONFIG: Record<AppointmentStatus, { bg: string; fg: string; label: string; dot: string; icon: React.ElementType }> = {
+  SCHEDULED:   { bg: '#EFF6FF', fg: '#1D4ED8', label: 'Programada',  dot: '#1D4ED8', icon: Clock },        // 6.7:1
+  CONFIRMED:   { bg: '#ECFDF5', fg: '#1E7E34', label: 'Confirmada',  dot: '#1E7E34', icon: CheckCircle2 }, // 4.7:1
+  IN_PROGRESS: { bg: '#FFFBEB', fg: '#92600A', label: 'En consulta', dot: '#92600A', icon: Activity },     // 5.2:1
+  COMPLETED:   { bg: '#F1F5F9', fg: '#334155', label: 'Completada',  dot: '#64748B', icon: CheckCircle2 }, // 9.8:1
+  CANCELLED:   { bg: '#FEF2F2', fg: '#C0392B', label: 'Cancelada',   dot: '#C0392B', icon: XCircle },      // 4.8:1
+  NO_SHOW:     { bg: '#FDF4FF', fg: '#7E22CE', label: 'No asistió',  dot: '#7E22CE', icon: UserX },        // 6.8:1
 }
 
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 07:00 – 19:00
@@ -356,9 +356,19 @@ function ApptCard({
   onUpdate: (a: Appointment) => void
 }) {
   const s = STATUS_CONFIG[appt.status]
+  const StatusIcon = s.icon
   const [acting, setAct] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+
+  useEffect(() => {
+    if (!showCancel) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setShowCancel(false); setCancelReason('') }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showCancel])
 
   async function act(fn: () => Promise<Appointment>) {
     setAct(true)
@@ -388,9 +398,11 @@ function ApptCard({
           </span>
         </div>
         <span style={{
-          fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999,
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          fontSize: 11, fontWeight: 700, padding: '3px 8px 3px 6px', borderRadius: 999,
           background: s.bg, color: s.fg,
         }}>
+          <StatusIcon size={10} strokeWidth={2.5} aria-hidden />
           {s.label}
         </span>
       </div>

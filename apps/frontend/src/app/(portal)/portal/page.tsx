@@ -293,7 +293,7 @@ function ToggleChip({
       type="button"
       onClick={onClick}
       style={{
-        minHeight: 34,
+        minHeight: 44,
         borderRadius: 999,
         border: `1.5px solid ${selected ? s.border : 'var(--mt-border)'}`,
         background: selected ? s.bg : 'var(--mt-surface)',
@@ -656,7 +656,7 @@ function CheckInCard({
                     border: `1.5px solid ${mood === opt.value ? 'var(--mt-primary-mist)' : 'var(--mt-border)'}`,
                     background: mood === opt.value ? 'var(--mt-primary-subtle)' : 'var(--mt-surface)',
                     color: mood === opt.value ? 'var(--mt-primary)' : 'var(--mt-text-2)',
-                    padding: '12px 6px', fontSize: 13, fontWeight: 700,
+                    padding: '14px 6px', fontSize: 13, fontWeight: 700,
                     fontFamily: 'var(--mt-font)', cursor: 'pointer',
                     transition: 'all 0.15s ease', textAlign: 'center',
                   }}
@@ -690,7 +690,7 @@ function CheckInCard({
                     borderRadius: 12, border: `1.5px solid ${adherenceReport === key ? cfg.border : 'var(--mt-border)'}`,
                     background: adherenceReport === key ? cfg.bg : 'var(--mt-surface)',
                     color: adherenceReport === key ? cfg.color : 'var(--mt-text-2)',
-                    padding: '10px 8px', fontSize: 13, fontWeight: 700,
+                    padding: '13px 8px', fontSize: 13, fontWeight: 700,
                     fontFamily: 'var(--mt-font)', cursor: 'pointer',
                     transition: 'all 0.15s ease',
                   }}
@@ -892,7 +892,7 @@ function CheckInCard({
                           border: `1.5px solid ${energyLevel === opt.value ? (opt.value === 'low' ? '#FDE68A' : 'var(--mt-primary-mist)') : 'var(--mt-border)'}`,
                           background: energyLevel === opt.value ? (opt.value === 'low' ? '#FFFBEB' : 'var(--mt-primary-subtle)') : 'var(--mt-surface)',
                           color: energyLevel === opt.value ? (opt.value === 'low' ? '#B45309' : 'var(--mt-primary)') : 'var(--mt-text-2)',
-                          padding: '8px 10px', fontSize: 13, fontWeight: 700,
+                          padding: '12px 10px', fontSize: 13, fontWeight: 700,
                           fontFamily: 'var(--mt-font)', cursor: 'pointer', textAlign: 'left',
                           transition: 'all 0.15s ease',
                         }}
@@ -924,7 +924,7 @@ function CheckInCard({
                           border: `1.5px solid ${sleepQuality === opt.value ? (opt.value === 'poor' ? '#FDE68A' : 'var(--mt-primary-mist)') : 'var(--mt-border)'}`,
                           background: sleepQuality === opt.value ? (opt.value === 'poor' ? '#FFFBEB' : 'var(--mt-primary-subtle)') : 'var(--mt-surface)',
                           color: sleepQuality === opt.value ? (opt.value === 'poor' ? '#B45309' : 'var(--mt-primary)') : 'var(--mt-text-2)',
-                          padding: '8px 10px', fontSize: 13, fontWeight: 700,
+                          padding: '12px 10px', fontSize: 13, fontWeight: 700,
                           fontFamily: 'var(--mt-font)', cursor: 'pointer', textAlign: 'left',
                           transition: 'all 0.15s ease',
                         }}

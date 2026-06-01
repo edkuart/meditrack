@@ -1179,6 +1179,23 @@ export default function EncounterPage() {
     }
   }
 
+  // Ctrl+Enter → guardar notas desde cualquier campo
+  const saveNotesRef = useRef(handleSaveNotes)
+  saveNotesRef.current = handleSaveNotes
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
+        const target = e.target as HTMLElement
+        if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
+          e.preventDefault()
+          saveNotesRef.current()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   async function handleAiAssist(mode: AiAssistMode) {
     if (!token) return
     setAiLoading(mode)
