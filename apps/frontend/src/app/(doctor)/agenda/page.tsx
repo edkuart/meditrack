@@ -140,7 +140,7 @@ function CreateModal({
     setSaving(true)
     setError('')
     try {
-      const scheduled_at = `${form.scheduled_date}T${form.scheduled_time}:00`
+      const scheduled_at = new Date(`${form.scheduled_date}T${form.scheduled_time}:00`).toISOString()
       const appt = await createAppointment(token, form.patient_id, {
         patient_id:       form.patient_id,
         doctor_id:        form.doctor_id,

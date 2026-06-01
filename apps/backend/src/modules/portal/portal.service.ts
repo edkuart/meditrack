@@ -1,9 +1,9 @@
-import { eq, and, desc, lte, gte, count, sql } from 'drizzle-orm'
+import { eq, and, desc, lte, gte, lt, count, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import {
   db, patients, patientAccessTokens, encounters,
   treatmentPlans, medicationItems, doseEvents, documents, patientCheckIns,
-  labOrders, treatmentInterventions,
+  labOrders, treatmentInterventions, appointments,
 } from '../../shared/db/index.ts'
 import {
   generateOpaqueToken, generatePin, hashToken,
@@ -593,6 +593,65 @@ export async function getLabOrderForPortal(patientId: string, tenantId: string, 
   })
   if (!order) throw new NotFoundError('LabOrder')
   return order
+}
+
+export async function getPortalAppointments(patientId: string, tenantId: string) {
+  const now = new Date()
+
+  const [upcoming, past] = await Promise.all([
+    db.query.appointments.findMany({
+      where: and(
+        eq(appointments.patient_id, patientId),
+        eq(appointments.tenant_id, tenantId),
+        gte(appointments.scheduled_at, now),
+      ),
+      with: {
+        doctor: { columns: { first_name: true, last_name: true, specialty: true } },
+        location: { columns: { name: true, address: true } },
+      },
+      orderBy: (a, { asc }) => asc(a.scheduled_at),
+      limit: 10,
+    }),
+    db.query.appointments.findMany({
+      where: and(
+        eq(appointments.patient_id, patientId),
+        eq(appointments.tenant_id, tenantId),
+        lt(appointments.scheduled_at, now),
+      ),
+      with: {
+        doctor: { columns: { first_name: true, last_name: true, specialty: true } },
+        location: { columns: { name: true, address: true } },
+      },
+      orderBy: (a, { desc }) => desc(a.scheduled_at),
+      limit: 5,
+    }),
+  ])
+
+  return { upcoming, past }
+}
+
+export async function confirmAppointmentAttendance(patientId: string, tenantId: string, appointmentId: string) {
+  const appt = await db.query.appointments.findFirst({
+    where: and(
+      eq(appointments.id, appointmentId),
+      eq(appointments.patient_id, patientId),
+      eq(appointments.tenant_id, tenantId),
+    ),
+    columns: { id: true, status: true },
+  })
+
+  if (!appt) throw new NotFoundError('Appointment')
+  if (appt.status !== 'SCHEDULED') {
+    throw new AppError(409, 'APPOINTMENT_STATUS_CONFLICT', 'Solo se pueden confirmar citas en estado SCHEDULED')
+  }
+
+  const [updated] = await db
+    .update(appointments)
+    .set({ status: 'CONFIRMED', updated_at: new Date() })
+    .where(eq(appointments.id, appointmentId))
+    .returning()
+
+  return updated
 }
 
 export async function getDocumentUrlForPatient(patientId: string, documentId: string) {

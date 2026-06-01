@@ -30,9 +30,11 @@ import { getSession, saveSession, clearSession, type PatientSession } from '@/li
 import {
   authMagicLink,
   confirmDose,
+  confirmAppointmentAttendance,
   getAdherence,
   getEngagement,
   getLabOrders,
+  getPortalAppointments,
   getTodayCheckIn,
   getTodayDoses,
   isUnauthorizedPortalError,
@@ -45,6 +47,7 @@ import {
   type PatientCheckIn,
   type PatientCheckInInput,
   type PatientEngagement,
+  type PortalAppointment,
   type PortalLabOrder,
 } from '@/lib/portal/api'
 
@@ -1057,6 +1060,162 @@ function CheckInCard({
 }
 
 
+// ─────────────────────────────────────────────
+// Appointment type / status labels
+// ─────────────────────────────────────────────
+const APPT_TYPE_LABELS: Record<string, string> = {
+  CONSULTATION: 'Consulta',
+  FOLLOW_UP: 'Control',
+  PROCEDURE: 'Procedimiento',
+  CHECK_UP: 'Chequeo',
+  EMERGENCY: 'Urgencia',
+  TELECONSULT: 'Teleconsulta',
+}
+
+
+function apptChipLabel(isoString: string) {
+  const date = new Date(isoString)
+  const now = new Date()
+  const time = date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const toDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const isToday = toDay(date) === toDay(now)
+  const isTomorrow = toDay(date) === toDay(now) + 86400000
+  let day: string
+  if (isToday) day = 'Hoy'
+  else if (isTomorrow) day = 'Mañana'
+  else {
+    day = date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' })
+    day = day.charAt(0).toUpperCase() + day.slice(1)
+  }
+  return { label: `${day} · ${time}`, isToday }
+}
+
+function NextAppointmentCard({
+  appointments,
+  onConfirm,
+}: {
+  appointments: { upcoming: PortalAppointment[]; past: PortalAppointment[] } | null
+  onConfirm: (id: string) => Promise<void>
+}) {
+  const [confirming, setConfirming] = useState(false)
+
+  if (!appointments) return null
+  const next = appointments.upcoming.find(a => a.status !== 'CANCELLED' && a.status !== 'NO_SHOW')
+  if (!next) return null
+
+  const { label: chipLabel, isToday } = apptChipLabel(next.scheduled_at)
+  const canConfirm = next.status === 'SCHEDULED'
+  const isConfirmed = next.status === 'CONFIRMED'
+
+  async function handleConfirm() {
+    setConfirming(true)
+    try { await onConfirm(next!.id) } finally { setConfirming(false) }
+  }
+
+  return (
+    <article
+      className="portal-dose-card"
+      style={{ borderColor: isToday ? '#FDE68A' : '#C7D2FE' }}
+    >
+      <header style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        {/* Icon — same size/shape as Pill icon in DoseCard */}
+        <div style={{
+          width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+          background: isToday ? '#FEF3C7' : 'var(--mt-primary-subtle)',
+          border: `1.5px solid ${isToday ? '#FDE68A' : 'var(--mt-primary-mist)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: isToday ? '#B45309' : 'var(--mt-primary)',
+        }}>
+          <CalendarDays size={22} />
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Doctor name — same typography as drug name */}
+          <h3 style={{
+            margin: 0, fontSize: 16.5, fontWeight: 800,
+            color: 'var(--mt-text)', letterSpacing: '-0.015em', lineHeight: 1.2,
+          }}>
+            Dr. {next.doctor.first_name} {next.doctor.last_name}
+          </h3>
+          {next.doctor.specialty && (
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--mt-text-2)' }}>
+              {next.doctor.specialty}
+            </p>
+          )}
+
+          {/* Date chip + meta — same row as time chip + period label */}
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span
+              className="portal-time-chip"
+              style={{
+                background: isToday ? '#FEF3C7' : 'var(--mt-primary-subtle)',
+                color: isToday ? '#B45309' : 'var(--mt-primary)',
+              }}
+            >
+              <CalendarDays size={13} strokeWidth={2.5} />
+              {chipLabel}
+            </span>
+            <span style={{ fontSize: 12.5, color: 'var(--mt-muted)', fontWeight: 500 }}>
+              {next.duration_minutes} min
+            </span>
+            <span className="portal-food-chip" style={{ background: 'var(--mt-elevated)', color: 'var(--mt-text-2)', border: 'none' }}>
+              {APPT_TYPE_LABELS[next.type] ?? next.type}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Location + reason — same indent as dose amount */}
+      {(next.location || next.reason) && (
+        <div style={{ marginTop: 10, paddingLeft: 60, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {next.location && (
+            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--mt-text-2)', lineHeight: 1.4 }}>
+              📍 {next.location.name}{next.location.address ? ` · ${next.location.address}` : ''}
+            </p>
+          )}
+          {next.reason && (
+            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--mt-text-2)', fontStyle: 'italic', lineHeight: 1.4 }}>
+              "{next.reason}"
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Confirmed strip — mirrors portal-confirm-strip */}
+      {isConfirmed && (
+        <div className="portal-confirm-strip" style={{ background: 'var(--mt-success-subtle)', borderColor: '#A7F3D0' }}>
+          <span className="portal-confirm-strip-icon" style={{ background: '#A7F3D0', color: '#047857' }}>
+            <CheckCircle2 size={17} strokeWidth={3} />
+          </span>
+          <div style={{ color: 'var(--mt-text)' }}>
+            <strong>Asistencia confirmada.</strong> Tu médico ya sabe que vas a asistir.
+          </div>
+        </div>
+      )}
+
+      {/* Confirm button — flagship portal-confirm-btn, green variant */}
+      {canConfirm && (
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={confirming}
+          className="portal-confirm-btn"
+          style={{
+            background: '#047857',
+            boxShadow: '0 4px 14px rgba(4,120,87,0.30), 0 1px 2px rgba(4,120,87,0.15)',
+          }}
+        >
+          {confirming ? (
+            <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />Confirmando…</>
+          ) : (
+            <><CheckCircle2 size={18} strokeWidth={2.5} />Confirmar asistencia</>
+          )}
+        </button>
+      )}
+    </article>
+  )
+}
+
 const LAB_ORDER_LABELS: Record<string, string> = {
   PENDING: 'Solicitado',
   IN_PROGRESS: 'En proceso',
@@ -1141,6 +1300,7 @@ function PortalContent() {
   const [engagement, setEngagement] = useState<PatientEngagement | null>(null)
   const [checkIn, setCheckIn] = useState<PatientCheckIn | null>(null)
   const [labOrders, setLabOrders] = useState<PortalLabOrder[]>([])
+  const [portalAppointments, setPortalAppointments] = useState<{ upcoming: PortalAppointment[]; past: PortalAppointment[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -1182,6 +1342,7 @@ function PortalContent() {
       setCheckIn(checkInData)
       const labData = await getLabOrders(token).catch(() => [])
       setLabOrders(labData)
+      getPortalAppointments(token).then(setPortalAppointments).catch(() => setPortalAppointments(null))
       if (window.location.search.includes('token=')) window.history.replaceState({}, '', '/portal')
     } catch (err) {
       if (isUnauthorizedPortalError(err)) {
@@ -1209,6 +1370,18 @@ function PortalContent() {
     if (!session) return
     const saved = await submitCheckIn(session.token, input)
     setCheckIn(saved)
+  }
+
+  async function handleConfirmAttendance(appointmentId: string) {
+    if (!session) return
+    const updated = await confirmAppointmentAttendance(session.token, appointmentId)
+    setPortalAppointments(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        upcoming: prev.upcoming.map(a => a.id === updated.id ? { ...a, status: updated.status } : a),
+      }
+    })
   }
 
   if (error) {
@@ -1299,7 +1472,7 @@ function PortalContent() {
         </div>
 
         <div className="portal-main-grid">
-          {/* Doses first — visible immediately on mobile */}
+          {/* Columna izquierda — Dosis (1): acción principal del día */}
           <div className="portal-column">
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: -2 }}>
               <h2 className="portal-section-title" style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.015em', margin: 0 }}>
@@ -1320,10 +1493,9 @@ function PortalContent() {
                 doses.map(dose => <DoseCard key={dose.id} dose={dose} onConfirm={handleConfirm} />)
               )}
             </div>
-            <LabOrdersCard orders={labOrders} />
           </div>
 
-          {/* Adherence + check-in */}
+          {/* Columna derecha — Adherencia (2) → Próxima cita (3) → Check-in (4) → Labs (5) */}
           <div className="portal-column">
             <AdherenceCard
               confirmed={confirmedToday}
@@ -1332,7 +1504,21 @@ function PortalContent() {
               customMessage={engagement?.headline ?? null}
               weekData={engagement?.week}
             />
+            {portalAppointments?.upcoming.some(a => a.status !== 'CANCELLED' && a.status !== 'NO_SHOW') && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <h2 style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.015em', margin: 0, color: 'var(--mt-text)' }}>
+                    Próxima cita
+                  </h2>
+                  <a href="/portal/appointments" className="mt-small" style={{ color: 'var(--mt-primary)', textDecoration: 'none', fontWeight: 700 }}>
+                    Ver todas →
+                  </a>
+                </div>
+                <NextAppointmentCard appointments={portalAppointments} onConfirm={handleConfirmAttendance} />
+              </div>
+            )}
             <CheckInCard checkIn={checkIn} onSubmit={handleSubmitCheckIn} />
+            <LabOrdersCard orders={labOrders} />
           </div>
         </div>
 

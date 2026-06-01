@@ -194,6 +194,18 @@ router.get('/portal/lab/external-submissions', requirePatient, async (c) => {
   return c.json({ success: true, data })
 })
 
+router.get('/portal/appointments', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.getPortalAppointments(p.sub, p.tenant_id)
+  return c.json({ success: true, data })
+})
+
+router.post('/portal/appointments/:id/confirm-attendance', requirePatient, async (c) => {
+  const p = c.get('patient')
+  const data = await portalService.confirmAppointmentAttendance(p.sub, p.tenant_id, c.req.param('id')!)
+  return c.json({ success: true, data })
+})
+
 router.get('/portal/adherence', requirePatient, async (c) => {
   const p = c.get('patient')
   const data = await portalService.getAdherenceForPortal(p.sub)

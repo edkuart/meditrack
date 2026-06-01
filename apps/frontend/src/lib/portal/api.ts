@@ -281,3 +281,30 @@ export async function getDocumentUrl(token: string, documentId: string) {
     `/portal/documents/${documentId}/url`, token,
   )
 }
+
+export type AppointmentType = 'CONSULTATION' | 'FOLLOW_UP' | 'PROCEDURE' | 'CHECK_UP' | 'EMERGENCY' | 'TELECONSULT'
+export type AppointmentStatus = 'SCHEDULED' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW'
+
+export interface PortalAppointment {
+  id: string
+  scheduled_at: string
+  duration_minutes: number
+  type: AppointmentType
+  status: AppointmentStatus
+  reason: string | null
+  doctor: { first_name: string; last_name: string; specialty: string | null }
+  location: { name: string; address: string | null } | null
+}
+
+export async function getPortalAppointments(token: string) {
+  return portalFetch<{ upcoming: PortalAppointment[]; past: PortalAppointment[] }>(
+    '/portal/appointments', token,
+  )
+}
+
+export async function confirmAppointmentAttendance(token: string, appointmentId: string) {
+  return portalFetch<PortalAppointment>(`/portal/appointments/${appointmentId}/confirm-attendance`, token, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
