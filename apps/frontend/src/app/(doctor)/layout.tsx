@@ -1,15 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-// Module-level store: survives re-renders and component remounts within the session
-const _dismissed = new Set<string>(
-  (() => {
-    if (typeof window === 'undefined') return []
-    try { return JSON.parse(localStorage.getItem('meditrack:dismissed-notifs') ?? '[]') as string[] }
-    catch { return [] }
-  })()
-)
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -42,12 +33,12 @@ import { LegalAcceptanceBanner } from '@/components/doctor/LegalAcceptanceBanner
 import { MTAvatar, MTLogo } from '@/components/doctor/clinical-ui'
 import { NotificationPanel } from '@/components/doctor/NotificationPanel'
 import { SearchModal } from '@/components/doctor/SearchModal'
-import { fetchClinicNotifications, type NotificationEntry } from '@/lib/doctor/notifications-api'
 import {
   fetchDoctorNotifications, markDoctorNotificationRead, markAllDoctorNotificationsRead,
   type DoctorNotification,
 } from '@/lib/doctor/referral-notifications-api'
 import { hasCapability, hasPermission, PERMISSIONS, type Permission } from '@/lib/doctor/permissions'
+import { subscribeToPush, isPushSubscribed } from '@/lib/doctor/push-api'
 
 const ROLE_LABELS: Record<string, string> = {
   DOCTOR:        'Médico/a',
@@ -359,10 +350,22 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
-  const [notifications, setNotifications] = useState<NotificationEntry[]>([])
   const [doctorNotifications, setDoctorNotifications] = useState<DoctorNotification[]>([])
   const [loadingNotif, setLoadingNotif] = useState(false)
+  const [pushSubscribed, setPushSubscribed] = useState<boolean | null>(null)
   const bellRef = useRef<HTMLDivElement>(null)
+
+  // Auto-register push on first mount (once per session)
+  useEffect(() => {
+    if (!token) return
+    isPushSubscribed().then(subscribed => {
+      setPushSubscribed(subscribed)
+      if (!subscribed && 'Notification' in window && Notification.permission === 'default') {
+        // Silently attempt subscription — user hasn't denied yet
+        subscribeToPush(token).then(ok => { if (ok) setPushSubscribed(true) })
+      }
+    })
+  }, [token])
 
   // Global ⌘K / Ctrl+K shortcut
   useEffect(() => {
@@ -376,28 +379,24 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
-  const [, rerender] = useState(0)
-
-  const handleDismiss = useCallback((id: string) => {
-    _dismissed.add(id)
-    try { localStorage.setItem('meditrack:dismissed-notifs', JSON.stringify([..._dismissed])) } catch {}
-    rerender(n => n + 1)
-  }, [])
-
-  const visibleNotifications = notifications.filter(n => !_dismissed.has(n.id))
-  const failedCount = visibleNotifications.filter(n => n.status === 'FAILED' || n.status === 'BOUNCED').length
-  const unreadReferralCount = doctorNotifications.filter(n => !n.is_read).length
+  const unreadCount = doctorNotifications.filter(n => !n.is_read).length
+  const unreadCritical = doctorNotifications.filter(n => {
+    if (n.is_read) return false
+    if (n.type === 'PATIENT_CHECKIN_ALERT') return true
+    if (n.type === 'LAB_RESULT_READY') {
+      const m = n.metadata as { critical_count?: number } | null
+      return (m?.critical_count ?? 0) > 0
+    }
+    return false
+  }).length
+  const unreadReferralCount = unreadCount
 
   const loadNotifications = useCallback(async () => {
     if (!token) return
     setLoadingNotif(true)
     try {
-      const [patientRes, doctorRes] = await Promise.allSettled([
-        fetchClinicNotifications(token),
-        fetchDoctorNotifications(token),
-      ])
-      if (patientRes.status === 'fulfilled') setNotifications(patientRes.value.data)
-      if (doctorRes.status === 'fulfilled') setDoctorNotifications(doctorRes.value.data)
+      const doctorRes = await fetchDoctorNotifications(token).catch(() => null)
+      if (doctorRes) setDoctorNotifications(doctorRes.data)
     } finally {
       setLoadingNotif(false)
     }
@@ -515,6 +514,23 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           <Search size={16} />
         </button>
 
+        {/* Enable push notifications — shown only when not yet subscribed */}
+        {pushSubscribed === false && token && (
+          <button
+            title="Activar notificaciones push"
+            onClick={() => subscribeToPush(token).then(ok => { if (ok) setPushSubscribed(true) })}
+            style={{
+              height: 34, padding: '0 10px', borderRadius: 8, flexShrink: 0,
+              border: '1px solid var(--mt-border)', background: 'var(--mt-surface)',
+              display: 'flex', alignItems: 'center', gap: 5,
+              color: 'var(--mt-text-2)', cursor: 'pointer', fontSize: 12, fontWeight: 500,
+            }}
+          >
+            <Bell size={13} />
+            <span className="hidden sm:inline">Activar alertas</span>
+          </button>
+        )}
+
         {/* Bell with notification panel */}
         <div ref={bellRef} style={{ position: 'relative' }}>
           <button
@@ -529,47 +545,28 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
             }}
           >
             <Bell size={16} />
-            {failedCount > 0 && (
+            {unreadCount > 0 && (
               <span style={{
                 position: 'absolute', top: -4, right: -4,
                 minWidth: 16, height: 16, borderRadius: 999,
-                background: 'var(--mt-danger)', border: '2px solid #fff',
+                background: unreadCritical > 0 ? '#be123c' : 'var(--mt-purple)',
+                border: '2px solid #fff',
                 fontSize: 10, fontWeight: 700, color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: '0 3px',
+                animation: unreadCritical > 0 ? 'mt-pulse 2s ease-in-out infinite' : 'none',
               }}>
-                {failedCount > 99 ? '99+' : failedCount}
+                {unreadCount > 9 ? '9+' : unreadCount}
               </span>
-            )}
-            {failedCount === 0 && unreadReferralCount > 0 && (
-              <span style={{
-                position: 'absolute', top: -4, right: -4,
-                minWidth: 16, height: 16, borderRadius: 999,
-                background: 'var(--mt-purple)', border: '2px solid #fff',
-                fontSize: 10, fontWeight: 700, color: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '0 3px',
-              }}>
-                {unreadReferralCount > 9 ? '9+' : unreadReferralCount}
-              </span>
-            )}
-            {failedCount === 0 && unreadReferralCount === 0 && notifications.length > 0 && (
-              <span style={{
-                position: 'absolute', top: 6, right: 6, width: 7, height: 7,
-                borderRadius: '50%', background: 'var(--mt-purple)', border: '2px solid #fff',
-              }} />
             )}
           </button>
 
           {panelOpen && (
             <NotificationPanel
-              notifications={visibleNotifications}
               doctorNotifications={doctorNotifications}
-              failedCount={failedCount}
               unreadReferralCount={unreadReferralCount}
               loading={loadingNotif}
               onRefresh={loadNotifications}
-              onDismiss={handleDismiss}
               onDoctorNotifRead={handleDoctorNotifRead}
               onMarkAllRead={handleMarkAllRead}
             />

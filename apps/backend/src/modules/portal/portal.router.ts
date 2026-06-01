@@ -232,4 +232,21 @@ router.get('/portal/documents/:id/url', requirePatient, async (c) => {
   return c.json({ success: true, data })
 })
 
+// Patient uploads a document to their own record (lab result from external, referral letter, etc.)
+router.post('/portal/documents', requirePatient, async (c) => {
+  const p = c.get('patient')
+
+  const formData = await c.req.formData()
+  const file = formData.get('file')
+  if (!(file instanceof File)) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'file required' } }, 400)
+  }
+
+  const docType = (formData.get('type') as string | null) ?? 'OTHER'
+  const note    = (formData.get('note') as string | null)?.trim() ?? ''
+
+  const data = await portalService.uploadPatientDocument(p.sub, p.tenant_id, file, docType, note)
+  return c.json({ success: true, data }, 201)
+})
+
 export { portalAuthRouter, router as portalRouter }

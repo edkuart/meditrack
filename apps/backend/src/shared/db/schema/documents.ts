@@ -19,7 +19,7 @@ export const documents = pgTable('documents', {
   tenant_id: uuid('tenant_id').references(() => tenants.id, { onDelete: 'restrict' }).notNull(),
   patient_id: uuid('patient_id').references(() => patients.id, { onDelete: 'restrict' }).notNull(),
   encounter_id: uuid('encounter_id').references(() => encounters.id, { onDelete: 'set null' }),
-  uploaded_by: uuid('uploaded_by').references(() => users.id, { onDelete: 'restrict' }).notNull(),
+  uploaded_by: uuid('uploaded_by').references(() => users.id, { onDelete: 'restrict' }),
   type: documentTypeEnum('type').default('OTHER').notNull(),
   file_name: varchar('file_name', { length: 255 }).notNull(),
   // Size in bytes

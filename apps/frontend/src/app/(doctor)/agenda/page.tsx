@@ -452,7 +452,7 @@ function ApptCard({
 
       {/* Actions */}
       {canAct && !showCancel && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 2 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 6 }}>
           {appt.status === 'SCHEDULED' && (
             <ActionBtn icon={Check} label="Confirmar" color="green" disabled={acting}
               onClick={() => act(() => confirmAppointment(token, appt.id))} />
@@ -533,15 +533,15 @@ function ActionBtn({
       onClick={onClick}
       disabled={disabled}
       style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '5px 10px', borderRadius: 7,
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '10px 14px', minHeight: 44, borderRadius: 9,
         border: `1px solid ${colors.fg}22`,
         background: colors.bg, color: colors.fg,
-        fontSize: 11.5, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: 12, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.6 : 1,
       }}
     >
-      <Icon size={11} />
+      <Icon size={13} />
       {label}
     </button>
   )

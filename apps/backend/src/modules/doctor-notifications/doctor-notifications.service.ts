@@ -1,19 +1,39 @@
 import { eq, and, desc } from 'drizzle-orm'
 import { db, doctorNotifications } from '../../shared/db/index.ts'
-import type { DoctorNotification } from '../../shared/db/schema/doctor-notifications.ts'
+import { sendPushToUser } from '../../shared/services/push.service.ts'
+import type { DoctorNotifType } from '../../shared/db/schema/doctor-notifications.ts'
 
-export type DoctorNotifType = DoctorNotification['type']
+export type { DoctorNotifType }
 
 export async function createDoctorNotification(params: {
   tenant_id: string
   recipient_id: string
-  referral_id: string
   patient_id: string
   type: DoctorNotifType
   title: string
   body: string
+  referral_id?: string
+  metadata?: Record<string, unknown>
 }): Promise<void> {
-  await db.insert(doctorNotifications).values(params)
+  await db.insert(doctorNotifications).values({
+    tenant_id:    params.tenant_id,
+    recipient_id: params.recipient_id,
+    patient_id:   params.patient_id,
+    type:         params.type,
+    title:        params.title,
+    body:         params.body,
+    referral_id:  params.referral_id ?? null,
+    metadata:     params.metadata ?? null,
+  })
+
+  // Fire-and-forget web push (silently ignores if VAPID not configured)
+  const patientHref = `/patients/${params.patient_id}`
+  sendPushToUser(params.recipient_id, {
+    title: params.title,
+    body:  params.body.length > 120 ? params.body.slice(0, 117) + '…' : params.body,
+    url:   patientHref,
+    tag:   params.type,
+  }).catch(() => { /* push failure must never break in-app flow */ })
 }
 
 export async function listDoctorNotifications(tenantId: string, recipientId: string, limit = 40) {

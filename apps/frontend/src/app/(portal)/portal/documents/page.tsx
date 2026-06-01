@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, FileText, Download, Loader2,
   FolderOpen, Pill, FlaskConical, Scan, ClipboardList, FileSignature,
+  Upload, X, Plus, CheckCircle2,
 } from 'lucide-react'
 import { clearSession, getSession } from '@/lib/portal/session'
-import { getDocuments, getDocumentUrl, isUnauthorizedPortalError, type PatientDocument } from '@/lib/portal/api'
+import { getDocuments, getDocumentUrl, uploadPatientDocument, isUnauthorizedPortalError, type PatientDocument } from '@/lib/portal/api'
 
 const TYPE_CONFIG: Record<string, {
   label: string
@@ -139,6 +140,173 @@ function DocRow({ doc, token }: { doc: PatientDocument; token: string }) {
   )
 }
 
+const DOC_UPLOAD_TYPES = [
+  { value: 'LAB_RESULT',    label: 'Resultado de laboratorio' },
+  { value: 'IMAGING',       label: 'Imagen / Radiografía' },
+  { value: 'PRESCRIPTION',  label: 'Receta de otro médico' },
+  { value: 'CONSENT',       label: 'Consentimiento' },
+  { value: 'CLINICAL_NOTE', label: 'Nota clínica' },
+  { value: 'OTHER',         label: 'Otro documento' },
+]
+
+const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+
+function UploadPanel({ token, onUploaded }: { token: string; onUploaded: (doc: PatientDocument) => void }) {
+  const [open, setOpen] = useState(false)
+  const [file, setFile] = useState<File | null>(null)
+  const [docType, setDocType] = useState('OTHER')
+  const [note, setNote] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function handleFile(files: FileList | null) {
+    const f = files?.[0]
+    if (!f) return
+    if (!ALLOWED_MIME.includes(f.type)) { setError('Solo PDF, JPEG, PNG o WEBP.'); return }
+    if (f.size > 20 * 1024 * 1024) { setError('El archivo supera 20 MB.'); return }
+    setError(''); setFile(f)
+  }
+
+  async function handleUpload() {
+    if (!file) return
+    setUploading(true); setError('')
+    try {
+      const doc = await uploadPatientDocument(token, file, docType, note)
+      onUploaded(doc)
+      setFile(null); setNote(''); setDocType('OTHER'); setDone(true)
+      setTimeout(() => { setDone(false); setOpen(false) }, 2200)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al subir el documento')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div style={{ borderRadius: 16, border: '1.5px solid var(--mt-border)', background: 'var(--mt-surface)', overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', padding: '14px 16px',
+          display: 'flex', alignItems: 'center', gap: 12,
+          border: 'none', background: 'transparent', cursor: 'pointer',
+          fontFamily: 'var(--mt-font)',
+        }}
+      >
+        <div style={{
+          width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+          background: 'var(--mt-primary-subtle)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Upload size={18} color="var(--mt-primary)" />
+        </div>
+        <div style={{ flex: 1, textAlign: 'left' }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--mt-text)' }}>Enviar documento a mi médico</p>
+          <p style={{ margin: '2px 0 0', fontSize: 12.5, color: 'var(--mt-muted)' }}>Resultados de lab externos, recetas, imágenes…</p>
+        </div>
+        <Plus size={18} color="var(--mt-muted)" style={{ transform: open ? 'rotate(45deg)' : 'none', transition: 'transform .2s' }} />
+      </button>
+
+      {open && (
+        <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--mt-border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {done ? (
+            <div style={{ padding: '20px 0', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <CheckCircle2 size={32} color="var(--mt-success)" />
+              <p style={{ margin: 0, fontWeight: 700, color: 'var(--mt-text)', fontSize: 14 }}>Documento enviado</p>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--mt-muted)' }}>Tu médico recibirá una notificación.</p>
+            </div>
+          ) : (
+            <>
+              {/* Drop zone */}
+              <div
+                onClick={() => inputRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files) }}
+                style={{
+                  marginTop: 12, borderRadius: 12, cursor: 'pointer',
+                  border: `2px dashed ${file ? 'var(--mt-success)' : 'var(--mt-border)'}`,
+                  background: file ? 'var(--mt-success-subtle)' : 'var(--mt-bg)',
+                  padding: '20px 16px', textAlign: 'center',
+                  transition: 'border-color .2s, background .2s',
+                }}
+              >
+                <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style={{ display: 'none' }} onChange={e => handleFile(e.target.files)} />
+                {file ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                    <FileText size={20} color="var(--mt-success)" />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--mt-text)' }}>{file.name}</span>
+                    <button type="button" onClick={e => { e.stopPropagation(); setFile(null) }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mt-muted)', display: 'flex', padding: 2 }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'var(--mt-muted)' }}>
+                    <Upload size={22} />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Toca aquí o arrastra el archivo</span>
+                    <span style={{ fontSize: 12 }}>PDF, JPEG, PNG — máx. 20 MB</span>
+                  </div>
+                )}
+              </div>
+
+              {file && (
+                <>
+                  <select
+                    value={docType}
+                    onChange={e => setDocType(e.target.value)}
+                    style={{
+                      border: '1px solid var(--mt-border)', borderRadius: 10, padding: '10px 12px',
+                      fontSize: 13.5, fontFamily: 'var(--mt-font)', background: 'var(--mt-surface)',
+                      color: 'var(--mt-text)', outline: 'none',
+                    }}
+                  >
+                    {DOC_UPLOAD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    placeholder="Nota opcional para tu médico (ej: resultado del 25 mayo)"
+                    style={{
+                      border: '1px solid var(--mt-border)', borderRadius: 10, padding: '10px 12px',
+                      fontSize: 13.5, fontFamily: 'var(--mt-font)', background: 'var(--mt-surface)',
+                      color: 'var(--mt-text)', outline: 'none',
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    className="portal-confirm-btn"
+                    style={{ marginTop: 0 }}
+                  >
+                    {uploading ? (
+                      <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />Enviando…</>
+                    ) : (
+                      <><Upload size={18} strokeWidth={2.5} />Enviar a mi médico</>
+                    )}
+                  </button>
+                </>
+              )}
+
+              {error && (
+                <p style={{ margin: 0, fontSize: 13, color: '#b91c1c', background: '#fef2f2', borderRadius: 8, padding: '8px 12px', border: '1px solid #fecaca' }}>
+                  {error}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DocumentsPage() {
   const router = useRouter()
   const [docs, setDocs]       = useState<PatientDocument[]>([])
@@ -210,6 +378,14 @@ export default function DocumentsPage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Patient upload panel — always visible */}
+          {token && (
+            <UploadPanel
+              token={token}
+              onUploaded={doc => setDocs(prev => [doc, ...prev])}
+            />
+          )}
 
           {docs.length === 0 ? (
             <>

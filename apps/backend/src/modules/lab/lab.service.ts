@@ -1,7 +1,8 @@
 import { eq, and, sql } from 'drizzle-orm'
 import { db, labOrders, labResults, patients } from '../../shared/db/index.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
-import { NotFoundError } from '../../shared/errors.ts'
+import { NotFoundError, AppError } from '../../shared/errors.ts'
+import { createDoctorNotification } from '../doctor-notifications/doctor-notifications.service.ts'
 import type {
   CreateLabOrderInput,
   UpdateLabOrderInput,
@@ -305,7 +306,12 @@ export async function upsertLabResults(
   })
   if (!order) throw new NotFoundError('LabOrder')
 
-  // Delete existing results and re-insert (simpler than partial upsert for small sets)
+  // Completed orders are immutable — results cannot be overwritten
+  if ((order.status as string) === 'COMPLETED') {
+    throw new AppError(409, 'IMMUTABLE_RECORD', 'Lab results are final once the order is completed. Create a new order to re-run the analysis.')
+  }
+
+  // Delete existing IN_PROGRESS results and re-insert (corrections allowed while in progress)
   await db.delete(labResults).where(eq(labResults.order_id, orderId))
 
   await db.insert(labResults).values(
@@ -318,10 +324,60 @@ export async function upsertLabResults(
     columns: { status: true },
   })
   const allFilled = allResults.length > 0 && allResults.every(r => r.status !== 'PENDING')
+
   if (allFilled) {
     await db.update(labOrders)
       .set({ status: 'COMPLETED', updated_at: new Date() })
       .where(eq(labOrders.id, orderId))
+
+    // Notify ordering doctor — order was IN_PROGRESS before (not COMPLETED, guard above ensured that)
+    if (true) {
+      try {
+        const fullOrder = await db.query.labOrders.findFirst({
+          where: eq(labOrders.id, orderId),
+          columns: { patient_id: true, ordered_by: true },
+          with: {
+            patient: { columns: { first_name: true, last_name: true } },
+          },
+        })
+        if (fullOrder?.ordered_by && fullOrder.patient) {
+          const patientName = `${fullOrder.patient.first_name} ${fullOrder.patient.last_name}`
+          const critical = allResults.filter(r =>
+            r.status === 'CRITICAL_HIGH' || r.status === 'CRITICAL_LOW',
+          ).length
+          const abnormal = allResults.filter(r =>
+            r.status === 'HIGH' || r.status === 'LOW' ||
+            r.status === 'CRITICAL_HIGH' || r.status === 'CRITICAL_LOW',
+          ).length
+
+          // Critical values get a more urgent title
+          const title = critical > 0
+            ? `⚠️ Valor crítico en lab: ${patientName}`
+            : `Resultados de laboratorio: ${patientName}`
+
+          const bodyText = critical > 0
+            ? `${critical} valor${critical > 1 ? 'es' : ''} CRÍTICO${critical > 1 ? 'S' : ''} fuera de rango. Intervención inmediata recomendada.`
+            : abnormal > 0
+              ? `${abnormal} parámetro${abnormal > 1 ? 's' : ''} fuera de rango. Requiere revisión.`
+              : 'Todos los parámetros dentro del rango normal.'
+
+          await createDoctorNotification({
+            tenant_id:    tenantId,
+            recipient_id: fullOrder.ordered_by,
+            patient_id:   fullOrder.patient_id,
+            type:         'LAB_RESULT_READY',
+            title,
+            body:         bodyText,
+            metadata: {
+              lab_order_id:    orderId,
+              result_count:    allResults.length,
+              abnormal_count:  abnormal,
+              critical_count:  critical,
+            },
+          })
+        }
+      } catch { /* notification failure must not block result entry */ }
+    }
   } else if (order.status === 'PENDING') {
     // Lab tech started entering values — mark as in progress
     await db.update(labOrders)

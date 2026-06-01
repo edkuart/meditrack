@@ -6,16 +6,70 @@ export type DoctorNotifType =
   | 'REFERRAL_REJECTED'
   | 'REFERRAL_COMPLETED'
   | 'REFERRAL_CANCELLED'
+  | 'DOCUMENT_UPLOADED'
+  | 'LAB_RESULT_READY'
+  | 'PATIENT_CHECKIN_ALERT'
+  | 'APPOINTMENT_CONFIRMED'
+  | 'APPOINTMENT_CANCELLED'
+  | 'EXTERNAL_LAB_SUBMITTED'
+
+export type DocumentUploadedMeta = {
+  document_id: string
+  document_type: string
+  file_name: string
+  mime_type: string
+  note?: string
+}
+
+export type LabResultReadyMeta = {
+  lab_order_id: string
+  result_count: number
+  abnormal_count: number
+  critical_count?: number
+}
+
+export type CheckInAlertMeta = {
+  severity: 'ALERT'
+  check_in_id: string
+  pain_score: number | null
+  temperature_c: number | null
+  red_flags: string[]
+  adherence_self_report: string | null
+  medication_issue: boolean
+}
+
+export type AppointmentMeta = {
+  appointment_id: string
+  scheduled_at: string
+  appointment_type: string
+  cancelled_reason?: string
+}
+
+export type ExternalLabMeta = {
+  submission_id: string
+  file_count: number
+  file_names: string[]
+  patient_notes: string | null
+}
+
+export type DoctorNotifMeta =
+  | DocumentUploadedMeta
+  | LabResultReadyMeta
+  | CheckInAlertMeta
+  | AppointmentMeta
+  | ExternalLabMeta
+  | Record<string, unknown>
 
 export interface DoctorNotification {
   id: string
   tenant_id: string
   recipient_id: string
-  referral_id: string
+  referral_id: string | null
   patient_id: string
   type: DoctorNotifType
   title: string
   body: string
+  metadata?: DoctorNotifMeta | null
   is_read: boolean
   created_at: string
   patient?: { id: string; first_name: string; last_name: string; mrn: string | null }

@@ -1,15 +1,15 @@
-import { eq, and, desc, lte, gte, lt, count, sql } from 'drizzle-orm'
+import { eq, and, desc, lte, gte, lt, count, sql, gte as gteOp } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import {
   db, patients, patientAccessTokens, encounters,
   treatmentPlans, medicationItems, doseEvents, documents, patientCheckIns,
-  labOrders, treatmentInterventions, appointments,
+  labOrders, treatmentInterventions, appointments, doctorNotifications,
 } from '../../shared/db/index.ts'
 import {
   generateOpaqueToken, generatePin, hashToken,
   signPatientToken, verifyPatientToken,
 } from '../../shared/services/token.service.ts'
-import { getSignedViewUrl } from '../../shared/storage/storage.service.ts'
+import { getSignedViewUrl, uploadFile, buildStorageKey } from '../../shared/storage/storage.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { UnauthorizedError, NotFoundError, AppError } from '../../shared/errors.ts'
 import {
@@ -18,6 +18,7 @@ import {
   sendWhatsAppPortalAccessNotification,
 } from '../notifications/notifications.service.ts'
 import { buildEngagementProfile } from './engagement.ts'
+import { createDoctorNotification } from '../doctor-notifications/doctor-notifications.service.ts'
 import type { GenerateAccessInput, PatientCheckInInput, ValidatePinInput } from './portal.schema.ts'
 
 // ─── Doctor: generate patient access ──────────────────────────────────────────
@@ -445,6 +446,66 @@ export async function submitPatientCheckIn(
     context: { patient_id: patientId, severity },
   })
 
+  // Notify treating doctor only for ALERT severity (anti-fatigue: max 1 per patient per day)
+  if (severity === 'ALERT') {
+    try {
+      const [patient, lastEnc] = await Promise.all([
+        db.query.patients.findFirst({
+          where: eq(patients.id, patientId),
+          columns: { first_name: true, last_name: true },
+        }),
+        db.query.encounters.findFirst({
+          where: and(eq(encounters.patient_id, patientId), eq(encounters.tenant_id, tenantId)),
+          orderBy: (e, { desc: d }) => d(e.created_at),
+          columns: { doctor_id: true },
+        }),
+      ])
+
+      if (lastEnc?.doctor_id && patient) {
+        // De-dup: skip if ALERT already sent today for this patient
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+        const recentAlert = await db.query.doctorNotifications.findFirst({
+          where: and(
+            eq(doctorNotifications.patient_id, patientId),
+            eq(doctorNotifications.recipient_id, lastEnc.doctor_id),
+            eq(doctorNotifications.type, 'PATIENT_CHECKIN_ALERT'),
+            gteOp(doctorNotifications.created_at, todayStart),
+          ),
+          columns: { id: true },
+        })
+
+        if (!recentAlert) {
+          const patientName = `${patient.first_name} ${patient.last_name}`
+          const reasons: string[] = []
+          if ((input.red_flags ?? []).length > 0) reasons.push(`señales de alarma: ${input.red_flags.join(', ')}`)
+          if (typeof input.pain_score === 'number' && input.pain_score >= 8) reasons.push(`dolor ${input.pain_score}/10`)
+          if (typeof input.temperature_c === 'number' && input.temperature_c >= 38) reasons.push(`fiebre ${input.temperature_c}°C`)
+          if (input.adherence_self_report === 'none') reasons.push('no tomó ningún medicamento')
+
+          await createDoctorNotification({
+            tenant_id:    tenantId,
+            recipient_id: lastEnc.doctor_id,
+            patient_id:   patientId,
+            type:         'PATIENT_CHECKIN_ALERT',
+            title:        `⚠️ Revisión necesaria: ${patientName}`,
+            body:         reasons.length > 0
+              ? `Reporte de hoy: ${reasons.join('; ')}.`
+              : 'El paciente reportó una señal de alerta en su check-in de hoy.',
+            metadata: {
+              severity,
+              check_in_id:          checkIn.id,
+              pain_score:           input.pain_score ?? null,
+              temperature_c:        input.temperature_c ?? null,
+              red_flags:            input.red_flags,
+              adherence_self_report:input.adherence_self_report ?? null,
+              medication_issue:     input.medication_issue,
+            },
+          })
+        }
+      }
+    } catch { /* notification failure must not affect check-in save */ }
+  }
+
   return checkIn
 }
 
@@ -637,7 +698,10 @@ export async function cancelAppointmentFromPortal(patientId: string, tenantId: s
       eq(appointments.patient_id, patientId),
       eq(appointments.tenant_id, tenantId),
     ),
-    columns: { id: true, status: true, scheduled_at: true },
+    columns: { id: true, status: true, scheduled_at: true, doctor_id: true, type: true },
+    with: {
+      patient: { columns: { first_name: true, last_name: true } },
+    },
   })
 
   if (!appt) throw new NotFoundError('Appointment')
@@ -661,6 +725,31 @@ export async function cancelAppointmentFromPortal(patientId: string, tenantId: s
     .where(eq(appointments.id, appointmentId))
     .returning()
 
+  // Notify assigned doctor — cancellation frees a slot and is operationally important
+  if (appt.doctor_id && appt.patient) {
+    const patientName = `${appt.patient.first_name} ${appt.patient.last_name}`
+    const dateStr = new Date(appt.scheduled_at).toLocaleString('es', {
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+    try {
+      await createDoctorNotification({
+        tenant_id:    tenantId,
+        recipient_id: appt.doctor_id,
+        patient_id:   patientId,
+        type:         'APPOINTMENT_CANCELLED',
+        title:        `${patientName} canceló su cita`,
+        body:         `Cita del ${dateStr} fue cancelada. Motivo: ${reason || 'sin motivo especificado'}.`,
+        metadata: {
+          appointment_id: appointmentId,
+          scheduled_at:   appt.scheduled_at,
+          appointment_type: appt.type,
+          cancelled_reason: reason,
+        },
+      })
+    } catch { /* push failure must not block */ }
+  }
+
   return updated
 }
 
@@ -671,7 +760,10 @@ export async function confirmAppointmentAttendance(patientId: string, tenantId: 
       eq(appointments.patient_id, patientId),
       eq(appointments.tenant_id, tenantId),
     ),
-    columns: { id: true, status: true },
+    columns: { id: true, status: true, doctor_id: true, scheduled_at: true, type: true },
+    with: {
+      patient: { columns: { first_name: true, last_name: true } },
+    },
   })
 
   if (!appt) throw new NotFoundError('Appointment')
@@ -684,6 +776,28 @@ export async function confirmAppointmentAttendance(patientId: string, tenantId: 
     .set({ status: 'CONFIRMED', updated_at: new Date() })
     .where(eq(appointments.id, appointmentId))
     .returning()
+
+  // In-app feed entry for the doctor — confirmation is informational, no push needed
+  if (appt.doctor_id && appt.patient) {
+    const patientName = `${appt.patient.first_name} ${appt.patient.last_name}`
+    const timeStr = new Date(appt.scheduled_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hour12: false })
+    const dateStr = new Date(appt.scheduled_at).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' })
+    try {
+      await createDoctorNotification({
+        tenant_id:    tenantId,
+        recipient_id: appt.doctor_id,
+        patient_id:   patientId,
+        type:         'APPOINTMENT_CONFIRMED',
+        title:        `${patientName} confirmó asistencia`,
+        body:         `Confirmó la cita del ${dateStr} a las ${timeStr}.`,
+        metadata: {
+          appointment_id:   appointmentId,
+          scheduled_at:     appt.scheduled_at,
+          appointment_type: appt.type,
+        },
+      })
+    } catch { /* push failure must not block */ }
+  }
 
   return updated
 }
@@ -798,4 +912,97 @@ export async function getEngagementForPortal(patientId: string) {
       next_dose_name: nextDose?.medication_item.drug_name ?? null,
     },
   )
+}
+
+// ─── Patient uploads a document from their portal ─────────────────────────────
+
+const ALLOWED_PORTAL_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const
+const MAX_PORTAL_DOC_BYTES = 20 * 1024 * 1024 // 20 MB
+
+export async function uploadPatientDocument(
+  patientId: string,
+  tenantId: string,
+  file: File,
+  docType: string,
+  note: string,
+) {
+  if (!ALLOWED_PORTAL_MIME.includes(file.type as typeof ALLOWED_PORTAL_MIME[number])) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Tipo de archivo no permitido. Solo PDF, JPEG, PNG o WEBP.')
+  }
+  if (file.size > MAX_PORTAL_DOC_BYTES) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'El archivo supera el límite de 20 MB.')
+  }
+
+  const patient = await db.query.patients.findFirst({
+    where: and(eq(patients.id, patientId), eq(patients.tenant_id, tenantId)),
+    columns: { id: true, first_name: true, last_name: true },
+  })
+  if (!patient) throw new NotFoundError('Patient')
+
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const { createHash } = await import('crypto')
+  const checksum = createHash('sha256').update(buffer).digest('hex')
+
+  type DocumentType = 'PRESCRIPTION' | 'LAB_RESULT' | 'IMAGING' | 'CONSENT' | 'CLINICAL_NOTE' | 'OTHER'
+  const VALID_DOC_TYPES: DocumentType[] = ['PRESCRIPTION', 'LAB_RESULT', 'IMAGING', 'CONSENT', 'CLINICAL_NOTE', 'OTHER']
+  const safeType: DocumentType = VALID_DOC_TYPES.includes(docType as DocumentType)
+    ? (docType as DocumentType)
+    : 'OTHER'
+
+  const [doc] = await db.insert(documents).values({
+    tenant_id:            tenantId,
+    patient_id:           patientId,
+    uploaded_by:          null, // patient uploads have no staff uploader
+    type:                 safeType,
+    file_name:            file.name,
+    file_size:            file.size,
+    mime_type:            file.type,
+    storage_key:          'pending',
+    checksum,
+    is_visible_to_patient: true,
+  }).returning()
+
+  const storageKey = buildStorageKey(tenantId, patientId, doc.id, file.name)
+  await uploadFile(storageKey, buffer, file.type)
+  await db.update(documents).set({ storage_key: storageKey }).where(eq(documents.id, doc.id))
+
+  // Notify treating doctor — find doctor from most recent encounter
+  try {
+    const lastEnc = await db.query.encounters.findFirst({
+      where: and(eq(encounters.patient_id, patientId), eq(encounters.tenant_id, tenantId)),
+      orderBy: (e, { desc }) => desc(e.created_at),
+      columns: { doctor_id: true },
+    })
+
+    if (lastEnc?.doctor_id) {
+      const patientName = `${patient.first_name} ${patient.last_name}`
+      const typeLabel: Record<string, string> = {
+        LAB_RESULT:    'resultado de laboratorio',
+        IMAGING:       'imagen diagnóstica',
+        PRESCRIPTION:  'receta',
+        CLINICAL_NOTE: 'nota clínica',
+        CONSENT:       'consentimiento',
+        OTHER:         'documento',
+      }
+      const label = typeLabel[docType] ?? 'documento'
+
+      await createDoctorNotification({
+        tenant_id:    tenantId,
+        recipient_id: lastEnc.doctor_id,
+        patient_id:   patientId,
+        type:         'DOCUMENT_UPLOADED',
+        title:        `${patientName} compartió un ${label}`,
+        body:         note || `El paciente subió "${file.name}" desde su portal.`,
+        metadata: {
+          document_id:   doc.id,
+          document_type: docType,
+          file_name:     file.name,
+          mime_type:     file.type,
+          note,
+        },
+      })
+    }
+  } catch { /* notification failure must not block the upload */ }
+
+  return { id: doc.id, type: docType, file_name: file.name, mime_type: file.type, created_at: doc.created_at }
 }

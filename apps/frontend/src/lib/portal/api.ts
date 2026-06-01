@@ -282,6 +282,28 @@ export async function getDocumentUrl(token: string, documentId: string) {
   )
 }
 
+export async function uploadPatientDocument(
+  token: string,
+  file: File,
+  docType: string,
+  note: string,
+) {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('type', docType)
+  form.append('note', note)
+
+  const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001/api/v1'
+  const res = await fetch(`${API}/portal/documents`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+  const json = await res.json() as { success: boolean; data?: PatientDocument; error?: { message: string } }
+  if (!json.success) throw new Error(json.error?.message ?? 'Error al subir el documento')
+  return json.data!
+}
+
 export type AppointmentType = 'CONSULTATION' | 'FOLLOW_UP' | 'PROCEDURE' | 'CHECK_UP' | 'EMERGENCY' | 'TELECONSULT'
 export type AppointmentStatus = 'SCHEDULED' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW'
 

@@ -2,11 +2,12 @@ import { eq, and, sql } from 'drizzle-orm'
 import { db } from '../../shared/db/index.ts'
 import {
   labExternalSubmissions, labSubmissionFiles, labExtractedValues,
-  labOrders, labResults, patients,
+  labOrders, labResults, patients, encounters,
 } from '../../shared/db/index.ts'
 import { uploadFile, getSignedViewUrl, buildStorageKey } from '../../shared/storage/storage.service.ts'
 import { createAuditLog } from '../../shared/services/audit.service.ts'
 import { NotFoundError, ValidationError } from '../../shared/errors.ts'
+import { createDoctorNotification } from '../doctor-notifications/doctor-notifications.service.ts'
 import type { SubmitExternalLabInput, UpdateExtractedValueInput } from './lab-external.schema.ts'
 
 const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'] as const
@@ -90,6 +91,40 @@ export async function submitExternalLab(
     resource_id:   submission.id,
     context:       { order_id: input.order_id, file_count: files.length },
   })
+
+  // In-app feed: notify treating doctor when patient submits external lab results
+  try {
+    const [patient, lastEnc] = await Promise.all([
+      db.query.patients.findFirst({
+        where: eq(patients.id, patientId),
+        columns: { first_name: true, last_name: true },
+      }),
+      db.query.encounters.findFirst({
+        where: and(eq(encounters.patient_id, patientId), eq(encounters.tenant_id, tenantId)),
+        orderBy: (e, { desc }) => desc(e.created_at),
+        columns: { doctor_id: true },
+      }),
+    ])
+
+    if (lastEnc?.doctor_id && patient) {
+      const patientName = `${patient.first_name} ${patient.last_name}`
+      const fileLabel = files.length === 1 ? '1 archivo' : `${files.length} archivos`
+      await createDoctorNotification({
+        tenant_id:    tenantId,
+        recipient_id: lastEnc.doctor_id,
+        patient_id:   patientId,
+        type:         'EXTERNAL_LAB_SUBMITTED',
+        title:        `${patientName} envió resultados de laboratorio`,
+        body:         `${fileLabel} adjunto${files.length > 1 ? 's' : ''} desde su portal. Pendiente de revisión y validación.${input.patient_notes ? ` Nota: "${input.patient_notes}"` : ''}`,
+        metadata: {
+          submission_id:  submission.id,
+          file_count:     files.length,
+          file_names:     files.map(f => f.name),
+          patient_notes:  input.patient_notes ?? null,
+        },
+      })
+    }
+  } catch { /* notification failure must not block submission */ }
 
   return getSubmission(tenantId, submission.id)
 }
